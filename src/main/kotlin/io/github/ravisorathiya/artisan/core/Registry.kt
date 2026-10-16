@@ -11,6 +11,12 @@ class Ctx(args: List<String>, val cwd: File = File(System.getProperty("user.dir"
     val yes = args.any { it == "-y" || it == "--yes" }
     val verbose = "-v" in args
     val markdown = "-md" in args
+    /** true = force compact TSV, false = force boxes, null = decide by whether output is a terminal. */
+    val plain: Boolean? = when {
+        "--plain" in args -> true
+        "--table" in args -> false
+        else -> null
+    }
 
     private val found: Project? by lazy { Project.find(cwd) }
 
@@ -23,7 +29,7 @@ class Ctx(args: List<String>, val cwd: File = File(System.getProperty("user.dir"
     fun arg(i: Int): String? = args.getOrNull(i)
 
     companion object {
-        val FLAGS = setOf("-y", "--yes", "-v", "-md")
+        val FLAGS = setOf("-y", "--yes", "-v", "-md", "--plain", "--table")
     }
 }
 

@@ -7,7 +7,12 @@ commands. A group with one command (`del`, `build`) runs it directly. Leave out 
 picker when the choices are fixed. In a picker, type the number or the option's name; **Enter cancels**.
 A typo (`artisan mak`) suggests close matches.
 
-**Flags.** `-y` skips "yes" confirmations, `-v` shows details, `-md` prints markdown (`list:verify`).
+**Flags.** `-y` skips "yes" confirmations, `-v` shows details, `-md` prints markdown (`list:verify`),
+`--plain` / `--table` force the output style (below).
+
+**Plain output.** When stdout isn't a terminal (pipe, file, AI agent), every table prints as `== Title ==`
+followed by tab-separated lines (header first) with no borders and no truncation. `--plain` forces it in a
+terminal, `--table` forces boxes in a pipe; `ARTISAN_PLAIN=1|0` sets the default.
 
 **Colours.** Green = OK/done, yellow = needs attention / `VERIFY ON DEVICE`, red = failed/blocked. Long text is
 cut with `...` to fit the terminal.

@@ -41,6 +41,12 @@ object Ui {
     /** Set by `-y` / `--yes`: confirmations answer themselves. */
     var assumeYes = false
 
+    /**
+     * Compact output: tables as tab-separated rows, no borders, no truncation. Cheap for AI agents and easy for
+     * scripts (`cut -f2`). On by default when output isn't a terminal; `--plain` forces it, `--table` turns it off.
+     */
+    var plain = false
+
     fun say(text: String = "", style: TextStyle? = null) = terminal.println(style?.invoke(text) ?: text)
 
     fun head(text: String) {
@@ -84,10 +90,13 @@ object Ui {
         throw CliError("Pick 1-${items.size} (got '$answer').")
     }
 
+    /** stdout is a real terminal (not a pipe/file). Works on every JDK, unlike System.console() on 22+. */
+    val interactive: Boolean by lazy { runCatching { terminal.terminalInfo.outputInteractive }.getOrDefault(false) }
+
     /** Terminal width; 160 when output is piped/redirected (no real width to fit). */
     private fun width(): Int {
         System.getenv("COLUMNS")?.toIntOrNull()?.let { return it }
-        if (System.console() == null) return 160
+        if (!interactive) return 160
         return terminal.updateSize().width.takeIf { it >= 60 } ?: 160
     }
 
@@ -108,6 +117,15 @@ object Ui {
         title: String?, headers: List<String>, rows: List<Row>, right: Set<Int> = emptySet(),
         empty: String = "(none)", flex: Int = headers.size - 1,
     ) {
+        if (plain) {
+            // == Title ==, then TSV: header line + one line per row. Tabs/newlines inside cells become spaces.
+            if (title != null) terminal.println("== $title ==")
+            if (rows.isEmpty()) { terminal.println(empty); return }
+            fun tsv(cells: List<String>) = cells.joinToString("\t") { it.replace(Regex("[\t\r\n]+"), " ") }
+            terminal.println(tsv(headers))
+            rows.forEach { terminal.println(tsv(List(headers.size) { c -> it.cells.getOrElse(c) { "" } })) }
+            return
+        }
         if (title != null) head(title)
         if (rows.isEmpty()) {
             say("  $empty", green)

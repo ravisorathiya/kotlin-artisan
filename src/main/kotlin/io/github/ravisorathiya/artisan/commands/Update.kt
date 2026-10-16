@@ -193,7 +193,7 @@ object UpdateCheck {
         val l = latest ?: return
         if (compareVersions(l, VERSION) > 0) {
             val text = "kotlin-artisan $l is available (you have $VERSION). Update: artisan self:update"
-            System.err.println(if (System.console() != null) Tone.DIM(text) else text) // no colour codes in pipes/logs
+            System.err.println(if (Ui.interactive) Tone.DIM(text) else text) // no colour codes in pipes/logs
         }
     }
 }

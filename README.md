@@ -115,6 +115,11 @@ artisan list                   # everything
 Full reference with examples: [docs/commands.md](docs/commands.md).
 
 Flags: `-y` skips "yes" confirmations, `-v` shows details, `-md` prints markdown (`list:verify`).
+
+**Output for scripts and AI agents.** In a terminal you get boxed, coloured tables. When the output goes to a
+pipe, a file or an AI coding agent, tables print as compact tab-separated rows (`== Title ==`, then a header line
+and the rows): about half the size, with no truncation, and ready for `cut -f2` / `awk -F'\t'`. Force it either
+way with `--plain` / `--table`, or set `ARTISAN_PLAIN=1` / `ARTISAN_PLAIN=0`.
 Set `ARTISAN_DEBUG=1` to get the stack trace when something fails unexpectedly.
 
 ## Configuration (optional)

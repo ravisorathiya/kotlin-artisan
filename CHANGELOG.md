@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Plain output: when stdout isn't a terminal (pipe, file, AI agent), tables print as compact tab-separated rows
+  with no borders and no truncation, about half the size. `--plain` / `--table` and `ARTISAN_PLAIN=1|0` override it.
+- Terminal detection uses Mordant instead of `System.console()`, which reports a console even for pipes on JDK 22+.
+
 ## 0.2.0
 
 - `artisan self:update`: installs the latest GitHub release in place (Windows-safe: the swap happens after the

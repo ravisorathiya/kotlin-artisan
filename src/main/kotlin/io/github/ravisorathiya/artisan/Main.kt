@@ -22,6 +22,7 @@ fun main(argv: Array<String>) {
     val ctx = Ctx(argv.drop(1))
     val command = argv.firstOrNull() ?: "list"
     Ui.assumeYes = ctx.yes
+    Ui.plain = ctx.plain ?: (System.getenv("ARTISAN_PLAIN")?.let { it != "0" } ?: !Ui.interactive)
     UpdateCheck.start()
     val code = try {
         registerMisc()
