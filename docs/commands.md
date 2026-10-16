@@ -25,6 +25,11 @@ cut with `...` to fit the terminal.
 | `init notes` | Creates the notes workspace (asks for the folder, default `notes/`) |
 | `status` | versionName / versionCode / package, then (with notes) the latest version's phase table and every open item |
 | `stats` | Kotlin files/lines, Java lines and `extraSources` lines per module, the 10 biggest Kotlin files (yellow ≥ 1,000 lines, red ≥ 2,000), notes totals |
+| `self:update` | Checks the latest GitHub release. If it's newer, shows `0.2.0 -> 0.3.0`, asks, then downloads and installs it into the folder artisan runs from. On Windows the files are swapped a second after the command exits (Windows locks running files). `-y` skips the question |
+
+**Update notice.** Once a day artisan checks GitHub in the background (at most ~1.5 s extra, silent when offline,
+off on CI). If a newer release exists, it prints one line on stderr after the command. `artisan version` also shows
+it. Turn it off with `ARTISAN_NO_UPDATE_CHECK=1`.
 
 ## Phone (`app:`)
 

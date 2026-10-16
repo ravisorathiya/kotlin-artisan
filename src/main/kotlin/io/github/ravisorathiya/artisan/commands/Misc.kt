@@ -41,6 +41,7 @@ private fun version(ctx: Ctx) {
     val p = ctx.projectOrNull
     Ui.table(null, listOf("What", "Value"), listOfNotNull(
         Row("kotlin-artisan", VERSION),
+        UpdateCheck.cachedLatest()?.takeIf { compareVersions(it, VERSION) > 0 }?.let { Row(listOf("Latest release", "$it  (artisan self:update)"), color = Tone.WARN) },
         p?.let { Row("Project", it.root.name) },
         p?.let { Row("versionName", it.versionName ?: "?") },
         p?.let { Row("versionCode", it.versionCode ?: "?") },

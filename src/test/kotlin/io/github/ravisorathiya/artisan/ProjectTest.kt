@@ -130,6 +130,16 @@ class ProjectDetectionTest {
     }
 }
 
+class VersionCompareTest {
+    @Test
+    fun `numeric dotted compare`() {
+        assertTrue(io.github.ravisorathiya.artisan.commands.compareVersions("0.10.0", "0.9.1") > 0)
+        assertTrue(io.github.ravisorathiya.artisan.commands.compareVersions("v0.2.0", "0.2.0") == 0)
+        assertTrue(io.github.ravisorathiya.artisan.commands.compareVersions("0.2", "0.2.1") < 0)
+        assertTrue(io.github.ravisorathiya.artisan.commands.compareVersions("1.0.0", "0.99.99") > 0)
+    }
+}
+
 class NamingTest {
     @Test
     fun `plan names become snake case`() {

@@ -6,6 +6,8 @@ import io.github.ravisorathiya.artisan.commands.registerCustom
 import io.github.ravisorathiya.artisan.commands.registerMisc
 import io.github.ravisorathiya.artisan.commands.registerNotes
 import io.github.ravisorathiya.artisan.commands.registerOpen
+import io.github.ravisorathiya.artisan.commands.registerUpdate
+import io.github.ravisorathiya.artisan.commands.UpdateCheck
 import io.github.ravisorathiya.artisan.core.Cancelled
 import io.github.ravisorathiya.artisan.core.CliError
 import io.github.ravisorathiya.artisan.core.Ctx
@@ -18,15 +20,19 @@ val VERSION: String = Ctx::class.java.`package`?.implementationVersion ?: "dev"
 
 fun main(argv: Array<String>) {
     val ctx = Ctx(argv.drop(1))
+    val command = argv.firstOrNull() ?: "list"
     Ui.assumeYes = ctx.yes
+    UpdateCheck.start()
     val code = try {
         registerMisc()
         registerNotes()
         registerCode()
         registerApp()
         registerOpen()
+        registerUpdate()
         ctx.projectOrNull?.let { registerCustom(it) }
-        Registry.dispatch(argv.firstOrNull() ?: "list", ctx)
+        Registry.dispatch(command, ctx)
+        UpdateCheck.notifyIfNewer(command)
         0
     } catch (e: Cancelled) {
         Ui.say("Cancelled.", Tone.WARN)

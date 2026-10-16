@@ -45,6 +45,20 @@ curl -fsSL https://raw.githubusercontent.com/ravioriginfo/kotlin-artisan/main/in
 Both install `kotlin-artisan` and a short alias `artisan` into a user folder and add it to your PATH. Open a new
 terminal afterwards.
 
+### Updating
+
+```sh
+artisan self:update        # downloads and installs the latest release (asks first; -y to skip)
+```
+
+artisan also checks GitHub at most once a day in the background. When a newer release exists, it prints one line
+after your command: `kotlin-artisan 0.3.0 is available (you have 0.2.0). Update: artisan self:update`. The check
+never slows a command by more than ~1.5 s, stays quiet when you're offline, and is off on CI. Turn it off with
+`ARTISAN_NO_UPDATE_CHECK=1`.
+
+> Installed **0.1.0**? It doesn't have `self:update` yet, so run the install command above once. After that,
+> `artisan self:update` is enough.
+
 **From source**
 ```sh
 git clone https://github.com/ravioriginfo/kotlin-artisan && cd kotlin-artisan
@@ -71,6 +85,7 @@ artisan list                   # everything
 | Group | Commands |
 |---|---|
 | — | `list` `version` `doctor` `init [notes]` `status` `stats` |
+| `self:` | `update` |
 | `make:` | `plan` `version` `phase` `bug` |
 | `del:` | `asset` |
 | `check:` | `links` `assets` `strings [lang] [-v]` |

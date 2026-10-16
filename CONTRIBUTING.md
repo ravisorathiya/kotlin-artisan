@@ -12,6 +12,17 @@ build/install/kotlin-artisan/bin/artisan list      # Windows: build\install\kotl
 
 Run it inside any Android project to try a change.
 
+## Releasing (maintainers)
+
+1. Bump `version` in `build.gradle.kts` and add a `CHANGELOG.md` entry.
+2. Commit, then `git tag vX.Y.Z` and `git push origin main vX.Y.Z`. The tag must match the version, or the release workflow stops.
+3. The Release workflow attaches `kotlin-artisan-X.Y.Z.zip`. Users get the update notice within a day, and `artisan self:update` installs it.
+
+To try `self:update` locally without publishing: build a copy that thinks it's older
+(`./gradlew installDist "-PreportedVersion=0.0.1"`), then point it at a local release JSON with
+`ARTISAN_RELEASE_API=file:///path/release.json`. The JSON needs `tag_name` plus an `assets[]` entry with `name`
+and `browser_download_url` (a `file:///` URL works).
+
 ## Where things live
 
 | Path | What |

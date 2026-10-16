@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "io.github.ravisorathiya"
-version = "0.1.0"
+version = "0.2.0"
 
 repositories {
     mavenCentral()
@@ -46,7 +46,8 @@ distributions.main {
 }
 
 tasks.jar {
-    manifest { attributes("Implementation-Version" to project.version) }
+    // -PreportedVersion=x.y.z builds a copy that thinks it is x.y.z (used to test self:update locally).
+    manifest { attributes("Implementation-Version" to (findProperty("reportedVersion") ?: project.version)) }
 }
 
 tasks.test {

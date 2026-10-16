@@ -1,6 +1,14 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.2.0
+
+- `artisan self:update`: installs the latest GitHub release in place (Windows-safe: the swap happens after the
+  command exits).
+- Once-a-day update notice after commands (stderr, never slows a command by more than ~1.5 s, off on CI and with
+  `ARTISAN_NO_UPDATE_CHECK=1`); `artisan version` shows the latest release when it's newer.
+- If you're on 0.1.0, update once by re-running the install command; from 0.2.0 on, `artisan self:update` is enough.
+
+## 0.1.0
 
 First release: a Kotlin rewrite of a PowerShell project script.
 
