@@ -1,32 +1,45 @@
+<p align="center">
+  <a href="https://ravisorathiya.github.io/open-source/kotlin-artisan"><img src=".github/assets/banner.png" alt="kotlin-artisan: type a word, your Android project does the rest" width="100%"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/ravioriginfo/kotlin-artisan/releases/latest"><img src="https://img.shields.io/github/v/release/ravioriginfo/kotlin-artisan?style=flat-square&color=10b981&label=release" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b5cf6?style=flat-square" alt="MIT license"></a>
+  <img src="https://img.shields.io/badge/Java-17%2B-0ea5e9?style=flat-square&logo=openjdk&logoColor=white" alt="Java 17+">
+  <img src="https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-334155?style=flat-square" alt="Windows, macOS, Linux">
+</p>
+
+<p align="center">
+  <b><a href="https://ravisorathiya.github.io/open-source/kotlin-artisan">Website</a></b> ·
+  <a href="#install">Install</a> ·
+  <a href="#30-second-tour">30-second tour</a> ·
+  <a href="docs/commands.md">All commands</a>
+</p>
+
 # kotlin-artisan
 
 **An `artisan`-style command line for Android projects.** Type a word and the phone switches to dark mode, takes a
 screenshot, installs the build, shows missing translations, or opens Crashlytics. Written in Kotlin and runs
 anywhere a JDK runs (Windows, macOS, Linux).
 
-```text
-$ artisan app
-  +----+-------------+------------------------------------------------------+
-  |  # | Option      | What it does                                         |
-  +----+-------------+------------------------------------------------------+
-  |  1 | app:install | Build + install the debug APK and launch it          |
-  |  2 | app:logcat  | Stream logcat: app, crashes, or a tag                |
-  |  7 | app:dark    | Dark / light theme                                   |
-  |  9 | app:font    | Font size, e.g. 1.3                                  |
-  ...
-Pick a number (Enter = cancel): 7
-```
+<p align="center">
+  <img src=".github/assets/app.svg" alt="artisan app: a numbered picker of every phone command" width="49%" align="top">
+  <img src=".github/assets/strings.svg" alt="artisan check:strings: missing translations per module and language" width="49%" align="top">
+</p>
 
-- **Zero setup.** Run it anywhere inside a Gradle project. It finds the root, the modules (Kotlin or Groovy DSL),
-  the app module, `applicationId`, version, and Firebase project by itself.
-- **Pickers instead of memorising.** `artisan make`, `artisan app` and `artisan open` show just that group's commands.
-  If you leave out a value (`artisan app:font`), it shows the choices.
-- **Readable output.** Coloured boxed tables that fit your terminal.
-- **Phone switches for QA.** Dark/light, font scale, rotation, per-app language, screenshot, screen recording, logcat.
-- **Project health.** Missing translations per module × language, TODO/FIXME summary, lines of code, doctor.
-- **Optional notes workspace.** Versions → phases → bugs, plans, and screenshots for a team or an AI agent:
-  `make:plan`, `make:bug`, `status`, `list:verify`.
-- **Your own commands.** Add shell commands in `artisan.json` and they show up in the pickers.
+<sub>Real output from v0.2.0 on a production Android app (paths and device serial masked).</sub>
+
+## Why
+
+| Feature | What you get |
+|---|---|
+| ⚡ **Zero setup** | Run it anywhere inside a Gradle project. It finds the root, the modules (Kotlin or Groovy DSL), the app module, `applicationId`, version, and Firebase project by itself. |
+| 🔢 **Pickers instead of memorising** | `artisan make`, `artisan app` and `artisan open` show just that group's commands. Leave out a value (`artisan app:font`) and it shows the choices. |
+| 🎨 **Readable output** | Coloured boxed tables that fit your terminal. |
+| 📱 **Phone switches for QA** | Dark/light, font scale, rotation, per-app language, screenshot, screen recording, logcat. |
+| 🩺 **Project health** | Missing translations per module × language, TODO/FIXME summary, lines of code, `doctor`. |
+| 🗒️ **Optional notes workspace** | Versions → phases → bugs, plans, and screenshots for a team or an AI agent: `make:plan`, `make:bug`, `status`, `list:verify`. |
+| 🧩 **Your own commands** | Add shell commands in `artisan.json` and they show up in the pickers. |
 
 ## Install
 
@@ -94,6 +107,11 @@ artisan list                   # everything
 | `open:` | `firebase [overview\|crash\|config\|analytics]` `play` `admob` `app` `studio` `report` |
 | `build:` | `release [apk\|aab]` |
 
+<p align="center">
+  <img src=".github/assets/doctor.svg" alt="artisan doctor: Java, SDK, adb, phone, git and notes checks" width="49%" align="top">
+  <img src=".github/assets/stats.svg" alt="artisan stats: Kotlin and Java lines per module" width="49%" align="top">
+</p>
+
 Full reference with examples: [docs/commands.md](docs/commands.md).
 
 Flags: `-y` skips "yes" confirmations, `-v` shows details, `-md` prints markdown (`list:verify`).
@@ -147,6 +165,8 @@ coding agents.
 ## Contributing
 
 Issues and PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+If artisan saves you a few clicks, a ⭐ helps other Android devs find it.
 
 ## License
 
