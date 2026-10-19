@@ -397,7 +397,7 @@ internal fun scaffoldNotes(p: Project, dir: File) {
 private val NOTES_README = """
     |# Notes
     |
-    |Working notes for this project, managed with [kotlin-artisan](https://github.com/ravioriginfo/kotlin-artisan).
+    |Working notes for this project, managed with [kotlin-artisan](https://github.com/ravisorathiya/kotlin-artisan).
     |
     || Folder | What goes in it |
     ||---|---|

@@ -22,7 +22,7 @@ import java.nio.file.Files
 import java.util.zip.ZipInputStream
 
 /** GitHub repo that publishes releases. Change it here when the repo moves (GitHub redirects in the meantime). */
-const val RELEASE_REPO = "ravioriginfo/kotlin-artisan"
+const val RELEASE_REPO = "ravisorathiya/kotlin-artisan"
 
 /** Release API endpoint; ARTISAN_RELEASE_API overrides it (used to test updates against a local file:// release). */
 private val releaseApi get() = System.getenv("ARTISAN_RELEASE_API") ?: "https://api.github.com/repos/$RELEASE_REPO/releases/latest"

@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ravioriginfo/kotlin-artisan/releases/latest"><img src="https://img.shields.io/github/v/release/ravioriginfo/kotlin-artisan?style=flat-square&color=10b981&label=release" alt="Latest release"></a>
+  <a href="https://github.com/ravisorathiya/kotlin-artisan/releases/latest"><img src="https://img.shields.io/github/v/release/ravisorathiya/kotlin-artisan?style=flat-square&color=10b981&label=release" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b5cf6?style=flat-square" alt="MIT license"></a>
   <img src="https://img.shields.io/badge/Java-17%2B-0ea5e9?style=flat-square&logo=openjdk&logoColor=white" alt="Java 17+">
   <img src="https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-334155?style=flat-square" alt="Windows, macOS, Linux">
@@ -50,12 +50,12 @@ manual setup, see [docs/setup.md](docs/setup.md).
 
 **Windows (PowerShell)**
 ```powershell
-irm https://raw.githubusercontent.com/ravioriginfo/kotlin-artisan/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/ravisorathiya/kotlin-artisan/main/install.ps1 | iex
 ```
 
 **macOS / Linux**
 ```sh
-curl -fsSL https://raw.githubusercontent.com/ravioriginfo/kotlin-artisan/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/ravisorathiya/kotlin-artisan/main/install.sh | sh
 ```
 
 Both install `kotlin-artisan` and a short alias `artisan` into a user folder and add it to your PATH. Open a new
@@ -77,7 +77,7 @@ never slows a command by more than ~1.5 s, stays quiet when you're offline, and 
 
 **From source**
 ```sh
-git clone https://github.com/ravioriginfo/kotlin-artisan && cd kotlin-artisan
+git clone https://github.com/ravisorathiya/kotlin-artisan && cd kotlin-artisan
 ./gradlew installDist        # -> build/install/kotlin-artisan/bin/{kotlin-artisan,artisan}
 ```
 

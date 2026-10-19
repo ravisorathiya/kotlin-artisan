@@ -18,7 +18,7 @@ The installer handles it. It checks for Java and adb, and for each one that's mi
 2. **Otherwise install it with winget**: Eclipse Temurin 21 for Java, Google Platform Tools for adb.
 
 ```powershell
-irm https://raw.githubusercontent.com/ravioriginfo/kotlin-artisan/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/ravisorathiya/kotlin-artisan/main/install.ps1 | iex
 ```
 
 Press Enter to accept each offer. To accept all of them without prompts, run `$env:ARTISAN_YES = '1'` first.

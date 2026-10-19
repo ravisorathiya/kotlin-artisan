@@ -1,10 +1,10 @@
 #!/bin/sh
 # Installs the latest kotlin-artisan release for the current user (macOS / Linux).
-#   curl -fsSL https://raw.githubusercontent.com/ravioriginfo/kotlin-artisan/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/ravisorathiya/kotlin-artisan/main/install.sh | sh
 # Installs to ~/.kotlin-artisan and links artisan + kotlin-artisan into ~/.local/bin.
 set -eu
 
-repo="ravioriginfo/kotlin-artisan"
+repo="ravisorathiya/kotlin-artisan"
 dest="$HOME/.kotlin-artisan"
 links="$HOME/.local/bin"
 

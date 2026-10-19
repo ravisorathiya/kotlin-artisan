@@ -1,11 +1,11 @@
 # Installs the latest kotlin-artisan release for the current user (Windows).
-#   irm https://raw.githubusercontent.com/ravioriginfo/kotlin-artisan/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/ravisorathiya/kotlin-artisan/main/install.ps1 | iex
 # Installs to %LOCALAPPDATA%\kotlin-artisan and adds its bin folder to the user PATH.
 # Also offers to set up Java 17+ and adb when they're missing: reuses Android Studio's JDK / SDK if present,
 # otherwise installs them with winget. Set ARTISAN_YES=1 to accept every offer without asking.
 
 $ErrorActionPreference = 'Stop'
-$repo = 'ravioriginfo/kotlin-artisan'
+$repo = 'ravisorathiya/kotlin-artisan'
 $dest = Join-Path $env:LOCALAPPDATA 'kotlin-artisan'
 $guide = "https://github.com/$repo/blob/main/docs/setup.md"
 
