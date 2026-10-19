@@ -96,7 +96,7 @@ private fun checkStrings(ctx: Ctx) {
     val waiting = p.modules.flatMap { m ->
         val res = File(m.dir, "src/main/res")
         (res.listFiles() ?: emptyArray()).filter { it.isDirectory && LANG_DIR.matches(it.name) }
-            .map { it.name.removePrefix("values-") }.filter { only.isEmpty() || it in only }
+            .map { it.name.removePrefix("values-") }.sorted().filter { only.isEmpty() || it in only }
             .flatMap { lang -> untranslatedKeys(File(res, "values-$lang/strings.xml")).map { Triple(m.name, lang, it) } }
     }
     if (waiting.isNotEmpty()) {

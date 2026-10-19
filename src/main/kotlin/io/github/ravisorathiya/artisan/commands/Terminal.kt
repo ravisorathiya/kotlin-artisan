@@ -183,7 +183,7 @@ internal fun stagedIssues(p: Project): List<StagedIssue> {
             .mapNotNull { Regex("""<(?:string|plurals|string-array)\s+name="([^"]+)"(?![^>]*translatable="false")""").find(it)?.groupValues?.get(1) }
         if (keys.isEmpty()) continue
         val res = File(p.root, path).parentFile.parentFile
-        val locales = (res.listFiles() ?: emptyArray()).filter { it.isDirectory && LANG_DIR.matches(it.name) && File(it, "strings.xml").isFile }
+        val locales = (res.listFiles() ?: emptyArray()).filter { it.isDirectory && LANG_DIR.matches(it.name) && File(it, "strings.xml").isFile }.sortedBy { it.name }
         for (key in keys) {
             val missing = locales.filter { key !in stringKeys(File(it, "strings.xml")) }.map { it.name.removePrefix("values-") }
             if (missing.isNotEmpty()) issues += StagedIssue(true, "String '$key' is missing in ${missing.joinToString(" ")}. Fix: add it there (artisan make:string adds new keys everywhere).")
