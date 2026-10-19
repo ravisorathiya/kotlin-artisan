@@ -35,8 +35,11 @@ internal fun bundleWorthy(p: Project, path: String): Boolean {
 internal fun gitChanges(p: Project, since: String): List<Change> {
     fun git(vararg a: String) = Proc.run("git", *a, dir = p.root)
     if (!git("rev-parse", "--verify", "--quiet", "$since^{commit}").ok) throw CliError("'$since' isn't a tag or commit in this repository.")
-    val top = File(git("rev-parse", "--show-toplevel").out.trim()).absoluteFile
-    fun rel(gitPath: String): String? = File(top, gitPath).absoluteFile.normalize().relativeToOrNull(p.root.absoluteFile.normalize())?.invariantSeparatorsPath
+    // canonical on both sides: git prints the resolved path, the project path may be a symlink (macOS /var ->
+    // /private/var) or a Windows 8.3 short name (RUNNER~1)
+    val top = File(git("rev-parse", "--show-toplevel").out.trim()).canonicalFile
+    val root = p.root.canonicalFile
+    fun rel(gitPath: String): String? = File(top, gitPath).normalize().relativeToOrNull(root)?.invariantSeparatorsPath
     val out = mutableListOf<Change>()
     for (line in git("diff", "--name-status", "-M", since).lines) {
         val cols = line.split('\t')
