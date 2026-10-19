@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.0
+
+- `artisan make:ai`: adds an `:ai` agent-workspace module (README with agent rules, `workflow/`, `assets/`,
+  `event/event.md` pre-filled from `firebaseEvent(...)` calls) and includes it in the settings file.
+- Notes commands understand the `:ai` layout: version folders with a stage (`v_1_8_alpha`), `plan/` as well as
+  `plans/`, `[]` as an open item, and `ai/src/main/java/ai` is found without `artisan.json`.
+  `make:version 1.9 alpha` creates a staged folder.
+- Windows installer sets up Java 17+ and adb when they're missing. It reuses Android Studio's JDK and the SDK's
+  `platform-tools` when present, otherwise installs them with `winget` (asks first; `ARTISAN_YES=1` skips the
+  questions).
+- `install.sh` prints the brew/apt commands for a missing Java or adb.
+- New setup guide: [docs/setup.md](docs/setup.md).
+- `artisan setup`: puts adb on PATH (SDK copy, else `winget` / `brew`) and sets `JAVA_HOME` (Android Studio's
+  `jbr`), asking first. `make:ai` runs it at the end when adb or `JAVA_HOME` is missing.
+- Windows app-execution aliases (such as `winget.exe`) are now found on PATH.
+- When adb is missing, `doctor` and the `app:*` commands say how to fix it. The `doctor` Java row shows `JAVA_HOME`.
+
 ## 0.3.0
 
 - Plain output: when stdout isn't a terminal (pipe, file, AI agent), tables print as compact tab-separated rows

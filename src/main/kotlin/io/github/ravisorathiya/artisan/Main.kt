@@ -1,11 +1,13 @@
 package io.github.ravisorathiya.artisan
 
+import io.github.ravisorathiya.artisan.commands.registerAi
 import io.github.ravisorathiya.artisan.commands.registerApp
 import io.github.ravisorathiya.artisan.commands.registerCode
 import io.github.ravisorathiya.artisan.commands.registerCustom
 import io.github.ravisorathiya.artisan.commands.registerMisc
 import io.github.ravisorathiya.artisan.commands.registerNotes
 import io.github.ravisorathiya.artisan.commands.registerOpen
+import io.github.ravisorathiya.artisan.commands.registerSetup
 import io.github.ravisorathiya.artisan.commands.registerUpdate
 import io.github.ravisorathiya.artisan.commands.UpdateCheck
 import io.github.ravisorathiya.artisan.core.Cancelled
@@ -27,10 +29,12 @@ fun main(argv: Array<String>) {
     val code = try {
         registerMisc()
         registerNotes()
+        registerAi()
         registerCode()
         registerApp()
         registerOpen()
         registerUpdate()
+        registerSetup()
         ctx.projectOrNull?.let { registerCustom(it) }
         Registry.dispatch(command, ctx)
         UpdateCheck.notifyIfNewer(command)

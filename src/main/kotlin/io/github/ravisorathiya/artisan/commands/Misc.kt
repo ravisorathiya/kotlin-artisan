@@ -15,7 +15,6 @@ import io.github.ravisorathiya.artisan.project.LogcatConfig
 import io.github.ravisorathiya.artisan.project.NotesConfig
 import io.github.ravisorathiya.artisan.project.Project
 import java.io.File
-import java.util.Properties
 
 fun registerMisc() {
     Registry.add("list", "list", "Show this list") { Registry.printList() }
@@ -62,17 +61,18 @@ private fun doctor(ctx: Ctx) {
     }
     val p = ctx.projectOrNull
     check("Project") { p?.let { "${it.root} (${it.modules.size} modules)" } ?: throw CliError("not inside a Gradle project") }
-    check("Java") { "${System.getProperty("java.version")} (${System.getProperty("java.vendor")})" }
+    check("Java") {
+        val javaHome = System.getenv("JAVA_HOME")?.let { "JAVA_HOME=$it" } ?: "JAVA_HOME not set, Gradle uses java from PATH"
+        "${System.getProperty("java.version")} (${System.getProperty("java.vendor")}), $javaHome"
+    }
     check("Gradle wrapper") { p?.gradlew?.takeIf { it.isFile }?.name ?: throw CliError("no gradlew in the project root") }
     check("Android SDK") {
-        val lp = p?.let { File(it.root, "local.properties") }
-        val fromFile = lp?.takeIf { it.isFile }?.let { Properties().apply { it.inputStream().use(::load) }.getProperty("sdk.dir") }
-        val sdk = fromFile ?: System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT") ?: throw CliError("sdk.dir not in local.properties and ANDROID_HOME not set")
+        val sdk = localSdkDir(p?.root) ?: System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT") ?: throw CliError("sdk.dir not in local.properties and ANDROID_HOME not set")
         if (!File(sdk).isDirectory) throw CliError("does not exist: $sdk")
         sdk
     }
     check("App module") { p?.appModule?.let { "${it.name} -> ${p.packageName ?: "applicationId not found"}" } ?: throw CliError("no module applies com.android.application") }
-    check("adb") { Proc.which("adb")?.path ?: throw CliError("adb not on PATH") }
+    check("adb") { Proc.which("adb")?.path ?: throw CliError("not on PATH - ${adbMissingHint()}") }
     check("Phone") {
         if (Proc.which("adb") == null) throw CliError("needs adb")
         val d = adb("devices").lines.drop(1).filter { it.endsWith("\tdevice") }
@@ -88,7 +88,7 @@ private fun doctor(ctx: Ctx) {
         val n = p?.notes ?: throw CliError("none (optional: artisan init notes)")
         val v = p.versionName?.let { Regex("""^(\d+)\.(\d+)""").find(it)?.value }
         val name = v?.let { "v_" + it.replace('.', '_') }
-        if (name != null && !File(n.workflow, name).isDirectory) throw CliError("versionName $v but no workflow/$name")
+        if (name != null && n.versionFolders().none { it.name == name || it.name.startsWith(name + "_") }) throw CliError("versionName $v but no workflow/$name")
         "${p.rel(n.dir)} (latest: ${n.versionFolders().lastOrNull()?.name ?: "-"}, ${n.assetFiles().size} assets)"
     }
     Ui.table("Doctor", listOf("Check", "Result", "Detail"), rows)

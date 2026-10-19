@@ -45,11 +45,27 @@ internal fun Notes.assetRefs(): List<AssetRef> = mdFiles().flatMap { md ->
     }
 }
 
-private val versionDir = Regex("""^v_(\d+)_(\d+)$""")
+/** v_1_8, or with a release stage: v_1_8_alpha (the :ai workspace style). */
+private val versionDir = Regex("""^v_(\d+)_(\d+)(?:_([a-z]+))?$""")
+private val STAGES = listOf("alpha", "beta", "rc")
+
+/** Sort key for a version folder name, null if it isn't one. alpha < beta < rc < other stage < no stage. */
+internal fun versionKey(name: String): Triple<Int, Int, Int>? {
+    val g = versionDir.find(name)?.groupValues ?: return null
+    val stage = g[3].ifEmpty { null }?.let { s -> STAGES.indexOf(s).takeIf { it >= 0 } ?: STAGES.size } ?: (STAGES.size + 1)
+    return Triple(g[1].toInt(), g[2].toInt(), stage)
+}
 
 internal fun Notes.versionFolders(): List<File> = (workflow.listFiles() ?: emptyArray())
-    .filter { it.isDirectory && versionDir.matches(it.name) }
-    .sortedWith(compareBy({ versionDir.find(it.name)!!.groupValues[1].toInt() }, { versionDir.find(it.name)!!.groupValues[2].toInt() }))
+    .filter { it.isDirectory && versionKey(it.name) != null }
+    .sortedWith(compareBy({ versionKey(it.name)!!.first }, { versionKey(it.name)!!.second }, { versionKey(it.name)!!.third }))
+
+/** "1.9", "1.9 alpha", "1.9-alpha" -> v_1_9 / v_1_9_alpha. Null if it doesn't look like a version. */
+internal fun versionFolderName(raw: String): String? {
+    val m = Regex("""^(\d+)\.(\d+)(?:[\s_-]+([a-zA-Z]+))?$""").find(raw.trim()) ?: return null
+    val (major, minor, stage) = m.destructured
+    return "v_${major}_$minor" + if (stage.isEmpty()) "" else "_" + stage.lowercase()
+}
 
 internal fun Notes.latestVersion(): File = versionFolders().lastOrNull()
     ?: throw CliError("No workflow/v_* folders yet. Run: artisan make:version")
@@ -60,7 +76,7 @@ internal fun phaseFiles(versionDir: File): List<File> = (versionDir.listFiles() 
 
 internal class OpenLine(val line: Int, val text: String)
 
-private val openRegex = Regex("""\[ \]|\[~\]|\[-\]|VERIFY ON DEVICE|ASK DEV""")
+private val openRegex = Regex("""\[ \]|^\s*[*-]\s*\[\]|\[~\]|\[-\]|VERIFY ON DEVICE|ASK DEV""")
 
 internal fun openLines(file: File): List<OpenLine> = file.readLines().mapIndexedNotNull { i, l ->
     if (openRegex.containsMatchIn(l) && !Regex("""^\s*(\||Status:)""").containsMatchIn(l)) OpenLine(i + 1, l.trim()) else null
@@ -76,7 +92,7 @@ private fun writeUtf8(f: File, text: String) = f.writeText(text, Charsets.UTF_8)
 fun registerNotes() {
     Registry.add("status", "status", "Version, phase table and every open item") { status(it) }
     Registry.add("make:plan", "make:plan [name]", "Create plans/<snake_case>.md (asks the name)") { makePlan(it) }
-    Registry.add("make:version", "make:version [x.y]", "Create workflow/v_x_y with overview.md + phase_1.md") { makeVersion(it) }
+    Registry.add("make:version", "make:version [x.y] [stage]", "Create workflow/v_x_y(_stage) with overview.md + phase_1.md") { makeVersion(it) }
     Registry.add("make:phase", "make:phase [summary]", "Create the next phase_<n>.md + its overview row") { makePhase(it) }
     Registry.add("make:bug", "make:bug", "Add a bug line to the latest phase (asks screen, area, problem)") { makeBug(it) }
     Registry.add("del:asset", "del:asset [name...]", "Delete notes asset files (pick one, or all)") { delAsset(it) }
@@ -155,17 +171,17 @@ private fun makePlan(ctx: Ctx) {
     if (phase != null) Ui.say("Link it under ## Changes in ${ctx.project.rel(phase)}:  [plans/$name.md](../../plans/$name.md)", Tone.DIM)
 }
 
-private fun phaseSkeleton(version: String, n: Int) = "# $version - Phase $n\n\n## Changes\n\n## Bugs\n"
+internal fun phaseSkeleton(version: String, n: Int) = "# $version - Phase $n\n\n## Changes\n\n## Bugs\n"
 
 private fun makeVersion(ctx: Ctx) {
     val notes = ctx.notes
     val prev = notes.versionFolders().lastOrNull()
-    val suggest = prev?.let { versionDir.find(it.name)!!.groupValues.let { g -> "${g[1]}.${g[2].toInt() + 1}" } }
+    // keep the previous folder's stage: v_1_8_alpha -> suggest "1.9 alpha"
+    val suggest = prev?.let { versionDir.find(it.name)!!.groupValues.let { g -> "${g[1]}.${g[2].toInt() + 1}" + if (g[3].isEmpty()) "" else " ${g[3]}" } }
         ?: ctx.project.versionName?.let { Regex("""^(\d+)\.(\d+)""").find(it)?.value } ?: "1.0"
     if (prev != null) Ui.say("Latest version folder: ${prev.name}", Tone.DIM)
-    val ver = ctx.arg(0) ?: Ui.ask("Version", suggest)
-    if (!Regex("""^\d+\.\d+$""").matches(ver)) throw CliError("Version must look like 1.2 (got '$ver').")
-    val name = "v_" + ver.replace('.', '_')
+    val ver = ctx.args.joinToString(" ").ifEmpty { Ui.ask("Version", suggest) }
+    val name = versionFolderName(ver) ?: throw CliError("Version must look like 1.2 or 1.2 alpha (got '$ver').")
     val dir = File(notes.workflow, name)
     if (dir.exists()) throw CliError("$name already exists.")
 

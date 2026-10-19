@@ -34,6 +34,7 @@ anywhere a JDK runs (Windows, macOS, Linux).
 | Feature | What you get |
 |---|---|
 | ⚡ **Zero setup** | Run it anywhere inside a Gradle project. It finds the root, the modules (Kotlin or Groovy DSL), the app module, `applicationId`, version, and Firebase project by itself. |
+| 🧰 **Easy tool setup** | Missing Java or adb? The Windows installer and `artisan setup` reuse Android Studio's JDK and SDK, or install them with `winget` / `brew`. Guide: [docs/setup.md](docs/setup.md). |
 | 🔢 **Pickers instead of memorising** | `artisan make`, `artisan app` and `artisan open` show just that group's commands. Leave out a value (`artisan app:font`) and it shows the choices. |
 | 🎨 **Readable output** | Coloured boxed tables that fit your terminal. |
 | 📱 **Phone switches for QA** | Dark/light, font scale, rotation, per-app language, screenshot, screen recording, logcat. |
@@ -43,7 +44,9 @@ anywhere a JDK runs (Windows, macOS, Linux).
 
 ## Install
 
-Needs Java 17+ (Android Studio's bundled JDK works) and, for the phone commands, `adb` on your PATH.
+Needs Java 17+ (Android Studio's bundled JDK works) and, for the phone commands, `adb` on your PATH. The Windows
+installer sets both up for you: it reuses Android Studio's copies or installs them with `winget`. For macOS/Linux or
+manual setup, see [docs/setup.md](docs/setup.md).
 
 **Windows (PowerShell)**
 ```powershell
@@ -82,6 +85,7 @@ git clone https://github.com/ravioriginfo/kotlin-artisan && cd kotlin-artisan
 
 ```sh
 artisan doctor                 # Java, SDK, adb, phone, git: what's OK, what's missing
+artisan setup                  # put adb on PATH + set JAVA_HOME (SDK copy, else winget/brew)
 artisan app:install            # build + install + launch the debug app
 artisan app:dark on            # dark theme on the phone   (artisan app:light to go back)
 artisan app:font 1.3           # large font                (artisan app:font reset)
@@ -97,7 +101,7 @@ artisan list                   # everything
 
 | Group | Commands |
 |---|---|
-| — | `list` `version` `doctor` `init [notes]` `status` `stats` |
+| — | `list` `version` `doctor` `setup` `init [notes]` `status` `stats` |
 | `self:` | `update` |
 | `make:` | `plan` `version` `phase` `bug` |
 | `del:` | `asset` |
@@ -166,6 +170,11 @@ notes/
 Then `make:plan`, `make:phase`, `make:version`, `make:bug`, `status`, `list:plans`, `list:verify`, `check:links`
 and `check:assets` keep it tidy. It's plain markdown, so it works for a team, or as cross-session memory for AI
 coding agents.
+
+For AI agents specifically, `artisan make:ai` adds an `:ai` Gradle module with the same workspace in
+`ai/src/main/java/ai/` (visible in Android Studio, never shipped): an agent README with the working rules,
+`workflow/v_1_0_alpha/`, `assets/`, and `event/event.md` pre-filled from the app's `firebaseEvent(...)` calls.
+The notes commands find it without any config.
 
 ## Contributing
 

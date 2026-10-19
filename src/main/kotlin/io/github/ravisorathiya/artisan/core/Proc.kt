@@ -2,6 +2,8 @@ package io.github.ravisorathiya.artisan.core
 
 import java.io.File
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.LinkOption
 
 object Os {
     private val name = System.getProperty("os.name").lowercase()
@@ -20,9 +22,10 @@ object Proc {
      * Runs a program and captures stdout+stderr. Its stdin is the null device, so it can never swallow the
      * user's answer to the next picker (an `adb` call did exactly that in the PowerShell version).
      */
-    fun run(vararg cmd: String, dir: File? = null): ProcResult {
+    fun run(vararg cmd: String, dir: File? = null, env: Map<String, String> = emptyMap()): ProcResult {
         val pb = ProcessBuilder(cmd.toList()).redirectErrorStream(true).redirectInput(ProcessBuilder.Redirect.from(Os.nullFile))
         dir?.let { pb.directory(it) }
+        pb.environment().putAll(env)
         val p = try {
             pb.start()
         } catch (e: IOException) {
@@ -55,13 +58,17 @@ object Proc {
         for (dir in path.split(File.pathSeparatorChar)) {
             for (ext in exts) {
                 val f = File(dir, name + ext.lowercase())
-                if (f.isFile) return f
+                if (isFileOrAlias(f)) return f
                 val g = File(dir, name + ext)
-                if (g.isFile) return g
+                if (isFileOrAlias(g)) return g
             }
         }
         return null
     }
+
+    /** Windows app execution aliases (WindowsApps\winget.exe) are reparse points that File.isFile reports as missing. */
+    private fun isFileOrAlias(f: File): Boolean =
+        f.isFile || (Os.isWindows && runCatching { Files.exists(f.toPath(), LinkOption.NOFOLLOW_LINKS) && !f.isDirectory }.getOrDefault(false))
 
     /** Opens a URL or file with the OS default handler (browser, viewer). */
     fun open(target: String) {

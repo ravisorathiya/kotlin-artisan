@@ -37,7 +37,8 @@ data class Module(val name: String, val dir: File) {
 class Notes(val dir: File) {
     val assets = File(dir, "assets")
     val workflow = File(dir, "workflow")
-    val plans = File(dir, "plans")
+    /** plans/, or plan/ (the :ai workspace style) when only that exists. */
+    val plans: File get() = listOf("plans", "plan").map { File(dir, it) }.firstOrNull { it.isDirectory } ?: File(dir, "plans")
 }
 
 class Project(val root: File, val config: Config) {
@@ -73,7 +74,8 @@ class Project(val root: File, val config: Config) {
     }
 
     val notes: Notes? by lazy {
-        val dir = config.notes?.dir?.let { File(root, it) } ?: File(root, "notes").takeIf { it.isDirectory }
+        val dir = config.notes?.dir?.let { File(root, it) }
+            ?: listOf("notes", AI_WORKSPACE).map { File(root, it) }.firstOrNull { it.isDirectory }
         dir?.takeIf { it.isDirectory }?.let(::Notes)
     }
 
@@ -89,6 +91,9 @@ class Project(val root: File, val config: Config) {
     companion object {
         val SETTINGS = listOf("settings.gradle.kts", "settings.gradle")
         const val CONFIG_FILE = "artisan.json"
+
+        /** The agent workspace inside the `:ai` module (`artisan make:ai`). */
+        const val AI_WORKSPACE = "ai/src/main/java/ai"
         val json = Json { ignoreUnknownKeys = true; prettyPrint = true; encodeDefaults = false }
 
         /** Walks up from [start] to the first folder with a settings.gradle(.kts). */

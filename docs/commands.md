@@ -25,7 +25,8 @@ cut with `...` to fit the terminal.
 |---|---|
 | `list` | Every command, grouped (`help` works too) |
 | `version` | kotlin-artisan version, project, versionName/versionCode, Java |
-| `doctor` | `OK`/`FAIL` per check: project, Java, Gradle wrapper, Android SDK (`local.properties` or `ANDROID_HOME`), app module + package, adb, the connected phone + its SDK, git, notes |
+| `doctor` | `OK`/`FAIL` per check: project, Java, Gradle wrapper, Android SDK (`local.properties` or `ANDROID_HOME`), app module + package, adb, the connected phone + its SDK, git, notes. A missing adb row says how to fix it (SDK folder to add to PATH, or `winget`/`brew`/`apt` command); see [setup.md](setup.md) |
+| `setup` | Checks adb and `JAVA_HOME`. For each one that's missing it offers a fix (asks first, `-y` skips): adds the Android SDK's `platform-tools` to your user PATH, otherwise installs adb with `winget` (Windows) or `brew` (macOS); sets `JAVA_HOME` to Android Studio's `jbr` (or the Java artisan runs on). On macOS/Linux it prints the `export` line for your shell profile instead of editing it |
 | `init` | Writes `artisan.json` with the detected values (shows it first, asks "yes") |
 | `init notes` | Creates the notes workspace (asks for the folder, default `notes/`) |
 | `status` | versionName / versionCode / package, then (with notes) the latest version's phase table and every open item |
@@ -84,12 +85,14 @@ All of these need `adb` and a connected device. Each prints the new value. Remem
 
 ## Notes workspace
 
-Needs a notes folder (`artisan init notes`, or `notes.dir` in `artisan.json`):
+Needs a notes folder: `artisan init notes`, `artisan make:ai` (below), or `notes.dir` in `artisan.json`. Without
+`notes.dir`, artisan uses `notes/`, else `ai/src/main/java/ai/`.
 
 ```text
 <notes>/workflow/v_<major>_<minor>/overview.md   phase table: | Phase | File | Summary | Status |
+                                                 (a stage suffix works too: v_1_8_alpha)
 <notes>/workflow/v_<major>_<minor>/phase_<n>.md  ## Changes / ## Bugs
-<notes>/plans/<name>.md                          one per feature or fix, with a "Status: `[~]`" line
+<notes>/plans/<name>.md                          one per feature or fix, with a "Status: `[~]`" line (or plan/)
 <notes>/assets/                                  screenshots / recordings
 ```
 
@@ -98,7 +101,8 @@ Status markers: `[ ]` not started, `[~]` in progress, `[x]` done, `[-]` blocked.
 | Type this | What happens |
 |---|---|
 | `artisan make:plan [name]` | `plans/<snake_case>.md` from a template (refuses if a similar plan exists) and prints the link line for the phase file. `EditTextUndo` → `edit_text_undo.md` |
-| `artisan make:version [x.y]` | `workflow/v_x_y/` with `overview.md` + `phase_1.md`. Suggests the next version, and copies every open item from the previous version into "Carried over". Never touches `versionName` |
+| `artisan make:ai [x.y] [stage]` | Adds an `:ai` Gradle module that holds the AI-agent workspace in `ai/src/main/java/ai/`: `README.md` (rules for agents, keeping `:ai` out of production, tracking conventions), `assets/`, `workflow/v_x_y_alpha/` (`overview.md` + `phase_1.md`) and, when the code calls `firebaseEvent(`, `event/event.md` pre-filled with every event name per screen. Adds `include(":ai")` to the settings file. The module is a plain `java-library` (plus the Kotlin JVM plugin when the version catalog already has it), and no other module may depend on it. Default version: `versionName` + `alpha`. When adb or `JAVA_HOME` is missing, it finishes by running `setup` |
+| `artisan make:version [x.y] [stage]` | `workflow/v_x_y/` (or `v_x_y_<stage>`, e.g. `1.9 alpha`) with `overview.md` + `phase_1.md`. Suggests the next version, and copies every open item from the previous version into "Carried over". Never touches `versionName` |
 | `artisan make:phase [summary]` | The next `phase_<n>.md` in the latest version, plus its row in `overview.md` |
 | `artisan make:bug` | Asks screen, area, problem, then appends `* [ ] **Screen – Area:** problem. VERIFY ON DEVICE` under `## Bugs` of the latest phase. Or in one go: `artisan make:bug "Home - Search bar: text overlaps icon"` |
 | `artisan del:asset` | Picker: all, or one file (size + date). Then the list, a "yes", and the notes lines that now link to deleted files |

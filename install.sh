@@ -8,7 +8,21 @@ repo="ravioriginfo/kotlin-artisan"
 dest="$HOME/.kotlin-artisan"
 links="$HOME/.local/bin"
 
-command -v java >/dev/null 2>&1 || [ -n "${JAVA_HOME:-}" ] || echo "kotlin-artisan needs Java 17+ (Android Studio's jbr works: export JAVA_HOME=...)."
+guide="https://github.com/$repo/blob/main/docs/setup.md"
+case "$(uname -s)" in
+  Darwin) java_fix="brew install --cask temurin@21   (or: export JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\")"
+          adb_fix="brew install android-platform-tools   (or add ~/Library/Android/sdk/platform-tools to PATH)" ;;
+  *)      java_fix="sudo apt install openjdk-17-jdk   (or: export JAVA_HOME=<android-studio>/jbr)"
+          adb_fix="sudo apt install adb   (or add ~/Android/Sdk/platform-tools to PATH)" ;;
+esac
+if ! command -v java >/dev/null 2>&1 && [ -z "${JAVA_HOME:-}" ]; then
+  echo "kotlin-artisan needs Java 17+. Install it: $java_fix"
+  echo "  Guide: $guide"
+fi
+if ! command -v adb >/dev/null 2>&1; then
+  echo "adb is not on your PATH (the app:* commands need it). Install it: $adb_fix"
+  echo "  Guide: $guide"
+fi
 
 url=$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" \
   | grep -o '"browser_download_url": *"[^"]*kotlin-artisan-[^"]*\.zip"' | head -n1 | sed 's/.*"\(https[^"]*\)"/\1/')
@@ -30,4 +44,4 @@ case ":$PATH:" in
   *":$links:"*) ;;
   *) echo "Add $links to your PATH, e.g.: echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.profile" ;;
 esac
-echo "Installed. Run: artisan list"
+echo "Installed. Run: artisan doctor"

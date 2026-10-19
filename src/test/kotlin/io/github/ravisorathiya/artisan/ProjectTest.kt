@@ -1,8 +1,12 @@
 package io.github.ravisorathiya.artisan
 
+import io.github.ravisorathiya.artisan.commands.addInclude
+import io.github.ravisorathiya.artisan.commands.firebaseEvents
 import io.github.ravisorathiya.artisan.commands.glob
+import io.github.ravisorathiya.artisan.commands.scaffoldAi
 import io.github.ravisorathiya.artisan.commands.snakeCase
 import io.github.ravisorathiya.artisan.commands.stringKeys
+import io.github.ravisorathiya.artisan.commands.versionFolderName
 import io.github.ravisorathiya.artisan.project.Gradle
 import io.github.ravisorathiya.artisan.project.Project
 import java.io.File
@@ -154,5 +158,92 @@ class NamingTest {
         assertTrue(glob("idcard/*").matches("idcard/front.png"))
         assertTrue(!glob("*.png").matches("a.png.bak"))
         assertTrue(glob("shot_?.png").matches("shot_1.png"))
+    }
+}
+
+class VersionFolderTest {
+    @Test
+    fun `version folders with a stage sort after plain numbers`() {
+        val names = listOf("v_1_8", "v_1_10_alpha", "v_1_8_alpha", "v_1_9_beta", "v_1_9_alpha", "notes", "v_1_8_rc")
+        val sorted = names.filter { io.github.ravisorathiya.artisan.commands.versionKey(it) != null }
+            .sortedWith(compareBy({ io.github.ravisorathiya.artisan.commands.versionKey(it)!!.first }, { io.github.ravisorathiya.artisan.commands.versionKey(it)!!.second }, { io.github.ravisorathiya.artisan.commands.versionKey(it)!!.third }))
+        assertEquals(listOf("v_1_8_alpha", "v_1_8_rc", "v_1_8", "v_1_9_alpha", "v_1_9_beta", "v_1_10_alpha"), sorted)
+    }
+
+    @Test
+    fun `version input becomes a folder name`() {
+        assertEquals("v_1_9", versionFolderName("1.9"))
+        assertEquals("v_1_9_alpha", versionFolderName("1.9 alpha"))
+        assertEquals("v_1_9_beta", versionFolderName("1.9-Beta"))
+        assertNull(versionFolderName("1.9.2"))
+    }
+}
+
+class AiScaffoldTest {
+    private val tmp: File = Files.createTempDirectory("artisan-ai").toFile()
+
+    @AfterTest
+    fun cleanup() {
+        tmp.deleteRecursively()
+    }
+
+    private fun write(path: String, text: String) = File(tmp, path).apply { parentFile.mkdirs(); writeText(text) }
+
+    @Test
+    fun `include goes after the last include statement`() {
+        val kts = "rootProject.name = \"x\"\ninclude(\":app\")\ninclude(\n    \":core\",\n    \":data\"\n)\n\nplugins {}\n"
+        assertEquals("rootProject.name = \"x\"\ninclude(\":app\")\ninclude(\n    \":core\",\n    \":data\"\n)\ninclude(\":ai\")\n\nplugins {}\n", addInclude(kts, kts = true))
+        assertEquals("include ':app',\n        ':lib'\ninclude ':ai'\n", addInclude("include ':app',\n        ':lib'\n", kts = false))
+        assertEquals("rootProject.name = 'x'\r\ninclude ':ai'\r\n", addInclude("rootProject.name = 'x'\r\n\r\n", kts = false))
+    }
+
+    @Test
+    fun `scaffolds the module, workspace and event names`() {
+        write("settings.gradle.kts", "include(\":app\")\ninclude(\":core\")\n")
+        write("app/build.gradle.kts", """plugins { id("com.android.application") }
+            android { defaultConfig { applicationId = "com.demo"; versionName = "1.7" } }""")
+        write("core/build.gradle.kts", "")
+        write("app/src/main/java/com/demo/SplashActivity.kt", """
+            firebaseEvent("SplashAct_OnCreate")
+            // firebaseEvent("SplashAct_Old")
+            firebaseEvent(
+                "SplashAct_OnResume", Bundle())
+        """.trimIndent())
+        val p = assertNotNull(Project.find(tmp))
+
+        val events = assertNotNull(firebaseEvents(p))
+        assertEquals(mapOf("SplashActivity" to listOf("SplashAct_OnCreate", "SplashAct_OnResume")), events)
+        scaffoldAi(p, "v_1_7_alpha", events)
+
+        assertTrue(File(tmp, "settings.gradle.kts").readText().contains("include(\":ai\")"))
+        assertTrue(File(tmp, "ai/build.gradle.kts").readText().contains("id(\"java-library\")"))
+        val ws = File(tmp, Project.AI_WORKSPACE)
+        val readme = File(ws, "README.md").readText()
+        assertTrue("`:app`, `:core`" in readme)
+        assertTrue("Analytics event sync" in readme && "{{" !in readme && "<!-- events" !in readme)
+        assertTrue("| `SplashAct_OnCreate`" in File(ws, "event/event.md").readText())
+        assertTrue(File(ws, "workflow/v_1_7_alpha/phase_1.md").isFile)
+
+        // artisan finds the workspace as its notes without artisan.json
+        val again = assertNotNull(Project.find(tmp))
+        assertEquals(Project.AI_WORKSPACE, again.notes?.let { again.rel(it.dir) })
+    }
+
+    @Test
+    fun `no firebaseEvent means no event folder or section`() {
+        write("settings.gradle", "include ':app'\n")
+        write("app/build.gradle", "apply plugin: 'com.android.application'")
+        val p = assertNotNull(Project.find(tmp))
+        assertNull(firebaseEvents(p))
+        scaffoldAi(p, "v_1_0_alpha", null)
+        assertTrue(File(tmp, "ai/build.gradle").readText().contains("id 'java-library'"))
+        assertTrue(!File(tmp, "${Project.AI_WORKSPACE}/event").exists())
+        assertTrue("Analytics event sync" !in File(tmp, "${Project.AI_WORKSPACE}/README.md").readText())
+    }
+
+    @Test
+    fun `plan folder is used when there is no plans folder`() {
+        write("notes/plan/a.md", "# a")
+        assertEquals("plan", io.github.ravisorathiya.artisan.project.Notes(File(tmp, "notes")).plans.name)
     }
 }

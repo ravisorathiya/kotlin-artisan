@@ -3,6 +3,7 @@ package io.github.ravisorathiya.artisan.commands
 import io.github.ravisorathiya.artisan.core.Cancelled
 import io.github.ravisorathiya.artisan.core.CliError
 import io.github.ravisorathiya.artisan.core.Ctx
+import io.github.ravisorathiya.artisan.core.Os
 import io.github.ravisorathiya.artisan.core.Proc
 import io.github.ravisorathiya.artisan.core.ProcResult
 import io.github.ravisorathiya.artisan.core.Registry
@@ -10,6 +11,7 @@ import io.github.ravisorathiya.artisan.core.Tone
 import io.github.ravisorathiya.artisan.core.Ui
 import io.github.ravisorathiya.artisan.project.Project
 import java.io.File
+import java.util.Properties
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -18,9 +20,35 @@ import java.time.format.DateTimeFormatter
 internal fun adb(vararg args: String): ProcResult = Proc.run("adb", *args)
 internal fun adbShell(vararg args: String): String = adb("shell", *args).out
 
+/** `sdk.dir` from the project's local.properties (what Android Studio writes), if any. */
+internal fun localSdkDir(root: File?): String? =
+    root?.let { File(it, "local.properties") }?.takeIf { it.isFile }
+        ?.let { Properties().apply { it.inputStream().use(::load) }.getProperty("sdk.dir") }
+
+/** The Android SDK's platform-tools folder holding adb (local.properties, ANDROID_HOME, or the default SDK spots). */
+internal fun sdkPlatformTools(): File? {
+    val home = System.getProperty("user.home")
+    val sdks = listOfNotNull(
+        localSdkDir(runCatching { Project.find(File(System.getProperty("user.dir"))) }.getOrNull()?.root),
+        System.getenv("ANDROID_HOME"), System.getenv("ANDROID_SDK_ROOT"),
+        System.getenv("LOCALAPPDATA")?.let { "$it/Android/Sdk" }, "$home/Library/Android/sdk", "$home/Android/Sdk",
+    )
+    return sdks.map { File(it, "platform-tools") }.firstOrNull { File(it, if (Os.isWindows) "adb.exe" else "adb").isFile }
+}
+
+/** How to get adb onto PATH: the Android SDK's own copy when there is one, otherwise the OS package manager. */
+internal fun adbMissingHint(): String {
+    sdkPlatformTools()?.let { return "found ${it.path} - add it to PATH (artisan setup does it)" }
+    return when {
+        Os.isWindows -> "run artisan setup, or: winget install Google.PlatformTools"
+        Os.isMac -> "run artisan setup, or: brew install android-platform-tools"
+        else -> "install it: sudo apt install adb"
+    } + " (guide: docs/setup.md)"
+}
+
 /** Fails clearly when adb is missing or no phone is connected; prints the device serial. */
 internal fun requireAdb(): String {
-    if (Proc.which("adb") == null) throw CliError("adb not found on PATH (install Android platform-tools).")
+    if (Proc.which("adb") == null) throw CliError("adb not found on PATH - ${adbMissingHint()}, then open a new terminal.")
     val devices = adb("devices").lines.drop(1).filter { it.endsWith("\tdevice") }
     if (devices.isEmpty()) throw CliError("No device connected (adb devices is empty).")
     val serial = devices.first().substringBefore('\t')
@@ -32,7 +60,7 @@ internal fun deviceSdk(): Int = adbShell("getprop", "ro.build.version.sdk").trim
 
 internal fun gradle(p: Project, vararg tasks: String) {
     if (!p.gradlew.isFile) throw CliError("No ${p.gradlew.name} in ${p.root} - generate the Gradle wrapper first.")
-    val cmd = if (io.github.ravisorathiya.artisan.core.Os.isWindows) listOf("cmd", "/c", p.gradlew.absolutePath) + tasks else listOf(p.gradlew.absolutePath) + tasks
+    val cmd = if (Os.isWindows) listOf("cmd", "/c", p.gradlew.absolutePath) + tasks else listOf(p.gradlew.absolutePath) + tasks
     val code = Proc.stream(cmd, p.root)
     if (code != 0) throw CliError("gradlew ${tasks.joinToString(" ")} failed (exit $code).")
 }
