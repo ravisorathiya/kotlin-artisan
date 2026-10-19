@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "io.github.ravisorathiya"
-version = "0.5.0"
+version = "0.6.0"
 
 repositories {
     mavenCentral()
@@ -42,6 +42,11 @@ distributions.main {
     contents {
         from(artisanScripts) { into("bin") }
         from("LICENSE", "README.md")
+        // PowerShell 7 predictor (C#), when built first: dotnet publish predictor -c Release -o predictor/bin/Release/publish
+        from("predictor/bin/Release/publish") {
+            include("ArtisanPredictor.dll")
+            into("predictor")
+        }
     }
 }
 

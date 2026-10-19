@@ -22,8 +22,18 @@ jobs:
         run: |
           v=$(grep -E '^version = ' build.gradle.kts | sed -E 's/version = "(.*)"/\1/')
           [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "Tag $GITHUB_REF_NAME != version $v in build.gradle.kts"; exit 1; }
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: PowerShell 7 predictor
+        shell: pwsh
+        run: |
+          dotnet publish predictor -c Release -o predictor/bin/Release/publish
+          ./predictor/smoke-test.ps1 -Dll ./predictor/bin/Release/publish/ArtisanPredictor.dll
       - name: Build
         run: ./gradlew test distZip --console=plain
+      - name: The zip carries the predictor
+        run: unzip -l build/distributions/*.zip | grep -q 'predictor/ArtisanPredictor.dll'
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:

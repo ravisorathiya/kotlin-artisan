@@ -19,6 +19,16 @@ jobs:
           distribution: temurin
           java-version: 17
       - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-dotnet@v4
+        if: runner.os == 'Linux'
+        with:
+          dotnet-version: 8.0.x
+      - name: PowerShell 7 predictor
+        if: runner.os == 'Linux'
+        shell: pwsh
+        run: |
+          dotnet publish predictor -c Release -o predictor/bin/Release/publish
+          ./predictor/smoke-test.ps1 -Dll ./predictor/bin/Release/publish/ArtisanPredictor.dll
       - name: Test and build
         run: ./gradlew test installDist --console=plain
       - name: Smoke test

@@ -11,6 +11,10 @@ import io.github.ravisorathiya.artisan.commands.registerNotes
 import io.github.ravisorathiya.artisan.commands.registerOpen
 import io.github.ravisorathiya.artisan.core.Fuzzy
 import io.github.ravisorathiya.artisan.core.Registry
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -59,5 +63,15 @@ class FuzzyTest {
         assertTrue("'app\\:dark:Dark / light theme'" in Completion.script(Shell.ZSH))
         assertTrue("app:rotate) echo 'land port auto' ;;" in Completion.script(Shell.BASH))
         assertTrue("\r\n" in Completion.script(Shell.POWERSHELL) && "\r\n" !in Completion.script(Shell.BASH))
+        assertTrue("ArtisanDataFile = '" in Completion.script(Shell.POWERSHELL) && "commands.json'" in Completion.script(Shell.POWERSHELL))
+    }
+
+    @Test
+    fun `commands json feeds the PowerShell 7 predictor`() {
+        val json = Json.parseToJsonElement(Completion.commandsJson()).jsonObject
+        val dark = json.getValue("commands").jsonArray.map { it.jsonObject }.first { it.getValue("name").jsonPrimitive.content == "app:dark" }
+        assertEquals("app:dark [on|off]", dark.getValue("usage").jsonPrimitive.content)
+        assertEquals(listOf("on", "off", "toggle"), dark.getValue("choices").jsonArray.map { it.jsonObject.getValue("name").jsonPrimitive.content })
+        assertTrue(json.getValue("flags").jsonArray.any { it.jsonObject.getValue("name").jsonPrimitive.content == "--plain" })
     }
 }

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- PowerShell 7.2+ predictor: artisan commands as gray suggestions while typing. Loaded by the completion script. -->
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>ArtisanPredictor</AssemblyName>
+    <RootNamespace>KotlinArtisan</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- PowerShell itself provides this at runtime: compile against it, don't ship it. -->
+    <PackageReference Include="System.Management.Automation" Version="7.2.0" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+</Project>

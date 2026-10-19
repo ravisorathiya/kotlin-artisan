@@ -89,7 +89,8 @@ artisan completion --install
 ```
 
 Adds one line to your shell profile (PowerShell `$PROFILE`, `~/.bashrc`, `~/.zshrc`; fish needs none) so
-`artisan app:<Tab>` completes commands, their values and flags. The installers and `artisan setup` offer it too.
+`artisan app:<Tab>` completes commands, their values and flags, and (PowerShell, zsh, fish) suggestions appear in gray
+while you type. The installers and `artisan setup` offer it too.
 Open a new terminal afterwards. In PowerShell, profiles only run when the execution policy allows local scripts;
 if it doesn't, artisan prints the `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` line that fixes it. No Tab
 completion in your shell (cmd.exe)? Run plain `artisan` and type to search.

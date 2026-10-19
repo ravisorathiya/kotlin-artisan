@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.6.0
+
+- **Suggestions while you type at the normal prompt**, no Tab needed. Type `artisan da` and the best match shows as
+  gray text after the cursor (`rk [on|off]`); → accepts it (and adds a space when the command takes a value, so its
+  values show next). They come with the shell completion (`artisan completion --install`):
+  - **Windows PowerShell 5.1:** artisan draws them itself: the gray text plus up to five matches with descriptions
+    under the line. Only keys that still have PSReadLine's default binding are used; yours are left alone.
+  - **PowerShell 7.2+:** a predictor module (`predictor/ArtisanPredictor.dll` in the release zip) plugs into
+    PSReadLine's own predictions: the same gray text, and F2 switches to the list view.
+  - **zsh** with zsh-autosuggestions: completions are added as a suggestion source. **fish** does this by itself.
+  - `ARTISAN_NO_LIVE_HINTS=1` turns them off.
+
 ## 0.5.0
 
 - **Search as you type.** Plain `artisan` (or `artisan find <words>`) opens a live search over every command: each

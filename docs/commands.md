@@ -29,6 +29,21 @@ so Tab never starts Java, and artisan rewrites it after an update. `artisan comp
 without installing anything. To turn it off, delete the tagged line. cmd.exe has no Tab completion API: use plain
 `artisan` there.
 
+**Suggestions while you type.** The same install also suggests as you type at the normal prompt, without Tab. Type
+`artisan da` and the best match appears as gray text after the cursor (`rk [on|off]`); press → to accept it. A
+command that takes a value gets a space after it, so `artisan app:rotate ` then suggests `land` / `port` / `auto`.
+A match that doesn't start with what you typed shows where it leads (`artisan dark` → `-> app:dark`).
+
+| Shell | What you get |
+|---|---|
+| Windows PowerShell 5.1 | artisan draws the gray text, plus up to five matches with descriptions under the line (when there's room below it in the window). It only uses keys that still have PSReadLine's default binding |
+| PowerShell 7.2+ | artisan's predictor module plugs into PSReadLine's own predictions (gray text, F2 for the list view). It turns `PredictionSource` on for plugins if it was off |
+| zsh | With zsh-autosuggestions installed, completions become a suggestion source |
+| fish | Built in: fish suggests from the completions |
+| bash, cmd.exe | No way to hook in: use plain `artisan` |
+
+`ARTISAN_NO_LIVE_HINTS=1` (set before your profile runs) turns them off.
+
 **Pickers.** Type only a group (`artisan make`, `artisan app`, `artisan open`, `artisan check`) to pick one of its
 commands. A group with one command (`del`, `build`) runs it directly. Leave out a value and the command asks, as a
 picker when the choices are fixed. In a picker, type the number or the option's name; **Enter cancels**.

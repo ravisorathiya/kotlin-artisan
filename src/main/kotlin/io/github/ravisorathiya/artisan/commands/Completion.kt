@@ -10,6 +10,10 @@ import io.github.ravisorathiya.artisan.core.Proc
 import io.github.ravisorathiya.artisan.core.Registry
 import io.github.ravisorathiya.artisan.core.Tone
 import io.github.ravisorathiya.artisan.core.Ui
+import kotlinx.serialization.json.addJsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import java.io.File
 
 /**
@@ -81,7 +85,43 @@ object Completion {
     }
 
     /** Windows PowerShell 5.1 reads a .ps1 without a byte-order mark as ANSI, so that one gets a BOM. */
-    private fun write(shell: Shell, f: File) = f.writeText((if (shell == Shell.POWERSHELL) "﻿" else "") + script(shell))
+    private fun write(shell: Shell, f: File) {
+        if (shell == Shell.POWERSHELL) writePredictorFiles()
+        f.writeText((if (shell == Shell.POWERSHELL) "\uFEFF" else "") + script(shell))
+    }
+
+    /** Command list for the PowerShell 7 predictor module. */
+    private val dataFile: File get() = File(dir, "commands.json")
+
+    /** The predictor DLL, in a folder per version: a running pwsh locks the one it loaded, and updates must not hit it. */
+    private val predictorDll: File get() = File(dir, "predictor/$VERSION/ArtisanPredictor.dll")
+
+    private fun writePredictorFiles() {
+        dir.mkdirs()
+        dataFile.writeText(commandsJson())
+        val dll = installDir()?.let { File(it, "predictor/ArtisanPredictor.dll") }?.takeIf { it.isFile } ?: return
+        if (!predictorDll.isFile) {
+            predictorDll.parentFile.mkdirs()
+            dll.copyTo(predictorDll)
+        }
+        // older versions; one still loaded by an open pwsh stays until next time
+        File(dir, "predictor").listFiles()?.filter { it.name != VERSION }?.forEach { runCatching { it.deleteRecursively() } }
+    }
+
+    /** `{"commands": [{name, usage, description, choices: [{name, description}]}], "flags": [{name, description}]}` */
+    internal fun commandsJson(): String = buildJsonObject {
+        putJsonArray("commands") {
+            Registry.all().filterNot { it.custom }.forEach { c ->
+                addJsonObject {
+                    put("name", c.name)
+                    put("usage", c.usage)
+                    put("description", c.description)
+                    putJsonArray("choices") { c.choices.forEach { (v, d) -> addJsonObject { put("name", v); put("description", d) } } }
+                }
+            }
+        }
+        putJsonArray("flags") { FLAGS.forEach { (f, d) -> addJsonObject { put("name", f); put("description", d) } } }
+    }.toString()
 
     /** Writes the script and adds the profile line; [ask] = false when the caller already asked. */
     fun install(shell: Shell, ask: Boolean = true) {
@@ -177,7 +217,9 @@ object Completion {
             Shell.ZSH -> zsh(commands)
             Shell.FISH -> fish(commands)
         }
-        val text = template.replace("{{VERSION}}", VERSION).replace("{{COMMANDS}}", cmds).replace("{{CHOICES}}", choices).replace("{{FLAGS}}", flags)
+        val text = template.replace("{{VERSION}}", VERSION)
+            .replace("{{PREDICTOR}}", predictorDll.takeIf { it.isFile }?.path?.let(::psQuote) ?: "")
+            .replace("{{DATA}}", psQuote(dataFile.path)).replace("{{COMMANDS}}", cmds).replace("{{CHOICES}}", choices).replace("{{FLAGS}}", flags)
         return if (shell == Shell.POWERSHELL) text.replace("\n", "\r\n") else text
     }
 

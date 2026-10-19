@@ -41,3 +41,8 @@ _artisan() {
 
 (( $+functions[compdef] )) || { autoload -Uz compinit && compinit -i; }
 compdef _artisan artisan kotlin-artisan
+
+# With zsh-autosuggestions, also suggest from completions while typing (gray text, -> accepts).
+if (( $+functions[_zsh_autosuggest_strategy_completion] )) && (( ! ${ZSH_AUTOSUGGEST_STRATEGY[(Ie)completion]} )); then
+  ZSH_AUTOSUGGEST_STRATEGY+=(completion)
+fi

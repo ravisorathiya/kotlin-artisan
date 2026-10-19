@@ -4,4 +4,6 @@ build/
 .idea/
 *.iml
 local.properties
+predictor/bin/
+predictor/obj/
 .DS_Store
