@@ -11,7 +11,8 @@ import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
 
 fun registerCode() {
-    Registry.add("check:strings", "check:strings [lang] [-v]", "Missing/extra translations per module and language") { checkStrings(it) }
+    Registry.add("check:strings", "check:strings [lang] [-v]", "Missing/extra translations per module and language", choicesFrom = ::projectLocales) { checkStrings(it) }
+    Registry.add("make:string", "make:string [key] [text] [--module :x]", "Add a string to values/ and every values-xx/ (marked for translation)") { makeString(it) }
     Registry.add("list:todo", "list:todo [module] [-v]", "TODO / FIXME / HACK comments in source") { listTodo(it) }
     Registry.add("stats", "stats", "Code per module, biggest files, notes totals") { stats(it) }
 }
@@ -90,7 +91,30 @@ private fun checkStrings(ctx: Ctx) {
         Ui.table("Keys (${detail.size})", listOf("Module", "Lang", "Kind", "Key"), detail, empty = "all translated")
     }
     Ui.say("  Total missing: $totalMissing", if (totalMissing > 0) Tone.WARN else Tone.OK)
+
+    // Copied in English by make:string, still waiting for a translation.
+    val waiting = p.modules.flatMap { m ->
+        val res = File(m.dir, "src/main/res")
+        (res.listFiles() ?: emptyArray()).filter { it.isDirectory && LANG_DIR.matches(it.name) }
+            .map { it.name.removePrefix("values-") }.filter { only.isEmpty() || it in only }
+            .flatMap { lang -> untranslatedKeys(File(res, "values-$lang/strings.xml")).map { Triple(m.name, lang, it) } }
+    }
+    if (waiting.isNotEmpty()) {
+        Ui.table(
+            "Waiting for translation (added by make:string)", listOf("Module", "Lang", "Keys"),
+            waiting.groupBy { it.first to it.second }.map { (k, v) -> Row(listOf(k.first, k.second, if (verbose) v.joinToString(", ") { it.third } else "${v.size}"), colors = listOf(null, null, Tone.WARN)) },
+        )
+    }
     if (!verbose) Ui.say("  Key names: artisan check:strings -v   (or one language: artisan check:strings ur)", Tone.DIM)
+}
+
+/** Marker make:string puts after a string it copied into a locale in English. */
+internal const val TRANSLATE_MARKER = "<!-- artisan: translate -->"
+
+/** Keys in [file] still carrying [TRANSLATE_MARKER]. */
+internal fun untranslatedKeys(file: File): List<String> {
+    if (!file.isFile) return emptyList()
+    return file.readLines().filter { TRANSLATE_MARKER in it }.mapNotNull { Regex("""name\s*=\s*"([^"]+)"""").find(it)?.groupValues?.get(1) }
 }
 
 private fun codeGlobs(ctx: Ctx, base: List<String>) = (base + ctx.project.config.extraSources).map { glob(it) }

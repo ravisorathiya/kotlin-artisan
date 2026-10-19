@@ -1,0 +1,657 @@
+package {{PACKAGE}}
+
+import android.annotation.SuppressLint
+import android.app.Activity
+import android.app.Application
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.res.ColorStateList
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Rect
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.TextUtils
+import android.text.style.ForegroundColorSpan
+import android.util.Log
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewConfiguration
+import android.view.ViewGroup
+import android.view.ViewTreeObserver
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.OvershootInterpolator
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import android.widget.Toast
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.roundToInt
+
+/**
+ * Floating in-app event log for testing. Works in any build type (debug, release, benchmark)
+ * and needs no permission: the box is added to each Activity's content view.
+ *
+ * Self-contained on Android API 26+: copy this file and adjust its package.
+ * No XML layouts, drawable resources, AndroidX, or other libraries are required.
+ *
+ * Setup:  if (ENABLE_EVENT_BOX) EventLogBox.init(this)   // in Application.onCreate()
+ * Usage:  EventLogBox.log("some_event")                  // from any thread (firebaseEvent does this)
+ *
+ * Keep ENABLE_EVENT_BOX = false in release builds so end users never see the box.
+ * Added by `artisan make:analytics`.
+ */
+object EventLogBox : Application.ActivityLifecycleCallbacks {
+
+    private data class Event(val no: Int, val time: String, val name: String)
+
+    private const val MAX = 300
+    private const val DOCK_ALPHA = 0.5f
+    private const val DOCK_MARGIN_DP = 4f
+    private const val START_X_DP = 12f
+    private const val START_Y_DP = 56f
+    private val COLOR_EVENT = 0xFFFFFFFF.toInt()
+    private val COLOR_LATEST = 0xFF00E676.toInt()
+    private val events = ArrayList<Event>()
+    private val main = Handler(Looper.getMainLooper())
+    private val fmt = SimpleDateFormat("HH:mm:ss", Locale.US)
+
+    private var registered = false
+    private var seq = 0
+    private var unseen = 0
+    private var panelVisible = true
+    private var boxX = -1f
+    private var boxY = -1f
+    /** One box per live activity, kept until it is destroyed so the box stays visible during screen transitions. */
+    private val overlays = LinkedHashMap<Activity, Overlay>()
+    /** Box of the resumed activity; the only one allowed to save the shared position. */
+    private var current: Overlay? = null
+
+    @JvmStatic
+    fun init(app: Application) {
+        if (registered) return
+        registered = true
+        app.registerActivityLifecycleCallbacks(this)
+    }
+
+    @JvmStatic
+    fun init(app: Application, enabled: Boolean) {
+        if (enabled) init(app)
+    }
+
+    /** Thread-safe: formatting and UI work run on the main thread (SimpleDateFormat is not thread-safe). */
+    @JvmStatic
+    fun log(name: String?) {
+        val at = System.currentTimeMillis()
+        val safeName = name?.trim().takeUnless { it.isNullOrEmpty() } ?: "Unknown_Event"
+        main.post {
+            safe {
+                seq++
+                events.add(Event(seq, fmt.format(Date(at)), safeName))
+                if (events.size > MAX) events.removeAt(0)
+                if (!panelVisible) unseen++
+                overlays.values.toList().forEach { o -> safe { o.onNewEvent() } }
+            }
+        }
+    }
+
+    private fun clearAll() {
+        events.clear(); seq = 0; unseen = 0
+        overlays.values.toList().forEach { o -> safe { o.rebuild(); o.updateBadge() } }
+    }
+
+    /** A failure in this debug tool must never crash the app. */
+    private inline fun safe(block: () -> Unit) {
+        try {
+            block()
+        } catch (t: Throwable) {
+            Log.w("EventLogger", "ignored", t)
+        }
+    }
+
+    private fun attach(activity: Activity): Overlay? {
+        overlays[activity]?.let { return it }
+        if (activity.isFinishing || activity.isDestroyed) return null
+        return try {
+            Overlay(activity).also { overlays[activity] = it }
+        } catch (t: Throwable) {
+            null
+        }
+    }
+
+    override fun onActivityStarted(activity: Activity) = safe {
+        attach(activity)?.sync()
+    }
+
+    override fun onActivityResumed(activity: Activity) = safe {
+        current = attach(activity)
+        current?.sync()
+    }
+
+    override fun onActivityPaused(activity: Activity) = safe {
+        if (current?.activity === activity) current = null
+    }
+
+    override fun onActivityDestroyed(activity: Activity) = safe {
+        val o = overlays.remove(activity)
+        if (current === o || current?.activity === activity) current = null
+        o?.detach()
+    }
+
+    override fun onActivityCreated(a: Activity, b: Bundle?) {}
+    override fun onActivityStopped(a: Activity) {}
+    override fun onActivitySaveInstanceState(a: Activity, b: Bundle) {}
+
+    private class Overlay(val activity: Activity) {
+        private val content: ViewGroup = activity.findViewById(android.R.id.content)
+        private val dp = activity.resources.displayMetrics.density
+        private val measuredBounds = Rect()
+        private val visibleFrame = Rect()
+        private val screenLocation = IntArray(2)
+        private var lastWidth = 0
+        private var lastHeight = 0
+        private var pendingDock = false
+        private val root: FrameLayout = object : FrameLayout(activity) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                fitPanel(MeasureSpec.getSize(widthMeasureSpec), MeasureSpec.getSize(heightMeasureSpec))
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            }
+
+            override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+                super.onLayout(changed, left, top, right, bottom)
+                if (width != lastWidth || height != lastHeight) {
+                    lastWidth = width
+                    lastHeight = height
+                    applyPos()
+                } else {
+                    // The box also changes size when the first event arrives or it is toggled.
+                    clamp(box)
+                }
+                if (pendingDock && !panelVisible) {
+                    pendingDock = false
+                    dockToSide()
+                }
+            }
+        }
+        private val box = FrameLayout(activity)
+        private val panel = LinearLayout(activity)
+        private val header = LinearLayout(activity)
+        private val list = LinearLayout(activity)
+        private val scroll = ScrollView(activity)
+        private val empty = TextView(activity)
+        private val count = TextView(activity)
+        private val clear = TextView(activity)
+        private val fab = FrameLayout(activity)
+        private val badge = TextView(activity)
+        private var lastRow: TextView? = null
+        private val windowLayoutListener = ViewTreeObserver.OnGlobalLayoutListener {
+            if (root.width > 0 && root.height > 0 && safeBounds(root.width, root.height) != measuredBounds) {
+                // Insets can change without resizing the activity (for example, adjustPan keyboards).
+                root.requestLayout()
+            }
+        }
+
+        init {
+            // Force LTR: in RTL locales the box is anchored to the right, so it re-lays out
+            // when it shrinks to the button and the dock animation lands in the wrong place.
+            root.layoutDirection = View.LAYOUT_DIRECTION_LTR
+            buildViews()
+            root.elevation = 1000f * dp
+            root.translationZ = 1000f * dp
+            content.addView(root, ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+            ))
+            panel.visibility = if (panelVisible) View.VISIBLE else View.GONE
+            fab.alpha = if (panelVisible) 1f else DOCK_ALPHA
+
+            pressAnim(clear)
+            clear.setOnClickListener { clearAll() }
+
+            drag(handle = fab, target = box) { togglePanel() }
+            drag(handle = header, target = box, onTap = null)
+            drag(handle = empty, target = box, onTap = null)
+            drag(handle = panel, target = box, onTap = null)
+
+            rebuild()
+            updateBadge()
+
+            applyPos()
+            root.post { applyPos() }
+            root.viewTreeObserver.addOnGlobalLayoutListener(windowLayoutListener)
+        }
+
+        private fun px(value: Float) = (value * dp).roundToInt()
+
+        /** Explicit layout parameters keep this file independent of app resources and IDs. */
+        private fun buildViews() {
+            val match = ViewGroup.LayoutParams.MATCH_PARENT
+            val wrap = ViewGroup.LayoutParams.WRAP_CONTENT
+            root.addView(box, FrameLayout.LayoutParams(wrap, wrap, Gravity.TOP or Gravity.LEFT))
+
+            panel.orientation = LinearLayout.VERTICAL
+            panel.isClickable = true
+            panel.background = roundBg(0xEB111827.toInt(), 16f)
+            panel.outlineProvider = null
+            box.addView(panel, FrameLayout.LayoutParams(px(320f), wrap, Gravity.TOP or Gravity.LEFT))
+
+            header.orientation = LinearLayout.HORIZONTAL
+            header.gravity = Gravity.CENTER_VERTICAL
+            header.setPadding(px(56f), 0, px(6f), 0)
+            header.background = roundBg(0xFF1C2638.toInt(), 16f, topOnly = true)
+            panel.addView(header, LinearLayout.LayoutParams(match, px(52f)))
+
+            val title = label("EVENTS", 12f, COLOR_EVENT, bold = true).apply {
+                letterSpacing = 0.08f
+                setSingleLine(true)
+                ellipsize = TextUtils.TruncateAt.END
+            }
+            // The title takes only leftover space, so count and clear cannot overlap it.
+            header.addView(title, LinearLayout.LayoutParams(0, wrap, 1f))
+            styleLabel(count, "0", 14f, 0xFFCFD8E6.toInt(), bold = true)
+            count.gravity = Gravity.CENTER
+            count.minWidth = px(26f)
+            count.minHeight = px(22f)
+            count.setPadding(px(7f), 0, px(7f), 0)
+            count.background = roundBg(0x33FFFFFF, 11f)
+            header.addView(count, LinearLayout.LayoutParams(wrap, wrap).apply {
+                leftMargin = px(6f)
+            })
+            styleLabel(clear, "CLEAR", 14f, 0xFFCFD8E6.toInt(), bold = true)
+            clear.gravity = Gravity.CENTER
+            clear.minHeight = px(32f)
+            clear.setPadding(px(10f), 0, px(10f), 0)
+            clear.background = roundBg(0x14FFFFFF, 8f)
+            clear.setSingleLine(true)
+            clear.contentDescription = "Clear events"
+            header.addView(clear, LinearLayout.LayoutParams(wrap, wrap).apply {
+                leftMargin = px(4f)
+            })
+
+            scroll.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            scroll.clipToPadding = false
+            scroll.isScrollbarFadingEnabled = true
+            scroll.setPadding(0, px(4f), 0, px(6f))
+            panel.addView(scroll, LinearLayout.LayoutParams(match, px(200f)))
+            list.orientation = LinearLayout.VERTICAL
+            list.setPadding(px(4f), 0, px(4f), 0)
+            scroll.addView(list, FrameLayout.LayoutParams(match, wrap))
+
+            styleLabel(empty, "No events yet", 12f, 0xFF6B7A90.toInt())
+            empty.gravity = Gravity.CENTER
+            empty.visibility = View.GONE
+            panel.addView(empty, LinearLayout.LayoutParams(match, px(64f)))
+
+            fab.elevation = 14f * dp
+            fab.contentDescription = "Toggle event log"
+            box.addView(fab, FrameLayout.LayoutParams(px(40f), px(40f), Gravity.TOP or Gravity.LEFT).apply {
+                topMargin = px(8f)
+                leftMargin = px(8f)
+            })
+            val circle = FrameLayout(activity).apply {
+                val fill = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(COLOR_LATEST)
+                    setStroke(px(8f), 0x7700E676)
+                }
+                val mask = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(COLOR_EVENT)
+                }
+                background = RippleDrawable(ColorStateList.valueOf(0x40FFFFFF), fill, mask)
+            }
+            fab.addView(circle, FrameLayout.LayoutParams(px(30f), px(30f), Gravity.CENTER))
+            circle.addView(BoltView(activity), FrameLayout.LayoutParams(px(16f), px(16f), Gravity.CENTER))
+
+            styleLabel(badge, "", 9f, COLOR_EVENT, bold = true)
+            badge.gravity = Gravity.CENTER
+            badge.minWidth = px(18f)
+            badge.minHeight = px(18f)
+            badge.setPadding(px(4f), 0, px(4f), 0)
+            badge.background = roundBg(0xFFFF1744.toInt(), 9f)
+            badge.visibility = View.GONE
+            fab.addView(badge, FrameLayout.LayoutParams(wrap, wrap, Gravity.TOP or Gravity.RIGHT))
+        }
+
+        /** Screen coordinates avoid counting system bars twice in activities that already inset content. */
+        private fun safeBounds(width: Int, height: Int): Rect {
+            var left = 0
+            var top = 0
+            var right = width
+            var bottom = height
+            if (root.isAttachedToWindow) {
+                root.getWindowVisibleDisplayFrame(visibleFrame)
+                root.getLocationOnScreen(screenLocation)
+                if (!visibleFrame.isEmpty) {
+                    left = (visibleFrame.left - screenLocation[0]).coerceIn(0, width)
+                    top = (visibleFrame.top - screenLocation[1]).coerceIn(0, height)
+                    right = (visibleFrame.right - screenLocation[0]).coerceIn(left, width)
+                    bottom = (visibleFrame.bottom - screenLocation[1]).coerceIn(top, height)
+                }
+            }
+            val marginX = px(DOCK_MARGIN_DP).coerceAtMost((right - left) / 2)
+            val marginY = px(DOCK_MARGIN_DP).coerceAtMost((bottom - top) / 2)
+            return Rect(left + marginX, top + marginY, right - marginX, bottom - marginY)
+        }
+
+        /** Reserve the header first; only the body shrinks in small windows or above the keyboard. */
+        private fun fitPanel(width: Int, height: Int) {
+            val bounds = safeBounds(width, height)
+            if (bounds != measuredBounds) {
+                box.animate().cancel()
+                measuredBounds.set(bounds)
+            }
+            panel.layoutParams?.width = px(320f).coerceAtMost(bounds.width())
+            val title = header.getChildAt(0) as TextView
+            val textHeight = maxOf(title.lineHeight, count.lineHeight, clear.lineHeight) + px(12f)
+            val headerHeight = maxOf(px(52f), textHeight).coerceAtMost(bounds.height())
+            header.layoutParams?.height = headerHeight
+            val bodyHeight = (bounds.height() - headerHeight).coerceAtLeast(0)
+            scroll.layoutParams?.height = px(200f).coerceAtMost(bodyHeight)
+            empty.layoutParams?.height = px(64f).coerceAtMost(bodyHeight)
+        }
+
+        private fun label(text: String, size: Float, color: Int, bold: Boolean = false) =
+            TextView(activity).apply { styleLabel(this, text, size, color, bold) }
+
+        private fun styleLabel(view: TextView, text: String, size: Float, color: Int, bold: Boolean = false) {
+            view.includeFontPadding = false
+            view.text = text
+            view.textSize = size
+            view.setTextColor(color)
+            view.setTypeface(Typeface.DEFAULT, if (bold) Typeface.BOLD else Typeface.NORMAL)
+        }
+
+        /** The original 24 x 24 bolt path, scaled to the view without a vector XML asset. */
+        private class BoltView(context: Context) : View(context) {
+            private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = COLOR_EVENT }
+            private val path = Path().apply {
+                moveTo(13.5f, 2f)
+                lineTo(4.5f, 13.5f)
+                lineTo(11f, 13.5f)
+                lineTo(10f, 22f)
+                lineTo(19.5f, 9.5f)
+                lineTo(13f, 9.5f)
+                close()
+            }
+
+            override fun onDraw(canvas: Canvas) {
+                super.onDraw(canvas)
+                val saved = canvas.save()
+                canvas.scale(width / 24f, height / 24f)
+                canvas.drawPath(path, paint)
+                canvas.restoreToCount(saved)
+            }
+        }
+
+        fun detach() {
+            try {
+                panel.animate().cancel(); box.animate().cancel(); fab.animate().cancel()
+                if (root.viewTreeObserver.isAlive) {
+                    root.viewTreeObserver.removeOnGlobalLayoutListener(windowLayoutListener)
+                }
+                content.removeView(root)
+            } catch (e: Throwable) {
+            }
+        }
+
+        /** Applies the shared state (open/closed, position, badge) to this box. */
+        fun sync() {
+            panel.animate().cancel(); box.animate().cancel(); fab.animate().cancel()
+            panel.visibility = if (panelVisible) View.VISIBLE else View.GONE
+            panel.alpha = 1f; panel.scaleX = 1f; panel.scaleY = 1f
+            fab.alpha = if (panelVisible) 1f else DOCK_ALPHA
+            fab.scaleX = 1f; fab.scaleY = 1f
+            updateHeader()
+            updateBadge()
+            bringOnTop()
+            applyPos()
+            root.post { applyPos() }
+        }
+
+        fun onNewEvent() {
+            if (list.childCount >= MAX) list.removeViewAt(0)
+            lastRow?.let { setRowLatest(it, false) }
+            lastRow = addRow(events.last()).also { setRowLatest(it, true) }
+            updateHeader()
+            bringOnTop()
+            if (panelVisible) scrollToEnd() else pulseFab()
+            updateBadge()
+        }
+
+        /** Keeps the box above views the app adds to the content view later. */
+        private fun bringOnTop() {
+            if (content.indexOfChild(root) != content.childCount - 1) root.bringToFront()
+        }
+
+        /**
+         * The box is laid out at (0,0), so its position is just its translation. This lets the
+         * saved position be applied right away in a new activity, before its first layout.
+         * Clamping only moves the view; the saved position is kept, so a temporarily small
+         * layout (first frame, keyboard) cannot move the box for good.
+         */
+        private fun applyPos() {
+            box.translationX = if (boxX >= 0) boxX else START_X_DP * dp
+            box.translationY = if (boxY >= 0) boxY else START_Y_DP * dp
+            if (root.width > 0 && root.height > 0) clamp(box)
+        }
+
+        private fun clamp(v: View) {
+            if (v.width == 0) return
+            val bounds = safeBounds(root.width, root.height)
+            v.x = v.x.coerceIn(bounds.left.toFloat(), (bounds.right - v.width).coerceAtLeast(bounds.left).toFloat())
+            v.y = v.y.coerceIn(bounds.top.toFloat(), (bounds.bottom - v.height).coerceAtLeast(bounds.top).toFloat())
+        }
+
+        fun rebuild() {
+            list.removeAllViews()
+            lastRow = null
+            events.forEach { lastRow = addRow(it) }
+            lastRow?.let { setRowLatest(it, true) }
+            updateHeader()
+            scrollToEnd()
+        }
+
+        private fun addRow(e: Event): TextView {
+            val tv = TextView(activity).apply {
+                typeface = Typeface.MONOSPACE
+                textSize = 11f
+                setLineSpacing(0f, 1.1f)
+                val h = (8 * dp).toInt(); val v = (4 * dp).toInt()
+                setPadding(h, v, h, v)
+                tag = e
+                text = rowText(e, latest = false)
+                setOnLongClickListener { copy(e.name); true }
+            }
+            list.addView(tv)
+            return tv
+        }
+
+        private fun roundBg(color: Int, radiusDp: Float, topOnly: Boolean = false) =
+            GradientDrawable().apply {
+                setColor(color)
+                val r = radiusDp * dp
+                if (topOnly) cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
+                else cornerRadius = r
+            }
+
+        private fun SpannableStringBuilder.span(s: String, color: Int) =
+            append(s, ForegroundColorSpan(color), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+
+        private fun rowText(e: Event, latest: Boolean) = SpannableStringBuilder().apply {
+            span(String.format(Locale.US, "%02d  ", e.no), 0xFF5C6B82.toInt())
+            span("${e.time}  ", 0xFF8AB4F8.toInt())
+            span(e.name, if (latest) COLOR_LATEST else COLOR_EVENT)
+        }
+
+        private fun setRowLatest(row: TextView, latest: Boolean) {
+            val e = row.tag as? Event ?: return
+            row.text = rowText(e, latest)
+        }
+
+        @SuppressLint("ClickableViewAccessibility")
+        private fun pressAnim(v: View) {
+            v.setOnTouchListener { _, e ->
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN ->
+                        v.animate().scaleX(0.9f).scaleY(0.9f).setDuration(80).start()
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
+                        v.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+                }
+                false // let the click listener handle the click
+            }
+        }
+
+        private fun updateHeader() {
+            count.text = events.size.toString()
+            empty.visibility = if (events.isEmpty()) View.VISIBLE else View.GONE
+            scroll.visibility = if (events.isEmpty()) View.GONE else View.VISIBLE
+        }
+
+        fun updateBadge() {
+            if (unseen > 0 && !panelVisible) {
+                badge.text = if (unseen > 99) "99+" else unseen.toString()
+                badge.visibility = View.VISIBLE
+            } else badge.visibility = View.GONE
+        }
+
+        /** Scales around the button so the box collapses into / expands out of it. */
+        private fun setPivotToFab() {
+            panel.pivotX = fab.x + fab.width / 2f
+            panel.pivotY = fab.y + fab.height / 2f
+        }
+
+        private fun togglePanel() {
+            panelVisible = !panelVisible
+            pendingDock = false
+            panel.animate().cancel()
+            if (panelVisible) {
+                unseen = 0
+                updateBadge()
+                box.animate().cancel()
+                fab.animate().alpha(1f).setDuration(150).start()
+                panel.visibility = View.VISIBLE
+                setPivotToFab()
+                box.post { slideInside() }
+                panel.alpha = 0f; panel.scaleX = 0f; panel.scaleY = 0f
+                panel.animate().alpha(1f).scaleX(1f).scaleY(1f)
+                    .setInterpolator(DecelerateInterpolator()).setDuration(320).start()
+                scrollToEnd()
+            } else {
+                setPivotToFab()
+                panel.animate().alpha(0f).scaleX(0f).scaleY(0f)
+                    .setInterpolator(AccelerateInterpolator()).setDuration(240)
+                    .withEndAction {
+                        if (!panelVisible) {
+                            pendingDock = true
+                            panel.visibility = View.GONE
+                            panel.scaleX = 1f; panel.scaleY = 1f; panel.alpha = 1f
+                        }
+                        savePos()
+                    }.start()
+            }
+        }
+
+        private fun dockToSide() {
+            if (root.width == 0 || box.width == 0) return
+            val bounds = safeBounds(root.width, root.height)
+            val centerX = box.x + fab.x + fab.width / 2f
+            val toX = if (centerX < bounds.exactCenterX()) bounds.left.toFloat()
+            else (bounds.right - box.width).coerceAtLeast(bounds.left).toFloat()
+            val toY = box.y.coerceIn(bounds.top.toFloat(), (bounds.bottom - box.height).coerceAtLeast(bounds.top).toFloat())
+            box.animate().x(toX).y(toY)
+                .setInterpolator(DecelerateInterpolator()).setDuration(260)
+                .withEndAction { savePos() }.start()
+            fab.animate().alpha(DOCK_ALPHA).setDuration(260).start()
+        }
+
+        private fun slideInside() {
+            if (root.width == 0 || box.width == 0) return
+            val bounds = safeBounds(root.width, root.height)
+            val toX = box.x.coerceIn(bounds.left.toFloat(), (bounds.right - box.width).coerceAtLeast(bounds.left).toFloat())
+            val toY = box.y.coerceIn(bounds.top.toFloat(), (bounds.bottom - box.height).coerceAtLeast(bounds.top).toFloat())
+            if (toX != box.x || toY != box.y) {
+                box.animate().x(toX).y(toY).setDuration(200).withEndAction { savePos() }.start()
+            }
+        }
+
+        private fun pulseFab() {
+            fab.animate().cancel()
+            if (!panelVisible) fab.alpha = DOCK_ALPHA
+            fab.scaleX = 1.15f; fab.scaleY = 1.15f
+            fab.animate().scaleX(1f).scaleY(1f)
+                .setInterpolator(OvershootInterpolator(3f)).setDuration(300).start()
+        }
+
+        private fun scrollToEnd() = scroll.post {
+            // Scrolling must not request focus and shift the overlay or the host screen.
+            scroll.scrollTo(0, (list.height + scroll.paddingTop + scroll.paddingBottom - scroll.height).coerceAtLeast(0))
+        }
+
+        private fun savePos() {
+            if (current != null && current !== this) return
+            if (box.width > 0) { boxX = box.translationX; boxY = box.translationY }
+        }
+
+        private fun copy(text: String) {
+            try {
+                val cm = activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("events", text))
+                Toast.makeText(activity, "Copied", Toast.LENGTH_SHORT).show()
+            } catch (e: Throwable) {
+            }
+        }
+
+        @SuppressLint("ClickableViewAccessibility")
+        private fun drag(handle: View, target: View, onTap: (() -> Unit)?) {
+            val slop = ViewConfiguration.get(activity).scaledTouchSlop
+            var downX = 0f; var downY = 0f; var startX = 0f; var startY = 0f
+            var dragging = false
+            handle.setOnTouchListener { _, e ->
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downX = e.rawX; downY = e.rawY
+                        startX = target.x; startY = target.y
+                        dragging = false
+                        target.animate().cancel()
+                        if (onTap != null) handle.animate().scaleX(0.9f).scaleY(0.9f).setDuration(80).start()
+                        if (!panelVisible) fab.animate().alpha(1f).setDuration(100).start()
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = e.rawX - downX; val dy = e.rawY - downY
+                        if (!dragging && (abs(dx) > slop || abs(dy) > slop)) {
+                            dragging = true
+                            handle.parent?.requestDisallowInterceptTouchEvent(true)
+                        }
+                        if (dragging) {
+                            target.x = startX + dx
+                            target.y = startY + dy
+                            clamp(target)
+                        }
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        if (onTap != null) handle.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+                        val tapped = !dragging && e.actionMasked == MotionEvent.ACTION_UP && onTap != null
+                        if (tapped) onTap?.invoke()
+                        if (dragging) savePos()
+                        if (!tapped && !panelVisible) dockToSide()
+                    }
+                }
+                true
+            }
+        }
+    }
+}

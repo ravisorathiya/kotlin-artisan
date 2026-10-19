@@ -94,12 +94,32 @@ private fun newAssetFile(ctx: Ctx, name: String?, prefix: String, ext: String): 
 }
 
 private fun showSaved(ctx: Ctx, out: File) {
-    Ui.say("Saved ${ctx.project.rel(out)}  (${out.kb()})", Tone.OK)
-    Ui.say("Link it in a note as:  `assets/${out.name}`", Tone.DIM)
+    Ui.say("Saved ${out.name}  (${out.kb()})", Tone.OK)
+    Ui.sayFile("file", out)
+    Ui.say("  In the latest phase file:  ${assetMarkdown(ctx.notes, out)}", Tone.DIM)
+    Ui.offerReveal(ctx, out, ask = false)
+}
+
+/** `![name](../../assets/name.png)`: the link from a workflow/v_x/phase_N.md file to an asset. */
+internal fun assetMarkdown(notes: io.github.ravisorathiya.artisan.project.Notes, f: File): String {
+    val rel = "../../assets/" + f.relativeTo(notes.assets).invariantSeparatorsPath
+    return if (f.extension == "mp4") "[${f.name}]($rel)" else "![${f.nameWithoutExtension}]($rel)"
+}
+
+/** Takes a screenshot into the notes assets (used by app:shot and make:bug --shot). */
+internal fun captureShot(ctx: Ctx, name: String?): File {
+    requireAdb()
+    val out = newAssetFile(ctx, name, "shot", "png")
+    val remote = "/sdcard/artisan_shot.png"
+    adbShell("screencap", "-p", remote)
+    adb("pull", remote, out.absolutePath)
+    adbShell("rm", remote)
+    if (!out.isFile) throw CliError("Screenshot failed.")
+    return out
 }
 
 /** Common language codes -> names for the app:lang picker; unknown codes show only the code. */
-private val LANGUAGE_NAMES = mapOf(
+internal val LANGUAGE_NAMES = mapOf(
     "af" to "Afrikaans", "am" to "Amharic", "ar" to "Arabic (RTL)", "az" to "Azerbaijani", "bg" to "Bulgarian", "bn" to "Bengali",
     "ca" to "Catalan", "cs" to "Czech", "da" to "Danish", "de" to "German", "el" to "Greek", "es" to "Spanish", "et" to "Estonian",
     "fa" to "Persian (RTL)", "fi" to "Finnish", "fil" to "Filipino", "fr" to "French", "gu" to "Gujarati", "he" to "Hebrew (RTL)",
@@ -129,11 +149,19 @@ fun registerApp() {
     }
     Registry.add("app:shot", "app:shot [name]", "Phone screenshot -> notes assets") { shot(it) }
     Registry.add("app:record", "app:record [name] [sec]", "Phone screen recording -> notes assets (Enter stops)") { record(it) }
-    Registry.add("app:lang", "app:lang [code]", "Set the app language (Android 13+)") { lang(it) }
+    Registry.add("app:lang", "app:lang [code]", "Set the app language (Android 13+)", listOf("reset" to "Follow the phone language"), choicesFrom = ::projectLocales) { lang(it) }
     Registry.add("app:dark", "app:dark [on|off]", "Dark / light theme", THEMES) { dark(it) }
     Registry.add("app:light", "app:light", "Light theme") { ctx -> ctx.args = listOf("off"); dark(ctx) }
     Registry.add("app:font", "app:font [scale]", "Font size, e.g. 1.3", FONT_SCALES + ("reset" to "Back to the default size")) { font(it) }
     Registry.add("app:rotate", "app:rotate [mode]", "Lock landscape / portrait, or auto", ROTATIONS) { rotate(it) }
+    Registry.add("app:text", "app:text [text]", "Type text into the focused field on the phone (no clipboard)") { typeText(it) }
+    Registry.add("app:open", "app:open [url|deeplink]", "Open a deep link / URL in the app", choicesFrom = ::projectDeepLinks) { openLink(it) }
+    Registry.add("app:grant", "app:grant [permission]", "Grant one runtime permission", choicesFrom = ::projectPermissions) { permission(it, grant = true) }
+    Registry.add("app:revoke", "app:revoke [permission]", "Revoke one runtime permission (the app restarts)", choicesFrom = ::projectPermissions) { permission(it, grant = false) }
+    Registry.add("app:reset-perms", "app:reset-perms", "Revoke every permission the manifest asks for: test the first-run flow again") { resetPermissions(it) }
+    Registry.add("app:clear", "app:clear", "Wipe the app's data (asks), then launch it fresh") { clearData(it) }
+    Registry.add("app:demo", "app:demo [on|off]", "Clean status bar for store screenshots (12:00, full battery and signal)", DEMO) { demo(it) }
+    Registry.add("app:mirror", "app:mirror", "Show and control the phone on this computer (scrcpy)") { mirror() }
 }
 
 private fun install(ctx: Ctx) {
@@ -175,14 +203,7 @@ private fun logcat(ctx: Ctx) {
 }
 
 private fun shot(ctx: Ctx) {
-    requireAdb()
-    val out = newAssetFile(ctx, nameAndNumber(ctx.args).first, "shot", "png")
-    val remote = "/sdcard/artisan_shot.png"
-    adbShell("screencap", "-p", remote)
-    adb("pull", remote, out.absolutePath)
-    adbShell("rm", remote)
-    if (!out.isFile) throw CliError("Screenshot failed.")
-    showSaved(ctx, out)
+    showSaved(ctx, captureShot(ctx, nameAndNumber(ctx.args).first))
 }
 
 private fun record(ctx: Ctx) {
@@ -270,4 +291,128 @@ private fun rotate(ctx: Ctx) {
         else -> throw CliError("Use land, port or auto (got '$mode').")
     }
     Ui.say("Rotation: $mode", Tone.OK)
+}
+
+// ---------- phone tricks: no Settings taps, no clipboard ----------
+
+private val DEMO = listOf("on" to "Clean status bar: 12:00, full battery and signal, no notifications", "off" to "Back to the real status bar")
+
+/** Text for `adb shell input text`: spaces as %s, and the device shell's special characters escaped. */
+internal fun inputTextArg(text: String): String = buildString {
+    for (c in text) {
+        when {
+            c == ' ' -> append("%s")
+            c in "()<>|;&*\\~\"'`$#?![]{}" -> append('\\').append(c)
+            else -> append(c)
+        }
+    }
+}
+
+private fun typeText(ctx: Ctx) {
+    val text = ctx.args.joinToString(" ").ifEmpty { Ui.ask("Text to type on the phone") }
+    if (text.isEmpty()) throw Cancelled
+    if (text.any { it.code > 126 }) Ui.say("  adb can only type plain ASCII; other characters may come out wrong.", Tone.WARN)
+    requireAdb()
+    val r = adb("shell", "input", "text", inputTextArg(text))
+    if (!r.ok || "Exception" in r.out) throw CliError("Typing failed: ${r.out.lines().firstOrNull() ?: ""}")
+    Ui.say("Typed ${text.length} character(s) into the focused field.", Tone.OK)
+}
+
+/** Single-quoted for the device shell. */
+private fun shQuote(s: String) = "'" + s.replace("'", "'\\''") + "'"
+
+private fun openLink(ctx: Ctx) {
+    val p = ctx.project
+    val pkg = p.requirePackage()
+    val url = ctx.arg(0) ?: run {
+        val links = projectDeepLinks(p)
+        if (links.isNotEmpty()) links[Ui.pick("Deep links from the manifest", links)].first else Ui.ask("URL or deep link")
+    }
+    if (url.isBlank()) throw Cancelled
+    requireAdb()
+    val r = adb("shell", "am start -W -a android.intent.action.VIEW -d ${shQuote(url)} $pkg")
+    if ("Error" in r.out || !r.ok) throw CliError(r.out.lines().firstOrNull { "Error" in it } ?: "Couldn't open $url")
+    Ui.say("Opened $url in $pkg", Tone.OK)
+}
+
+private fun permission(ctx: Ctx, grant: Boolean) {
+    val p = ctx.project
+    val pkg = p.requirePackage()
+    val perm = ctx.arg(0)?.let { if ('.' in it) it else "android.permission.$it" } ?: run {
+        val perms = projectPermissions(p).ifEmpty { throw CliError("No <uses-permission> in the app manifest.") }
+        perms[Ui.pick(if (grant) "Grant" else "Revoke", perms)].first
+    }
+    requireAdb()
+    val r = adb("shell", "pm", if (grant) "grant" else "revoke", pkg, perm)
+    if (!r.ok || "Exception" in r.out) {
+        throw CliError("${r.out.lines().firstOrNull { it.isNotBlank() } ?: "failed"}\n  Only runtime (dangerous) permissions can be granted or revoked.")
+    }
+    Ui.say("${if (grant) "Granted" else "Revoked"} ${perm.substringAfterLast('.')} for $pkg", Tone.OK)
+}
+
+private fun resetPermissions(ctx: Ctx) {
+    val p = ctx.project
+    val pkg = p.requirePackage()
+    val perms = projectPermissions(p).map { it.first }
+    requireAdb()
+    var revoked = 0
+    for (perm in perms) {
+        val r = adb("shell", "pm", "revoke", pkg, perm)
+        if (r.ok && "Exception" !in r.out) revoked++
+    }
+    // also forget "don't ask again", so the system dialog shows again
+    adb("shell", "pm", "clear-permission-flags", pkg, *perms.toTypedArray(), "user-set", "user-fixed")
+    Ui.say("Revoked $revoked runtime permission(s) of $pkg (the others aren't runtime permissions).", Tone.OK)
+}
+
+private fun clearData(ctx: Ctx) {
+    val pkg = ctx.project.requirePackage()
+    requireAdb()
+    if (!Ui.confirm("Wipe all data of $pkg on the phone (logins, settings, databases)?")) throw Cancelled
+    val r = adb("shell", "pm", "clear", pkg)
+    if (!r.out.contains("Success")) throw CliError("pm clear failed: ${r.out}")
+    launch(pkg)
+    Ui.say("Cleared $pkg and launched it fresh.", Tone.OK)
+}
+
+private fun demo(ctx: Ctx) {
+    val on = when (ctx.arg(0) ?: DEMO[Ui.pick("Demo mode", DEMO)].first) {
+        "on" -> true
+        "off" -> false
+        else -> throw CliError("Use on or off.")
+    }
+    requireAdb()
+    fun demoCmd(vararg extras: String) = adbShell("am", "broadcast", "-a", "com.android.systemui.demo", *extras)
+    if (on) {
+        adbShell("settings", "put", "global", "sysui_demo_allowed", "1")
+        demoCmd("-e", "command", "enter")
+        demoCmd("-e", "command", "clock", "-e", "hhmm", "1200")
+        demoCmd("-e", "command", "battery", "-e", "level", "100", "-e", "plugged", "false")
+        demoCmd("-e", "command", "network", "-e", "wifi", "show", "-e", "level", "4")
+        demoCmd("-e", "command", "network", "-e", "mobile", "show", "-e", "datatype", "none", "-e", "level", "4")
+        demoCmd("-e", "command", "notifications", "-e", "visible", "false")
+        Ui.say("Demo mode on: 12:00, full battery and signal, no notification icons. Off: artisan app:demo off", Tone.OK)
+    } else {
+        demoCmd("-e", "command", "exit")
+        Ui.say("Demo mode off.", Tone.OK)
+    }
+}
+
+private fun mirror() {
+    requireAdb()
+    if (Proc.which("scrcpy") == null) {
+        when {
+            Os.isWindows && Proc.which("winget") != null ->
+                if (Ui.confirm("scrcpy isn't installed. Install it with winget (Genymobile.scrcpy)?")) {
+                    Proc.stream(listOf("winget", "install", "-e", "--id", "Genymobile.scrcpy", "--accept-source-agreements", "--accept-package-agreements"))
+                    Ui.say("Open a new terminal (so PATH has scrcpy), then run artisan app:mirror again.", Tone.WARN)
+                }
+            Os.isMac && Proc.which("brew") != null ->
+                if (Ui.confirm("scrcpy isn't installed. Install it with Homebrew?")) Proc.stream(listOf("brew", "install", "scrcpy"))
+            else -> Ui.say("Install scrcpy (https://github.com/Genymobile/scrcpy), then run this again.", Tone.WARN)
+        }
+        if (Proc.which("scrcpy") == null) return
+    }
+    Proc.start("scrcpy", "--stay-awake")
+    Ui.say("Mirroring in a new window (close it to stop).", Tone.OK)
 }

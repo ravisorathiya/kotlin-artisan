@@ -19,7 +19,7 @@ function global:Get-ArtisanCustomCommands {
     while ($dir) {
         $file = Join-Path $dir 'artisan.json'
         if (Test-Path -LiteralPath $file) {
-            try { $json = Get-Content -Raw -LiteralPath $file | ConvertFrom-Json } catch { return }
+            try { $json = Get-Content -Raw -Encoding UTF8 -LiteralPath $file | ConvertFrom-Json } catch { return }
             if ($json.commands) {
                 $json.commands.PSObject.Properties | ForEach-Object {
                     $d = if ($_.Value.description) { $_.Value.description } else { $_.Value.run }
@@ -30,6 +30,51 @@ function global:Get-ArtisanCustomCommands {
         }
         $dir = Split-Path $dir -Parent
     }
+}
+
+# ---------- this project: .gradle/artisan/status.json (artisan rewrites it after every command) ----------
+
+# The Android project around the current folder (has settings.gradle[.kts]), remembered per folder.
+$global:ArtisanRootCache = @{ Dir = $null; Root = $null }
+function global:Get-ArtisanRoot {
+    $here = (Get-Location).ProviderPath
+    if ($global:ArtisanRootCache.Dir -eq $here) { return $global:ArtisanRootCache.Root }
+    $dir = $here; $root = $null
+    while ($dir) {
+        if ((Test-Path -LiteralPath (Join-Path $dir 'settings.gradle.kts')) -or (Test-Path -LiteralPath (Join-Path $dir 'settings.gradle'))) { $root = $dir; break }
+        $dir = Split-Path $dir -Parent
+    }
+    $global:ArtisanRootCache = @{ Dir = $here; Root = $root }
+    $root
+}
+
+# status.json of this project, re-read only when it changed. Null outside a project or before artisan ran in it.
+$global:ArtisanStatusCache = @{ Path = $null; Stamp = $null; Data = $null }
+function global:Get-ArtisanStatus {
+    $root = Get-ArtisanRoot
+    if (-not $root) { return $null }
+    $path = Join-Path $root '.gradle\artisan\status.json'
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    $stamp = (Get-Item -LiteralPath $path).LastWriteTimeUtc
+    $c = $global:ArtisanStatusCache
+    if ($c.Path -ne $path -or $c.Stamp -ne $stamp) {
+        $data = try { Get-Content -Raw -Encoding UTF8 -LiteralPath $path | ConvertFrom-Json } catch { $null }
+        $global:ArtisanStatusCache = @{ Path = $path; Stamp = $stamp; Data = $data }
+    }
+    $global:ArtisanStatusCache.Data
+}
+
+# Values after a command: the fixed ones plus this project's (locales, permissions, deep links, screens...).
+function global:Get-ArtisanValues([string]$command) {
+    $list = @($global:ArtisanChoices[$command] | Where-Object { $_ })
+    $status = Get-ArtisanStatus
+    if ($status -and $status.choices -and $status.choices.PSObject.Properties[$command]) {
+        $known = @($list | ForEach-Object N)
+        foreach ($pair in $status.choices.$command) {
+            if ($known -notcontains $pair[0]) { $list += [pscustomobject]@{ N = $pair[0]; D = $pair[1] } }
+        }
+    }
+    $list
 }
 
 Register-ArgumentCompleter -Native -CommandName artisan, kotlin-artisan -ScriptBlock {
@@ -44,7 +89,7 @@ Register-ArgumentCompleter -Native -CommandName artisan, kotlin-artisan -ScriptB
     $list = $null
     if ($wordToComplete -like '-*') { $list = $global:ArtisanFlags }
     elseif ($positions.Count -eq 0) { $list = @($global:ArtisanCommands) + @(Get-ArtisanCustomCommands) }
-    elseif ($positions.Count -eq 1) { $list = $global:ArtisanChoices[$positions[0]] }
+    elseif ($positions.Count -eq 1) { $list = Get-ArtisanValues $positions[0] }
     if (-not $list) { return }
 
     # Starts with what you typed; else contains it (dark -> app:dark); else the description does (translation).
@@ -138,7 +183,7 @@ function global:Get-ArtisanHint([string]$line, [int]$cursor) {
     $values = $false
     if ($word -like '-*') { $list = $global:ArtisanFlags }
     elseif ($before.Count -eq 0) { $list = @($global:ArtisanCommands) + @(Get-ArtisanCustomCached) }
-    elseif ($before.Count -eq 1) { $list = $global:ArtisanChoices[$before[0]]; $values = $true }
+    elseif ($before.Count -eq 1) { $list = Get-ArtisanValues $before[0]; $values = $true }
     else { return $null }
     if (-not $list) { return $null }
     $items = @(Get-ArtisanMatches $word $list)
@@ -285,6 +330,56 @@ if (-not $artisanPredictor -and -not $env:ARTISAN_NO_LIVE_HINTS -and -not $artis
         }
         if ($bound['RightArrow'] -eq 'ForwardChar') {
             Set-PSReadLineKeyHandler -Chord RightArrow -BriefDescription ArtisanHint -ScriptBlock { param($key, $arg) Invoke-ArtisanAccept $key $arg }
+        }
+    } catch { }
+}
+
+# ---------- prompt status ----------
+# In an Android project the prompt starts with [v1.7(42) phase_3, 5 open, 2 verify] (from status.json; artisan
+# refreshes it after every command and the git hooks after checkout/merge). Your own prompt function is kept and
+# called after it. $env:ARTISAN_STATUS has the same text for oh-my-posh / starship. ARTISAN_NO_PROMPT=1 hides it.
+if (-not (Test-Path variable:global:ArtisanOriginalPrompt)) { $global:ArtisanOriginalPrompt = $function:prompt }
+function global:prompt {
+    $status = $null
+    try { $status = Get-ArtisanStatus } catch { }
+    $env:ARTISAN_STATUS = if ($status) { $status.prompt } else { '' }
+    # where the PowerShell 7 predictor finds this project's values
+    $env:ARTISAN_PROJECT_STATUS = if ($status) { $global:ArtisanStatusCache.Path } else { '' }
+    if ($status -and $status.prompt -and -not $env:ARTISAN_NO_PROMPT) {
+        Write-Host '[' -NoNewline -ForegroundColor DarkGray
+        Write-Host $status.prompt -NoNewline -ForegroundColor DarkCyan
+        Write-Host '] ' -NoNewline -ForegroundColor DarkGray
+    }
+    if ($global:ArtisanOriginalPrompt) { & $global:ArtisanOriginalPrompt } else { "PS $($executionContext.SessionState.Path.CurrentLocation)> " }
+}
+
+# ---------- hotkeys: Ctrl+g, then a key ----------
+# Puts `artisan <command>` on the line and runs it (so it's in your history). Keys and commands: artisan hotkeys;
+# change them in artisan.json "hotkeys". Another leader: $env:ARTISAN_HOTKEY_LEADER = 'Ctrl+k'.
+$global:ArtisanHotkeys = @{
+{{HOTKEYS}}
+}
+
+function global:Invoke-ArtisanHotkey([string]$key) {
+    $status = Get-ArtisanStatus
+    $command = if ($status -and $status.hotkeys -and $status.hotkeys.PSObject.Properties[$key]) { $status.hotkeys.$key } else { $global:ArtisanHotkeys[$key] }
+    if ($key -eq '?') { $command = 'hotkeys' }
+    if (-not $command) { return }
+    Clear-ArtisanHint
+    [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
+    [Microsoft.PowerShell.PSConsoleReadLine]::Insert("artisan $command")
+    [Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine()
+}
+
+if (-not $env:ARTISAN_NO_HOTKEYS -and (Get-Module PSReadLine)) {
+    try {
+        $leader = if ($env:ARTISAN_HOTKEY_LEADER) { $env:ARTISAN_HOTKEY_LEADER } else { 'Ctrl+g' }
+        $taken = @(Get-PSReadLineKeyHandler -Bound -ErrorAction Stop | Where-Object { $_.Key -ceq $leader -and $_.Function -ne 'ArtisanHotkey' })
+        if ($taken.Count -eq 0) {
+            foreach ($k in @([char[]]'abcdefghijklmnopqrstuvwxyz0123456789' | ForEach-Object { "$_" }) + '?') {
+                $body = { param($key, $arg) Invoke-ArtisanHotkey $k }.GetNewClosure()
+                Set-PSReadLineKeyHandler -Chord "$leader,$k" -BriefDescription ArtisanHotkey -ScriptBlock $body
+            }
         }
     } catch { }
 }

@@ -9,6 +9,7 @@ import com.github.ajalt.mordant.rendering.TextColors.yellow
 import com.github.ajalt.mordant.rendering.TextStyle
 import com.github.ajalt.mordant.rendering.TextStyles.dim
 import com.github.ajalt.mordant.terminal.Terminal
+import java.io.File
 import java.nio.charset.Charset
 
 /** Thrown when the user presses Enter on a picker/question to back out. Printed as "Cancelled." */
@@ -68,6 +69,29 @@ object Ui {
     fun ask(question: String, default: String = ""): String {
         val hint = if (default.isNotEmpty()) " [$default]" else ""
         return readLine("$question$hint").ifEmpty { default }
+    }
+
+    /**
+     * [f]'s full path, as a clickable file:// link where the terminal supports links (Windows Terminal, iTerm2,
+     * kitty, WezTerm, ...). Elsewhere, and in pipes, it's the plain full path.
+     */
+    fun fileLink(f: File, style: TextStyle? = Tone.INFO): String {
+        val path = f.absoluteFile.normalize()
+        val link = TextStyle(hyperlink = path.toPath().toUri().toString())
+        return (style?.plus(link) ?: link).invoke(path.path)
+    }
+
+    /** `  label  D:\full\path` with the path clickable. */
+    fun sayFile(label: String, f: File) = terminal.println("  " + label + "  " + fileLink(f))
+
+    /**
+     * After making [f]: `--open` shows it in the file manager. With [ask], a person at a terminal is asked first
+     * (Enter = yes, `-y` = yes). Never opens anything for scripts or agents.
+     */
+    fun offerReveal(ctx: Ctx, f: File, ask: Boolean, what: String = "folder") {
+        val open = ctx.has("--open") ||
+            (ask && interactive && !plain && (assumeYes || (canAsk && readLine("Open the $what? [Y/n]").lowercase().let { it.isEmpty() || it == "y" || it == "yes" })))
+        if (open) Proc.reveal(f)
     }
 
     /** Asks for the word "yes" unless `-y` was passed. */

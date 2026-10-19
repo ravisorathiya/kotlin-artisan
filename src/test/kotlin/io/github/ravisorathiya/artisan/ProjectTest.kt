@@ -249,7 +249,7 @@ class AiScaffoldTest {
     }
 
     @Test
-    fun `make plan in the ai workspace creates a bundle and an index row`() {
+    fun `a bundle folder gets its overview, reference folder and an index row`() {
         write("settings.gradle", "include ':app'\n")
         write("app/build.gradle", "apply plugin: 'com.android.application'")
         scaffoldAi(assertNotNull(Project.find(tmp)), "v_1_0_alpha", null)

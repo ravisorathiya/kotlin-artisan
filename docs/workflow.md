@@ -1,0 +1,104 @@
+# A day with artisan
+
+How artisan fits into everyday Android work: from opening the terminal to handing a feature to the next project
+copy. Every command here also shows up as you type (`artisan` + type to search, Tab, and the gray suggestions at your
+prompt), so you don't need to remember any of them. The full reference is [commands.md](commands.md).
+
+One-time setup per machine: run the installer (or `artisan setup`) and say yes to Tab completion. That brings the
+suggestions, the Ctrl+g hotkeys and the prompt status. Per project: `artisan make:ai` (the agent workspace with
+event.md and plan/) and `artisan hooks install`.
+
+## Morning: where am I?
+
+Open a terminal in the project. The prompt already says where things stand:
+
+```text
+[v1.8-alpha(17) phase_3 · 5 open · 2 verify] PS D:\work\MyApp>
+```
+
+`artisan status` (or **Ctrl+g t**) shows the phase table and every open item. `artisan list:verify -md` gives the
+VERIFY ON DEVICE checklist to paste into a chat with QA.
+
+## Pick a bug, see it on the phone
+
+```sh
+artisan app:install            # Ctrl+g i: build, install, launch
+artisan app:reset-perms        # first-run permission flow again, no reinstall
+artisan app:clear              # or start completely fresh (asks first)
+artisan app:open myapp://open/settings   # jump straight to the screen (deep links are suggested)
+artisan app:text "+91 98765 43210"       # type into the focused field, no clipboard
+artisan app:lang ar            # right-to-left check;  app:font 1.3, app:dark on, app:rotate land
+```
+
+Found something new? `artisan make:bug --shot` asks screen, area and problem, takes a screenshot and writes the bug
+line with the image link into the latest phase file. **Ctrl+g b** is the same without the screenshot.
+
+## Build the fix
+
+A new screen:
+
+```sh
+artisan make:screen activity Settings          # class + layout + manifest entry (ViewBinding if the module uses it)
+```
+
+Your team's base classes instead of the plain templates: `artisan stub:publish`, then edit `artisan/stubs/`.
+
+New text, in every language at once:
+
+```sh
+artisan make:string settings_title "Settings"  # values/ + every values-xx/ (English, marked for translation)
+artisan check:strings                          # what's missing / still waiting for a translator
+```
+
+## Analytics, without breaking event.md
+
+1. Pick the name with the rules in event.md ("How to name an event"): `snake_case`, under 30 characters,
+   `<screen>_<thing>_<action>`. For a permission flow: `permi_camera_ask`, `permi_camera_grant`,
+   `permi_camera_deny_1st`, `permi_camera_deny_2nd`.
+2. Add the row and get the code line:
+
+   ```sh
+   artisan make:event PermissionActivity permi_camera_grant "User allowed the camera" --from "cameraLauncher result"
+   # In the code:  firebaseEvent("permi_camera_grant")
+   ```
+
+3. Watch it fire: set `ENABLE_EVENT_BOX = true` (the floating event box), or `artisan app:logcat GlobalFirebaseEventNameTag`.
+   Set the box back to `false` before a release.
+4. `artisan check:events` compares every `firebaseEvent` call with event.md. The git hook does the same on every
+   commit, so a missing row can't slip through.
+
+An app without `firebaseEvent` yet: `artisan make:analytics` adds it (and the event box) once.
+
+## Commit
+
+```sh
+git add -A && git commit -m "Settings screen"
+```
+
+With the hooks installed, the commit stops when an event or a string is out of sync and says exactly what to run.
+`git commit --no-verify` skips the check once.
+
+## Release
+
+```sh
+artisan bump minor             # 1.8 -> 1.9, versionCode +1, workflow/v_1_9_alpha with the open items carried over
+artisan build:release aab      # then "Open the folder?" shows the .aab in Explorer / Finder
+artisan open:firebase crash    # after the rollout: Crashlytics for this app
+```
+
+## Hand the feature to the next project copy
+
+```sh
+artisan make:bundle settings_screen --since v1.8
+```
+
+Everything that changed since the tag becomes `plan/settings_screen/`: snapshots of each file, an `apply_bundle.ps1`
+(dry run first, then `-Apply`), and an overview with the new / modified / deleted files. Copy the folder into the
+next zip, run the script, merge what it reports as `DIFFERS`. `plan/MASTER_OVERVIEW.md` lists every bundle in order.
+
+For work that isn't a code snapshot, a plain plan file: `artisan make:plan caller id overlay` writes
+`plan/caller_id_overlay.md` (Goal, Context, Steps, Verification, Notes for the next agent).
+
+## The keys to remember
+
+Only one: **Ctrl+g ?** shows the hotkeys, and `artisan` + typing finds everything else.

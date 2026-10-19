@@ -50,8 +50,8 @@ Other categories (`migration/`, `investigations/`, `release-checks/`, ...) may b
   - **`overview.md`** — release summary: the phase table (phase / file / summary / status), grouped highlights of what changed and why, and what's still open. Update it when items in that release's phases change status. It may also hold a release-level list (e.g. the release's feature/crash-fix list with its Crashlytics link) — if so, track those items there.
   - Keep the original wording of an item as given (it may be in another language, e.g. manager feedback); add your notes after it (` — root cause / change / VERIFY ON DEVICE`), not in place of it.
 - **`assets/`** — visual/reference material (screenshots, mockups) for tasks. Flat, named `img.png`, `img_1.png`, ... Reference the asset from the task item with a path relative to the Markdown file (from `workflow/v_x/phase_N.md` that's `../../assets/img_N.png`). Don't duplicate normal Android resources here. Split into subfolders only if it stops scaling.
-- **`plan/`** — re-apply bundles: everything needed to port a shipped feature into a new zip/copy of this project without re-designing it. `MASTER_OVERVIEW.md` is the entry point (feature index, apply order, which snapshot wins). Each feature gets `plan/<feature>/`: `overview.md` (self-contained guide: new files, modified files with their per-section changes, preconditions, device checklist), `reference/` (final source of every new/modified file with a `.txt` suffix so it never compiles) and optionally `apply_bundle.ps1` (dry run by default). Update the bundle when the feature changes; never put secrets in snapshots.
-- **`event/`** — analytics/event instrumentation tracking: `event.md` lists every active `firebaseEvent` call, one table per screen (event name, description). Must stay in exact sync with the code — see [Analytics event sync](#analytics-event-sync--critical) below.
+- **`plan/`** — plans and re-apply bundles. A plan is one file, `plan/<name>.md` (`artisan make:plan <name>`): goal, context, steps, verification, notes for the next agent. Re-apply bundles (`artisan make:bundle <feature> --since <tag>`): everything needed to port a shipped feature into a new zip/copy of this project without re-designing it. `MASTER_OVERVIEW.md` is the entry point (feature index, apply order, which snapshot wins). Each feature gets `plan/<feature>/`: `overview.md` (self-contained guide: new files, modified files with their per-section changes, preconditions, device checklist), `reference/` (final source of every new/modified file with a `.txt` suffix so it never compiles) and optionally `apply_bundle.ps1` (dry run by default). Update the bundle when the feature changes; never put secrets in snapshots.
+- **`event/`** — analytics/event instrumentation tracking: `event.md` lists every active `firebaseEvent` call, one table per screen (event name, fired from, when). Its top part explains how `firebaseEvent` and the event box are wired, the naming rules, and sample sections (`## Example: ...`) to copy. Must stay in exact sync with the code — see [Analytics event sync](#analytics-event-sync--critical) below.
 
 The `artisan` CLI (kotlin-artisan) works on this folder: `artisan status`, `artisan make:plan`, `artisan list:plans`, `artisan make:phase`, `artisan make:bug`, `artisan make:version`, `artisan list:verify`, `artisan check:links`, `artisan app:shot`.
 
@@ -70,18 +70,26 @@ Whenever you touch a `firebaseEvent(...)` call in production code, update `event
 - **Changed parameters or trigger** (added/removed a `Bundle` key, new `source` value, moved to a different branch) → update the description.
 - **Moved** an event to another screen/class → move its row to that screen's table.
 
+Naming (event.md's "How to name an event" has the full table and samples):
+
+- **`snake_case`, under 30 characters, `<screen>_<thing>_<action>`**: `splash_on_create`, `permi_phone_deny_1st`, `setting_theme_dialog_show`, `setting_nat_loaded`. One prefix per screen, reused by all its events — check that screen's section before inventing a new one.
+- Actions come from a small set: lifecycle `on_create` / `on_resume` / `on_backpress`, taps `click`, dialogs `dialog_show` / `dialog_dismiss` / `dialog_ok_click`, permissions `ask` / `grant` / `deny_1st` / `deny_2nd` / `back`, ads `loading` / `loaded` / `failed` / `show` / `click`.
+- Too long: shorten the words (`act`, `frag`, `dlg`, `perm`, `noti`, `btn`), never the action. If the file already uses another style throughout (older apps), follow the file — and never rename a shipped event just for style: Firebase treats the new name as a new event.
+- `artisan make:event <Screen> <event_name> "<when>"` checks all of this and writes the row; `artisan check:events` compares code and file.
+
 Row rules:
 
-- **Event names must be under 30 characters.** Shorten with the existing abbreviations (`Act`, `Clk`, `Dlg`, `Stg`, `Det`, `Scr`, `OK`) before adding one; if you rename an event, rename it in code and `event.md` together.
-- Keep the table layout used throughout the file: the event-name column is padded so every `|` lines up (same width in every table), description column unpadded:
+- Each screen section: `## ClassName`, the file path in backticks, then a table: **Event name** (backticks) · **Fired from** (method / view / callback) · **When**. Keep the column padding the section already uses:
   ```markdown
-  | Event name                      | Description |
-  |---------------------------------| --- |
-  | `SplashAct_OnCreate`            | The splash screen is created and initialized. |
+  | Event name           | Fired from   | When                        |
+  |----------------------|--------------|-----------------------------|
+  | `splash_on_create`   | `onCreate()` | Splash screen created       |
   ```
 - Describe *when* the event fires in user/app terms, and name every `Bundle` parameter and its possible values. Say explicitly when personal data (numbers, names, message text, URIs) is **not** logged.
 - One row per event name per screen — no duplicates.
 - Don't document events that use `logging()` instead of `firebaseEvent()` (ad-load plumbing, error logs).
+
+Wiring: every event goes through the app's `firebaseEvent(...)` (event.md says where it's defined; `artisan make:analytics` adds it to an app that has none). To watch events while testing, turn on the event box (`ENABLE_EVENT_BOX = true` + `EventLogBox.init(this)` in `Application.onCreate()`) or run `artisan app:logcat GlobalFirebaseEventNameTag`. **The event box must be off (`false`) in any release build** — say so in your notes if you turned it on.
 
 Before finishing any task that touched analytics, grep the changed files for `firebaseEvent(` and diff the event names against that screen's section in `event.md` — both directions (in code but not in the doc, and in the doc but not in code). Note: some calls span multiple lines (`firebaseEvent(\n "Name", ...)`) and some choose the name with `if/else`; a single-line grep misses them, so search for the event names too. When a task touches events on a screen, also report any pre-existing mismatches you notice on that screen.
 

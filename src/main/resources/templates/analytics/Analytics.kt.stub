@@ -1,0 +1,51 @@
+package {{PACKAGE}}
+
+import android.content.Context
+import android.os.Bundle
+import android.util.Log
+import androidx.core.os.bundleOf
+import androidx.fragment.app.Fragment
+import com.google.firebase.analytics.FirebaseAnalytics
+import {{NAMESPACE}}.BuildConfig
+
+/**
+ * Analytics for the whole app (added by `artisan make:analytics`). Every event goes through [firebaseEvent], and
+ * every event is listed in ai/.../event/event.md (`artisan make:event` adds the row, `artisan check:events` compares).
+ *
+ * Names: snake_case, under 30 characters, `<screen>_<thing>_<action>` (e.g. `splash_on_create`,
+ * `setting_theme_dialog_show`). See event.md for the full rules.
+ */
+
+/** true shows the floating event log ([EventLogBox]) on every screen, for testing. Keep false in release builds. */
+const val ENABLE_EVENT_BOX = false
+
+private var analytics: FirebaseAnalytics? = null
+
+/** Logs [name] to Firebase Analytics (plus logcat `GlobalFirebaseEventNameTag` in debug builds and the event box). */
+fun Context.firebaseEvent(name: String, bundle: Bundle = bundleOf()) {
+    try {
+        val fa = analytics ?: FirebaseAnalytics.getInstance(applicationContext).also { analytics = it }
+        fa.logEvent(name, bundle)
+        if (ENABLE_EVENT_BOX) EventLogBox.log(name)
+        if (BuildConfig.DEBUG) Log.i("GlobalFirebaseEventNameTag", name)
+    } catch (e: Exception) {
+        logging("GlobalFirebaseEventNameTag_Error " + e.stackTraceToString(), e)
+    }
+}
+
+fun Fragment.firebaseEvent(name: String, bundle: Bundle = bundleOf()) {
+    try {
+        context?.firebaseEvent(name, bundle)
+    } catch (e: Exception) {
+        logging("GlobalFirebaseEventNameTag_Error " + e.stackTraceToString(), e)
+    }
+}
+
+/** Debug-only log line (not analytics: use [firebaseEvent] for events). */
+fun logging(message: String) {
+    if (BuildConfig.DEBUG) Log.d("GlobalAppDebugLogger", message)
+}
+
+fun logging(tag: String, throwable: Throwable) {
+    if (BuildConfig.DEBUG) Log.e("GlobalAppErrorLogger", "[$tag] ${throwable.message}", throwable)
+}

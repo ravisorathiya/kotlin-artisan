@@ -3,6 +3,9 @@ package io.github.ravisorathiya.artisan
 import io.github.ravisorathiya.artisan.commands.Completion
 import io.github.ravisorathiya.artisan.commands.registerAi
 import io.github.ravisorathiya.artisan.commands.registerCompletion
+import io.github.ravisorathiya.artisan.commands.registerBundle
+import io.github.ravisorathiya.artisan.commands.registerEvents
+import io.github.ravisorathiya.artisan.commands.registerMake
 import io.github.ravisorathiya.artisan.commands.registerApp
 import io.github.ravisorathiya.artisan.commands.registerCode
 import io.github.ravisorathiya.artisan.commands.registerCustom
@@ -10,6 +13,8 @@ import io.github.ravisorathiya.artisan.commands.registerMisc
 import io.github.ravisorathiya.artisan.commands.registerNotes
 import io.github.ravisorathiya.artisan.commands.registerOpen
 import io.github.ravisorathiya.artisan.commands.registerSetup
+import io.github.ravisorathiya.artisan.commands.registerTerminal
+import io.github.ravisorathiya.artisan.commands.StatusCache
 import io.github.ravisorathiya.artisan.commands.registerUpdate
 import io.github.ravisorathiya.artisan.commands.UpdateCheck
 import io.github.ravisorathiya.artisan.core.Cancelled
@@ -40,6 +45,10 @@ fun main(argv: Array<String>) {
         registerUpdate()
         registerSetup()
         registerCompletion()
+        registerMake()
+        registerEvents()
+        registerBundle()
+        registerTerminal()
         ctx.projectOrNull?.let { registerCustom(it) }
         Registry.dispatch(command, ctx)
         runCatching { Completion.refresh() }
@@ -56,5 +65,7 @@ fun main(argv: Array<String>) {
         if (System.getenv("ARTISAN_DEBUG") != null) e.printStackTrace() else Ui.say("Set ARTISAN_DEBUG=1 for the stack trace.", Tone.DIM)
         1
     }
+    // what the prompt, hotkeys and shell suggestions read (no Java on their side)
+    runCatching { ctx.projectOrNull?.let { StatusCache.write(it) } }
     exitProcess(code)
 }

@@ -101,6 +101,11 @@ private fun doctor(ctx: Ctx) {
         if (!Completion.installed(shell)) throw CliError("off for ${shell.id} (optional: artisan completion --install)")
         "${shell.id}: ${Completion.file(shell).path}"
     }
+    check("Git hooks") {
+        val hooks = p?.let { File(it.root, ".git/hooks/pre-commit") } ?: throw CliError("not inside a project")
+        if (!hooks.isFile || "kotlin-artisan hook" !in hooks.readText()) throw CliError("off (optional: artisan hooks install)")
+        "pre-commit checks event.md and translations"
+    }
     Ui.table("Doctor", listOf("Check", "Result", "Detail"), rows)
     Ui.say(if (fails > 0) "  $fails problem(s)." else "  All good.", if (fails > 0) Tone.WARN else Tone.OK)
 }
@@ -143,4 +148,9 @@ private fun buildRelease(ctx: Ctx) {
     val files = (dir.listFiles() ?: emptyArray()).filter { it.extension in setOf("apk", "aab") }
     Ui.table("Output", listOf("File", "Size"), files.map { Row(p.rel(it), "%.1f MB".format(it.length() / 1048576.0)) }, right = setOf(1),
         empty = "nothing found in ${p.rel(dir)}")
+    files.forEach { Ui.sayFile(it.extension.uppercase(), it) }
+    if (files.isNotEmpty()) {
+        Ui.sayFile("folder", dir)
+        Ui.offerReveal(ctx, files.maxBy { it.lastModified() }, ask = true)
+    }
 }

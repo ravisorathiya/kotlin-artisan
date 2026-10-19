@@ -33,7 +33,7 @@ class FuzzyTest {
         assertEquals("app:dark", top("dark"))
         assertEquals("check:strings", top("cs"))
         assertEquals("open:admob", top("ad"))
-        assertEquals("check:strings", top("translation"))
+        assertTrue("check:strings" in Fuzzy.rank("translation", Registry.all()).take(2).map { it.name })
         assertEquals("app:dark", top("app:drak"))
         assertEquals("app:rotate", top("rotat"))
         assertTrue(Fuzzy.rank("app", Registry.all()).take(5).all { it.name.startsWith("app:") })

@@ -66,7 +66,7 @@ namespace KotlinArtisan
             List<Item> list;
             if (word.StartsWith("-")) list = flags;
             else if (before.Count == 0) list = commands;
-            else if (before.Count == 1) list = commands.FirstOrDefault(c => string.Equals(c.Name, before[0], StringComparison.OrdinalIgnoreCase))?.Choices ?? new List<Item>();
+            else if (before.Count == 1) list = Values(before[0]);
             else return result;
 
             var head = line.Substring(0, line.Length - word.Length);
@@ -84,6 +84,59 @@ namespace KotlinArtisan
                 result.Add(new PredictiveSuggestion(text, tip));
             }
             return result;
+        }
+
+        /// <summary>A command's fixed values plus this project's (locales, permissions, deep links...).</summary>
+        private List<Item> Values(string command)
+        {
+            var list = new List<Item>(commands.FirstOrDefault(c => string.Equals(c.Name, command, StringComparison.OrdinalIgnoreCase))?.Choices ?? new List<Item>());
+            foreach (var item in ProjectValues(command))
+                if (!list.Any(x => x.Name == item.Name)) list.Add(item);
+            return list;
+        }
+
+        private string? projectPath;
+        private DateTime projectStamp = DateTime.MinValue;
+        private Dictionary<string, List<Item>> projectChoices = new Dictionary<string, List<Item>>();
+
+        /// <summary>
+        /// Values from the current project's .gradle/artisan/status.json. The profile's prompt function puts its path in
+        /// ARTISAN_PROJECT_STATUS on every prompt (a predictor runs on a background thread and can't ask for the location).
+        /// </summary>
+        private List<Item> ProjectValues(string command)
+        {
+            var path = Environment.GetEnvironmentVariable("ARTISAN_PROJECT_STATUS");
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return new List<Item>();
+            lock (gate)
+            {
+                var stamp = File.GetLastWriteTimeUtc(path);
+                if (path != projectPath || stamp != projectStamp)
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(File.ReadAllText(path));
+                        var map = new Dictionary<string, List<Item>>(StringComparer.OrdinalIgnoreCase);
+                        if (doc.RootElement.TryGetProperty("choices", out var choices) && choices.ValueKind == JsonValueKind.Object)
+                        {
+                            foreach (var cmd in choices.EnumerateObject())
+                            {
+                                map[cmd.Name] = cmd.Value.EnumerateArray()
+                                    .Where(pair => pair.ValueKind == JsonValueKind.Array && pair.GetArrayLength() >= 2)
+                                    .Select(pair => new Item { Name = pair[0].GetString() ?? "", Description = pair[1].GetString() ?? "" })
+                                    .ToList();
+                            }
+                        }
+                        projectChoices = map;
+                        projectPath = path;
+                        projectStamp = stamp;
+                    }
+                    catch (Exception)
+                    {
+                        return new List<Item>();
+                    }
+                }
+                return projectChoices.TryGetValue(command, out var items) ? items : new List<Item>();
+            }
         }
 
         /// <summary>(Re)reads commands.json when it changed; checks the file at most every two seconds.</summary>

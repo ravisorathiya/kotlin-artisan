@@ -55,7 +55,7 @@ fun registerCompletion() {
 }
 
 private fun completion(ctx: Ctx) {
-    val install = "--install" in ctx.args
+    val install = ctx.has("--install")
     val name = ctx.args.firstOrNull { !it.startsWith("-") }
     val shell = name?.let { Shell.of(it) ?: throw CliError("Unknown shell '$it'. Use: ${Shell.entries.joinToString(", ") { s -> s.id }}.") } ?: Shell.current()
     if (!install) {
@@ -220,7 +220,16 @@ object Completion {
         val text = template.replace("{{VERSION}}", VERSION)
             .replace("{{PREDICTOR}}", predictorDll.takeIf { it.isFile }?.path?.let(::psQuote) ?: "")
             .replace("{{DATA}}", psQuote(dataFile.path)).replace("{{COMMANDS}}", cmds).replace("{{CHOICES}}", choices).replace("{{FLAGS}}", flags)
+            .replace("{{HOTKEYS}}", hotkeyDefaults(shell))
         return if (shell == Shell.POWERSHELL) text.replace("\n", "\r\n") else text
+    }
+
+    /** The default hotkeys, in the shape each script wants (projects add theirs through .gradle/artisan). */
+    private fun hotkeyDefaults(shell: Shell): String = when (shell) {
+        Shell.POWERSHELL -> DEFAULT_HOTKEYS.entries.joinToString("\n") { (k, v) -> "    '${psQuote(k)}' = '${psQuote(v)}'" }
+        // the text inside $'...': key<TAB>command per line, as \t and \n escapes
+        Shell.BASH, Shell.ZSH -> DEFAULT_HOTKEYS.entries.joinToString("\\n") { (k, v) -> "$k\\t${v.replace("'", "")}" }
+        Shell.FISH -> ""
     }
 
     private fun powershell(commands: List<Command>): Triple<String, String, String> {

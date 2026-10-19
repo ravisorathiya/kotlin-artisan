@@ -95,6 +95,13 @@ Open a new terminal afterwards. In PowerShell, profiles only run when the execut
 if it doesn't, artisan prints the `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` line that fixes it. No Tab
 completion in your shell (cmd.exe)? Run plain `artisan` and type to search.
 
+## Hotkeys, prompt status, git hooks
+
+The completion install also brings **Ctrl+g hotkeys** (Ctrl+g then `i` installs the app, `s` takes a screenshot,
+`?` lists them) and the **prompt status** (`[v1.7(42) phase_3 · 5 open]` in an Android project). Turn them off with
+`ARTISAN_NO_HOTKEYS=1` / `ARTISAN_NO_PROMPT=1`. Git hooks are per project: `artisan hooks install`. Details:
+[commands.md](commands.md#terminal-hotkeys-prompt-git-hooks), and the day-to-day guide: [workflow.md](workflow.md).
+
 ## Check
 
 ```sh

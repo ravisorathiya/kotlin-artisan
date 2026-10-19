@@ -1,0 +1,13 @@
+package {{PACKAGE}}
+
+import android.os.Bundle
+import androidx.appcompat.app.AppCompatActivity
+import {{NAMESPACE}}.R
+
+class {{CLASS}} : AppCompatActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.{{LAYOUT}})
+    }
+}

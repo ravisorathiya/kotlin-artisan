@@ -10,6 +10,8 @@ import com.github.ajalt.mordant.rendering.TextColors.gray
 import com.github.ajalt.mordant.rendering.TextColors.green
 import com.github.ajalt.mordant.rendering.TextStyle
 import com.github.ajalt.mordant.rendering.TextStyles.bold
+import io.github.ravisorathiya.artisan.project.Project
+import java.io.File
 
 /**
  * `artisan` with no command (or `artisan find <words>`): a search box over every command that filters as you type.
@@ -26,6 +28,9 @@ object Palette {
     private val KEYS = if (Ui.unicode) "↑↓ move · Tab complete · Enter run · Esc quit" else "Up/Down move, Tab complete, Enter run, Esc quit"
 
     private val t get() = Ui.terminal
+
+    /** For project values (locales, screens, permissions...) in the suggestions. */
+    private val project: Project? by lazy { Project.find(File(System.getProperty("user.dir"))) }
 
     /** A real terminal with a person at it that understands cursor moves. */
     val available: Boolean
@@ -56,11 +61,12 @@ object Palette {
             return View(items, null, "", if (items.isEmpty()) "No command matches \"${text.trim()}\"." else null)
         }
         val arg = text.substringAfter(' ').trimStart()
-        if (cmd.choices.isEmpty() || ' ' in arg) {
+        val choices = cmd.choicesFor(project)
+        if (choices.isEmpty() || ' ' in arg) {
             val hint = if (cmd.takesArgs) "${cmd.usage}: type the value, Enter runs (empty = it asks)" else "${cmd.name} takes no value: Enter runs it"
             return View(emptyList(), cmd, arg, hint)
         }
-        val items = Fuzzy.rankChoices(arg, cmd.choices).map { (v, d) -> Item("${cmd.name} $v", v, d) }
+        val items = Fuzzy.rankChoices(arg, choices).map { (v, d) -> Item("${cmd.name} $v", v, d) }
         return View(items, cmd, arg, if (items.isEmpty()) "${cmd.usage}: Enter runs it with \"$arg\"" else null)
     }
 

@@ -6,8 +6,37 @@ import java.io.File
 
 /** Everything a command needs for one run. */
 class Ctx(args: List<String>, val cwd: File = File(System.getProperty("user.dir"))) {
-    /** Positional arguments (flags removed). Commands may replace them, e.g. after a picker. */
-    var args: List<String> = args.filter { it !in FLAGS }
+    /** `--name value` / `--name=value` for [VALUE_OPTIONS], and bare `--name` switches (`--open`, `--tag`). */
+    private val options: Map<String, String?>
+
+    /** Positional arguments (flags and options removed). Commands may replace them, e.g. after a picker. */
+    var args: List<String>
+
+    init {
+        val opts = mutableMapOf<String, String?>()
+        val positional = mutableListOf<String>()
+        var i = 0
+        while (i < args.size) {
+            val a = args[i]
+            when {
+                a in FLAGS -> {}
+                a.startsWith("--") && '=' in a -> opts[a.substringBefore('=')] = a.substringAfter('=')
+                a in VALUE_OPTIONS -> { opts[a] = args.getOrNull(i + 1); i++ }
+                a.startsWith("--") && a.length > 2 -> opts[a] = null
+                else -> positional += a
+            }
+            i++
+        }
+        options = opts
+        this.args = positional
+    }
+
+    /** Value of `--name value`, or null. */
+    fun option(name: String): String? = options[name]
+
+    /** `--name` was given (with or without a value). */
+    fun has(name: String): Boolean = name in options
+
     val yes = args.any { it == "-y" || it == "--yes" }
     val verbose = "-v" in args
     val markdown = "-md" in args
@@ -30,6 +59,9 @@ class Ctx(args: List<String>, val cwd: File = File(System.getProperty("user.dir"
 
     companion object {
         val FLAGS = setOf("-y", "--yes", "-v", "-md", "--plain", "--table")
+
+        /** Options that take the next word as their value. */
+        val VALUE_OPTIONS = setOf("--module", "--package", "--since", "--screen", "--from")
     }
 }
 
@@ -42,8 +74,16 @@ class Command(
     val choices: List<Pair<String, String>> = emptyList(),
     /** From artisan.json: belongs to one project, so it's left out of the shell completion scripts. */
     val custom: Boolean = false,
+    /** First-argument values that depend on the project (locales, screens, permissions...). */
+    val choicesFrom: ((Project) -> List<Pair<String, String>>)? = null,
     val run: (Ctx) -> Unit,
 ) {
+    /** Static [choices] plus the project's, without duplicates. */
+    fun choicesFor(p: Project?): List<Pair<String, String>> {
+        val extra = p?.let { project -> choicesFrom?.let { f -> runCatching { f(project) }.getOrDefault(emptyList()) } }.orEmpty()
+        return (choices + extra).distinctBy { it.first }
+    }
+
     /** The usage line has an [argument] after the name. */
     val takesArgs: Boolean get() = usage.length > name.length
     val group: String get() = if (':' in name) name.substringBefore(':') else ""
@@ -56,9 +96,9 @@ object Registry {
 
     fun add(
         name: String, usage: String, description: String, choices: List<Pair<String, String>> = emptyList(),
-        custom: Boolean = false, run: (Ctx) -> Unit,
+        custom: Boolean = false, choicesFrom: ((Project) -> List<Pair<String, String>>)? = null, run: (Ctx) -> Unit,
     ) {
-        commands[name] = Command(name, usage, description, choices, custom, run)
+        commands[name] = Command(name, usage, description, choices, custom, choicesFrom, run)
     }
 
     /** Every command in `list` order. */

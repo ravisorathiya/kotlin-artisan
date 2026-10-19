@@ -70,6 +70,17 @@ object Proc {
     private fun isFileOrAlias(f: File): Boolean =
         f.isFile || (Os.isWindows && runCatching { Files.exists(f.toPath(), LinkOption.NOFOLLOW_LINKS) && !f.isDirectory }.getOrDefault(false))
 
+    /** Shows [f] in the file manager: selected in its folder (Explorer, Finder), or the folder itself. */
+    fun reveal(f: File) {
+        val path = f.absoluteFile.normalize()
+        val cmd = when {
+            Os.isWindows -> if (path.isFile) arrayOf("explorer.exe", "/select,${path.path}") else arrayOf("explorer.exe", path.path)
+            Os.isMac -> if (path.isFile) arrayOf("open", "-R", path.path) else arrayOf("open", path.path)
+            else -> arrayOf("xdg-open", (if (path.isFile) path.parentFile else path).path)
+        }
+        start(*cmd)
+    }
+
     /** Opens a URL or file with the OS default handler (browser, viewer). */
     fun open(target: String) {
         val cmd = when {

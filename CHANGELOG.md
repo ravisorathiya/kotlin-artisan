@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.7.0: the daily Android loop
+
+**Generators**
+- `make:string <key> "text"`: adds the string to `values/` and every `values-xx/` in one go (English, marked
+  `<!-- artisan: translate -->`); `check:strings` lists what's waiting for translation.
+- `make:event <Screen> <name> "<when>" [--from x]`: checks the naming rules (snake_case, under 30 characters,
+  `<screen>_<thing>_<action>`; older PascalCase files keep their style), adds the row to event.md and prints the
+  `firebaseEvent(...)` line. `check:events`: code vs event.md both ways, plus names that break the rules.
+- event.md (from `make:ai`) now explains how `firebaseEvent` and the event box are wired, the naming rules as a
+  table, the row format (`Event name | Fired from | When`), and sample sections (lifecycle, a permission flow,
+  dialogs and ads). Samples (`## Example: ...`) are never counted as real events.
+- `make:analytics`: adds `firebaseEvent()`, `logging()` and the floating event box (`EventLogBox`,
+  `ENABLE_EVENT_BOX`) to an app that has none.
+- `make:screen [activity|fragment|dialog|sheet] <Name>`: class + layout (+ manifest entry), ViewBinding when the
+  module has it on. `stub:publish` copies the templates to `artisan/stubs/` so the team's own base classes are used.
+- `bump [patch|minor|major|code]`: versionName / versionCode in the app build file, plus the next workflow folder.
+- `make:bundle <feature> --since <tag>`: snapshots what changed since a tag into a `plan/<feature>/` re-apply bundle
+  with a generated `apply_bundle.ps1` (dry run, `-Apply`, `-IncludeModified`, backups) and a filled overview.
+- `make:plan` writes one plain `plan/<name>.md` (Goal, Context, Steps, Verification, Notes for the next agent).
+
+**Phone, no Settings taps and no clipboard**
+- `app:text "..."` types on the phone, `app:open <deeplink>` (deep links from the manifest are suggested),
+  `app:grant` / `app:revoke <permission>` (from the manifest), `app:reset-perms`, `app:clear`, `app:demo on|off`
+  (clean status bar for store screenshots), `app:mirror` (scrcpy, installs it if missing).
+- `make:bug --shot` takes a screenshot and links it from the bug line.
+
+**Clickable paths**
+- Files artisan makes or finds print as full paths that are clickable in Windows Terminal, iTerm2, kitty and
+  WezTerm. `build:release` asks to show the APK/AAB in Explorer / Finder (`--open` to skip the question);
+  `open:folder [apk|bundle|assets|plan|workflow|res|reports|root]`.
+
+**Terminal**
+- Hotkeys: Ctrl+g then a key runs a command (`i` install, `s` shot, `l` logcat, `d` dark toggle, `b` bug, `t` status,
+  `o` folder, `a` search, `?` list). Change them in `artisan.json` `"hotkeys"`; `artisan hotkeys` lists them.
+- Prompt status: `[v1.7(42) phase_3 · 5 open · 2 verify]` in front of your prompt inside an Android project.
+- `hooks install`: the pre-commit hook stops commits where `firebaseEvent` calls and event.md disagree, or a new
+  string is missing in a locale (`check:staged`); checkout/merge refresh the prompt status.
+- All of it comes with `completion --install` (PowerShell, bash, zsh; fish gets the project values) and reads
+  `.gradle/artisan/` in the project, so the shell never waits for Java. Suggestions and Tab now include the project's
+  locales, permissions, deep links, event screens and plans.
+- Options like `--since v1.6`, `--module :core`, `--open` are parsed properly.
+
 ## 0.6.0
 
 - **Suggestions while you type at the normal prompt**, no Tab needed. Type `artisan da` and the best match shows as

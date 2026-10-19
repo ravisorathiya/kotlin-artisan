@@ -11,11 +11,17 @@ $data = Join-Path ([IO.Path]::GetTempPath()) 'artisan-smoke-commands.json'
         @{ name = 'app:dark'; usage = 'app:dark [on|off]'; description = 'Dark / light theme'
            choices = @(@{ name = 'on'; description = 'Dark theme' }, @{ name = 'off'; description = 'Light theme' }) },
         @{ name = 'app:install'; usage = 'app:install'; description = 'Build + install the debug APK'; choices = @() },
+        @{ name = 'app:grant'; usage = 'app:grant [permission]'; description = 'Grant one runtime permission'; choices = @() },
         @{ name = 'check:strings'; usage = 'check:strings [lang]'; description = 'Missing/extra translations per module'; choices = @() }
     )
     flags = @(@{ name = '--plain'; description = 'Compact tab-separated output' })
 } | ConvertTo-Json -Depth 5 | Set-Content $data
 $env:ARTISAN_COMPLETION_DATA = $data
+
+# What the profile's prompt points at: the project's status.json with its values (here: a permission).
+$status = Join-Path ([IO.Path]::GetTempPath()) 'artisan-smoke-status.json'
+'{"prompt":"v1.0(1)","choices":{"app:grant":[["android.permission.CAMERA","CAMERA"]]}}' | Set-Content $status
+$env:ARTISAN_PROJECT_STATUS = $status
 
 Import-Module $Dll
 Import-Module $Dll   # a profile that runs twice must not fail
@@ -37,6 +43,7 @@ $cases = [ordered]@{
     'artisan translation'  = 'artisan check:strings '
     'artisan app:dark --p' = 'artisan app:dark --plain'
     'artisan app:in'       = 'artisan app:install'
+    'artisan app:grant cam' = 'artisan app:grant android.permission.CAMERA'
 }
 $failed = 0
 foreach ($case in $cases.GetEnumerator()) {

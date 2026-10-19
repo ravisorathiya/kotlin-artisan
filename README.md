@@ -13,7 +13,8 @@
   <b><a href="https://ravisorathiya.github.io/open-source/kotlin-artisan">Website</a></b> ·
   <a href="#install">Install</a> ·
   <a href="#30-second-tour">30-second tour</a> ·
-  <a href="docs/commands.md">All commands</a>
+  <a href="docs/commands.md">All commands</a> ·
+  <a href="docs/workflow.md">A day with artisan</a>
 </p>
 
 # kotlin-artisan
@@ -36,9 +37,11 @@ anywhere a JDK runs (Windows, macOS, Linux).
 | ⚡ **Zero setup** | Run it anywhere inside a Gradle project. It finds the root, the modules (Kotlin or Groovy DSL), the app module, `applicationId`, version, and Firebase project by itself. |
 | 🧰 **Easy tool setup** | Missing Java or adb? The Windows installer and `artisan setup` reuse Android Studio's JDK and SDK, or install them with `winget` / `brew`. Guide: [docs/setup.md](docs/setup.md). |
 | ⌨️ **Suggestions as you type** | At your normal prompt, `artisan da` shows `app:dark` in gray as you type; → accepts (PowerShell 5.1 and 7, zsh, fish). Or run `artisan` and type to search every command (`dark`, `translation`, even `drak`). `artisan app:<Tab>` completes with descriptions. |
+| 🏭 **Generators for the repetitive parts** | `make:string` (every locale at once), `make:event` + `check:events` (event.md in sync, naming rules checked), `make:screen`, `bump`, `make:bundle` (git diff → re-apply bundle), `make:analytics` (firebaseEvent + event box). |
+| ⌨️ **In your terminal, not only a CLI** | Ctrl+g hotkeys (`i` install, `s` screenshot, `l` logcat...), project status in your prompt, git hooks that stop commits with event.md or translations out of sync, clickable output paths. |
 | 🔢 **Pickers instead of memorising** | `artisan make`, `artisan app` and `artisan open` show just that group's commands. Leave out a value (`artisan app:font`) and it shows the choices. |
 | 🎨 **Readable output** | Coloured boxed tables that fit your terminal. |
-| 📱 **Phone switches for QA** | Dark/light, font scale, rotation, per-app language, screenshot, screen recording, logcat. |
+| 📱 **Phone switches for QA** | Dark/light, font scale, rotation, per-app language, screenshot, screen recording, logcat, type text, deep links, grant/revoke/reset permissions, clear data, demo status bar, mirror (scrcpy). |
 | 🩺 **Project health** | Missing translations per module × language, TODO/FIXME summary, lines of code, `doctor`. |
 | 🗒️ **Optional notes workspace** | Versions → phases → bugs, plans, and screenshots for a team or an AI agent: `make:plan`, `make:bug`, `status`, `list:verify`. |
 | 🧩 **Your own commands** | Add shell commands in `artisan.json` and they show up in the pickers. |
@@ -89,7 +92,13 @@ artisan                        # type to search every command; Tab fills in, Ent
 artisan app:<Tab>              # Tab completion with descriptions (artisan completion --install)
 artisan doctor                 # Java, SDK, adb, phone, git: what's OK, what's missing
 artisan setup                  # put adb on PATH + set JAVA_HOME (SDK copy, else winget/brew)
-artisan app:install            # build + install + launch the debug app
+artisan app:install            # build + install + launch the debug app   (or Ctrl+g i)
+artisan make:string call_ended "Call ended"   # values/ + every values-xx/ at once
+artisan make:event SplashActivity splash_on_create "Splash shown"   # event.md row + firebaseEvent line
+artisan make:screen activity Settings          # class + layout + manifest entry
+artisan app:reset-perms        # test the first-run permission flow again
+artisan bump minor             # 1.7 -> 1.8, versionCode +1, next workflow folder
+artisan hooks install          # stop commits with event.md / translations out of sync
 artisan app:dark on            # dark theme on the phone   (artisan app:light to go back)
 artisan app:font 1.3           # large font                (artisan app:font reset)
 artisan app:rotate land        # lock landscape            (artisan app:rotate auto)
@@ -104,14 +113,14 @@ artisan list                   # everything
 
 | Group | Commands |
 |---|---|
-| — | `find [words]` `list` `version` `doctor` `setup` `completion [shell]` `init [notes]` `status` `stats` |
+| — | `find [words]` `list` `version` `doctor` `setup` `completion [shell]` `hotkeys` `hooks` `bump` `init [notes]` `status` `stats` |
 | `self:` | `update` |
-| `make:` | `plan` `version` `phase` `bug` `ai` |
+| `make:` | `string` `event` `screen` `bundle` `analytics` `plan` `version` `phase` `bug [--shot]` `ai` |
 | `del:` | `asset` |
-| `check:` | `links` `assets` `strings [lang] [-v]` |
+| `check:` | `strings [lang] [-v]` `events` `staged` `links` `assets` |
 | `list:` | `verify [-md]` `plans` `todo [module] [-v]` |
-| `app:` | `install` `logcat [tag]` `clean` `shot [name]` `record [name] [sec]` `lang [code]` `dark [on\|off]` `light` `font [scale]` `rotate [land\|port\|auto]` |
-| `open:` | `firebase [overview\|crash\|config\|analytics]` `play` `admob` `app` `studio` `report` |
+| `app:` | `install` `logcat [tag]` `clean` `shot [name]` `record [name] [sec]` `lang [code]` `dark [on\|off]` `light` `font [scale]` `rotate [land\|port\|auto]` `text` `open` `grant` `revoke` `reset-perms` `clear` `demo` `mirror` |
+| `open:` | `firebase [overview\|crash\|config\|analytics]` `play` `admob` `app` `studio` `report` `folder` |
 | `build:` | `release [apk\|aab]` |
 
 <p align="center">
@@ -119,7 +128,7 @@ artisan list                   # everything
   <img src=".github/assets/stats.svg" alt="artisan stats: Kotlin and Java lines per module" width="49%" align="top">
 </p>
 
-Full reference with examples: [docs/commands.md](docs/commands.md).
+Full reference with examples: [docs/commands.md](docs/commands.md). How it all fits into a working day: [docs/workflow.md](docs/workflow.md).
 
 Flags: `-y` skips "yes" confirmations, `-v` shows details, `-md` prints markdown (`list:verify`).
 
@@ -177,8 +186,9 @@ coding agents.
 For AI agents specifically, `artisan make:ai` adds an `:ai` Gradle module with the same workspace in
 `ai/src/main/java/ai/` (visible in Android Studio, never shipped): an agent README with the working rules,
 `workflow/v_1_0_alpha/`, `assets/`, `event/event.md` pre-filled from the app's `firebaseEvent(...)` calls, and
-`plan/` for re-apply bundles (`make:plan <feature>` adds one to `plan/MASTER_OVERVIEW.md`), so a shipped feature
-can be ported into a new copy of the project without re-designing it.
+`plan/` for plans (`make:plan <name>`: one `.md` file) and re-apply bundles (`make:bundle <feature> --since <tag>`
+snapshots what changed into `plan/<feature>/` and lists it in `plan/MASTER_OVERVIEW.md`), so a shipped feature can
+be ported into a new copy of the project without re-designing it.
 The notes commands find it without any config.
 
 ## Contributing

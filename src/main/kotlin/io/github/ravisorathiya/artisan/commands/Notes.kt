@@ -91,10 +91,10 @@ private fun writeUtf8(f: File, text: String) = f.writeText(text, Charsets.UTF_8)
 
 fun registerNotes() {
     Registry.add("status", "status", "Version, phase table and every open item") { status(it) }
-    Registry.add("make:plan", "make:plan [name]", "New plan: plans/<name>.md, or a plan/<name>/ bundle in the :ai workspace") { makePlan(it) }
+    Registry.add("make:plan", "make:plan [name]", "New plan file: plans/<name>.md (plan/<name>.md in the :ai workspace)") { makePlan(it) }
     Registry.add("make:version", "make:version [x.y] [stage]", "Create workflow/v_x_y(_stage) with overview.md + phase_1.md") { makeVersion(it) }
     Registry.add("make:phase", "make:phase [summary]", "Create the next phase_<n>.md + its overview row") { makePhase(it) }
-    Registry.add("make:bug", "make:bug", "Add a bug line to the latest phase (asks screen, area, problem)") { makeBug(it) }
+    Registry.add("make:bug", "make:bug [--shot]", "Add a bug line to the latest phase (asks screen, area, problem); --shot attaches a phone screenshot") { makeBug(it) }
     Registry.add("del:asset", "del:asset [name...]", "Delete notes asset files (pick one, or all)") { delAsset(it) }
     Registry.add("check:links", "check:links", "Links in the notes that point to a missing file") { checkLinks(it) }
     Registry.add("check:assets", "check:assets", "Asset files nothing links to + links to missing assets") { checkAssets(it) }
@@ -162,21 +162,35 @@ private fun makePlan(ctx: Ctx) {
     val phase = dir?.let { phaseFiles(it).lastOrNull() }
     val where = when { phase != null -> "${dir.name}/${phase.nameWithoutExtension}"; dir != null -> dir.name; else -> "-" }
     val p = ctx.project
-    if (notes.plans.name == "plan") {
-        // :ai workspace: a re-apply bundle folder, listed in MASTER_OVERVIEW.md
-        val files = createPlanBundle(notes, name, where)
-        files.forEach { Ui.say("${if (it.name == MASTER) "Updated" else "Created"} ${p.rel(it)}", Tone.OK) }
-        Ui.say("Put final copies of new/changed files in reference/ as <File>.txt so they never compile.", Tone.DIM)
-        if (phase != null) Ui.say("Link it under ## Changes in ${p.rel(phase)}:  [plan/$name](../../plan/$name/overview.md)", Tone.DIM)
-        return
-    }
+    // one plain file, plans/<name>.md (plan/<name>.md in the :ai workspace); folder bundles come from make:bundle
     notes.plans.mkdirs()
     val file = File(notes.plans, "$name.md")
     existingPlan(notes, name)?.let { throw CliError("Plan already exists: ${p.rel(it)}") }
-    writeUtf8(file, "# ${titleOf(name)}\n\nStatus: `[ ]` - Version/phase: $where\n\n## Problem\n\n## Relevant code\n\n## Plan\n\n## Status / verification\n\n## Left to do\n")
+    writeUtf8(file, planDoc(name, where))
     Ui.say("Created ${p.rel(file)}", Tone.OK)
-    if (phase != null) Ui.say("Link it under ## Changes in ${p.rel(phase)}:  [plans/$name.md](../../plans/$name.md)", Tone.DIM)
+    Ui.sayFile("file", file)
+    val folder = notes.plans.name
+    if (phase != null) Ui.say("  Link it under ## Changes in ${p.rel(phase)}:  [$folder/$name.md](../../$folder/$name.md)", Tone.DIM)
 }
+
+/** A plan an agent (or a person) fills in and keeps current while working on it. */
+internal fun planDoc(name: String, where: String) = """
+    |# ${titleOf(name)}
+    |
+    |Status: `[ ]` - Version/phase: $where
+    |
+    |## Goal
+    |
+    |## Context / relevant code
+    |
+    |## Steps
+    |
+    |- [ ]
+    |
+    |## Verification
+    |
+    |## Notes for the next agent
+    |""".trimMargin()
 
 private const val MASTER = "MASTER_OVERVIEW.md"
 
@@ -270,6 +284,20 @@ private fun makeVersion(ctx: Ctx) {
     if (prev != null) Ui.say("Latest version folder: ${prev.name}", Tone.DIM)
     val ver = ctx.args.joinToString(" ").ifEmpty { Ui.ask("Version", suggest) }
     val name = versionFolderName(ver) ?: throw CliError("Version must look like 1.2 or 1.2 alpha (got '$ver').")
+    val (dir, carried) = createVersionFolder(notes, name)
+    Ui.say("Created ${ctx.project.rel(dir)} (overview.md, phase_1.md), $carried carried-over line(s).", Tone.OK)
+    Ui.say("versionName in the app's build file was NOT changed (artisan bump does both).", Tone.DIM)
+}
+
+/** The stage of the newest version folder (v_1_8_alpha -> "alpha"), or null. */
+internal fun Notes.latestStage(): String? = versionFolders().lastOrNull()?.let { versionDir.find(it.name)?.groupValues?.get(3) }?.ifEmpty { null }
+
+/**
+ * Creates workflow/[name] with overview.md (carrying over the previous version's open items) and phase_1.md.
+ * Returns the folder and the number of carried-over lines.
+ */
+internal fun createVersionFolder(notes: Notes, name: String): Pair<File, Int> {
+    val prev = notes.versionFolders().lastOrNull()
     val dir = File(notes.workflow, name)
     if (dir.exists()) throw CliError("$name already exists.")
 
@@ -300,8 +328,7 @@ private fun makeVersion(ctx: Ctx) {
         |""".trimMargin(),
     )
     writeUtf8(File(dir, "phase_1.md"), phaseSkeleton(name, 1))
-    Ui.say("Created ${ctx.project.rel(dir)} (overview.md, phase_1.md), ${carried.size} carried-over line(s).", Tone.OK)
-    Ui.say("versionName in the app's build file was NOT changed.", Tone.DIM)
+    return dir to (if (carried.firstOrNull()?.startsWith("_") == true) 0 else carried.size)
 }
 
 private fun makePhase(ctx: Ctx) {
@@ -344,7 +371,9 @@ private fun makeBug(ctx: Ctx) {
     )
     if (screen.isEmpty() || area.isEmpty() || problemRaw.isEmpty()) throw CliError("Screen, area and problem are all required.")
     val problem = problemRaw.trim().let { if (Regex("""[.!?]$""").containsMatchIn(it)) it else "$it." }
-    val line = "* [ ] **$screen – $area:** $problem VERIFY ON DEVICE"
+    // --shot: screenshot of the phone right now, linked from the bug line
+    val shot = if (ctx.has("--shot")) captureShot(ctx, null) else null
+    val line = "* [ ] **$screen – $area:** $problem VERIFY ON DEVICE" + (shot?.let { " " + assetMarkdown(notes, it) } ?: "")
 
     val lines = phase.readLines().toMutableList()
     var bugs = lines.indexOfFirst { Regex("""^##\s+Bugs""").containsMatchIn(it) }

@@ -98,6 +98,17 @@ All of these need `adb` and a connected device. Each prints the new value. Remem
 | `artisan app:font [scale]` | Picker 0.85 … 2.0, or a value 0.5–2.5; `reset` = 1.0 |
 | `artisan app:rotate [mode]` | `land`, `port` lock the rotation; `auto` turns auto-rotate back on |
 | `artisan app:lang [code]` | Per-app language (picker of the app's `values-xx` folders + `reset`), restarts the app. **Android 13+.** If the app applies its own saved language at startup, it can override this |
+| `artisan app:text "hello world"` | Types the text into the focused field on the phone (no clipboard, no phone keyboard). Plain ASCII |
+| `artisan app:open [url]` | Opens a deep link / URL in the app. Without a value: picker of the deep links in the manifest's intent filters |
+| `artisan app:grant [permission]` | Grants one runtime permission (picker of the manifest's `<uses-permission>`; `CAMERA` = `android.permission.CAMERA`) |
+| `artisan app:revoke [permission]` | Revokes one (Android restarts the app) |
+| `artisan app:reset-perms` | Revokes every permission the manifest asks for and clears "don't ask again": test the first-run permission flow again without reinstalling |
+| `artisan app:clear` | Wipes the app's data (asks first), then launches it fresh |
+| `artisan app:demo [on\|off]` | Demo mode: status bar at 12:00, full battery and signal, no notification icons, for store screenshots |
+| `artisan app:mirror` | Shows and controls the phone on this computer with scrcpy (offers `winget` / `brew` install) |
+
+`app:shot` and `app:record` print the saved file as a clickable full path plus the Markdown link for the latest
+phase file; `--open` shows it in Explorer / Finder.
 
 ## Open (`open:`)
 
@@ -109,6 +120,7 @@ All of these need `adb` and a connected device. Each prints the new value. Remem
 | `artisan open:app` | The **App info** screen on the phone (permissions, storage, clear data) |
 | `artisan open:studio` | The project in Android Studio (Windows, macOS, Linux, Toolbox) |
 | `artisan open:report` | The newest Gradle report, preferring unit-test reports |
+| `artisan open:folder [which]` | Shows a folder in Explorer / Finder: `apk`, `bundle`, `assets`, `workflow`, `plan`, `res`, `reports`, `root` |
 
 ## Code health
 
@@ -120,12 +132,76 @@ All of these need `adb` and a connected device. Each prints the new value. Remem
 | `artisan list:todo` | TODO / FIXME / HACK counts per module (details when there are 40 or fewer) |
 | `artisan list:todo pdf` | Details for modules whose name contains `pdf` |
 | `artisan list:todo -v` | Every hit |
+| `artisan make:string <key> "text" [--module :core]` | Adds `<string name="key">` to `values/strings.xml` **and** every `values-xx/strings.xml` (same indentation and line endings, Android escapes for `'` `"` `&` `<` and a leading `@`/`?`). Locale copies are English plus `<!-- artisan: translate -->`; `check:strings` shows them under "Waiting for translation" until someone translates them |
+| `artisan make:event <Screen> <name> "<when>" [--from x]` | Adds the row to `event/event.md` under `## Screen` (creating the section with the class's file path), in the section's own table layout, and prints `firebaseEvent("name")`. Checks the naming rules: snake_case, under 30 characters, `<screen>_<thing>_<action>`; if the file already uses another style throughout, it follows that. A wrong name gets a ready fix: `SplashActivity_onCreate` → `splash_on_create` |
+| `artisan check:events` | Every `firebaseEvent` call in the code vs event.md, both ways (multi-line calls and commented-out calls handled), plus names that are too long, not snake_case, or invalid for Firebase |
+| `artisan make:analytics` | For an app without `firebaseEvent`: adds `Analytics.kt` (`Context.firebaseEvent`, `Fragment.firebaseEvent`, `logging`, `ENABLE_EVENT_BOX`) and `EventLogBox.kt` (a floating list of events as they fire, on every screen) and says what to wire once (dependency, `buildConfig`, `EventLogBox.init(this)`) |
+
+### event.md
+
+`make:ai` writes an event.md that teaches the rules to whoever adds events (people or AI agents):
+
+- **How firebaseEvent is wired**: where it's defined, the event box (`ENABLE_EVENT_BOX`, **off in release**), the
+  logcat tag `GlobalFirebaseEventNameTag`, and `bundleOf(...)` parameters.
+- **How to name an event**: a table of rules with examples (snake_case, under 30, one prefix per screen, the action
+  words for lifecycle / taps / dialogs / permissions / ads, how to shorten, never rename a shipped event).
+- **Row format**: `## ClassName`, its file path, then `| Event name | Fired from | When |`.
+- **Samples**: `## Example: SplashActivity`, `## Example: PermissionActivity (a permission flow)`,
+  `## Example: SettingsFragment (dialogs and ads)`. Sections whose title starts with `Example` (or `How`,
+  `Row format`, `Notes`) are guides: `make:event`, `check:events` and the git hook never count them as events.
 
 ## Build
 
 | Type this | What happens |
 |---|---|
-| `artisan build:release` | Picker: `apk` (`assembleRelease`) or `aab` (`bundleRelease`), then the output files with size |
+| `artisan build:release` | Picker: `apk` (`assembleRelease`) or `aab` (`bundleRelease`), then the output files with size and clickable full paths, and asks "Open the folder?" (Explorer / Finder with the file selected). `--open` skips the question |
+| `artisan bump [patch\|minor\|major\|code]` | Raises `versionName` (`1.7` → `1.8`, `1.7.1`, `2.0`; suffixes like `-alpha` kept) and `versionCode` +1 in the app build file (Kotlin or Groovy DSL), shows before → after, asks, then creates the matching `workflow/v_x_y_<stage>` folder when the notes workspace has none. Prints the `git commit` / `git tag` line |
+
+## Make: screens and bundles
+
+| Type this | What happens |
+|---|---|
+| `artisan make:screen activity Settings` | `SettingsActivity.kt` + `res/layout/activity_settings.xml` + the `<activity>` entry in the manifest. ViewBinding when the module has it on, else `R.layout`. Also `fragment`, `dialog` (DialogFragment), `sheet` (Material bottom sheet). `--package presentation.settings` (relative to the namespace); without it, it asks with a guess from where the other screens live |
+| `artisan stub:publish` | Copies the screen templates to `artisan/stubs/` (`activity.kt.stub`, ..., `layout.xml.stub`). Edit them to use your base classes; `make:screen` uses them from then on. Placeholders: `{{PACKAGE}}` `{{CLASS}}` `{{LAYOUT}}` `{{BINDING}}` `{{NAMESPACE}}` `{{HEIGHT}}` |
+| `artisan make:bundle <feature> --since v1.7` | Everything that changed in the app's modules since the tag (committed or not; `:ai` and build output left out) becomes a re-apply bundle in `plan/<feature>/`: `reference/<File>.txt` snapshots, `apply_bundle.ps1` (dry run by default; `-Apply` adds new files; `-Apply -IncludeModified` also replaces modified files after a `.bak_<feature>` backup), `overview.md` with the new / modified / deleted tables, and a row in `plan/MASTER_OVERVIEW.md`. Copy the folder into the next project zip and run the script |
+
+## Terminal: hotkeys, prompt, git hooks
+
+They come with the shell setup (`artisan completion --install`, also offered by `setup` and the installers) and read
+`<project>/.gradle/artisan/`, which artisan rewrites after every command, so the shell never waits for Java.
+
+**Hotkeys.** Press **Ctrl+g**, then a key: the command appears on your prompt line and runs (so it's in your history).
+
+| Keys | Runs |
+|---|---|
+| Ctrl+g `i` | `artisan app:install` |
+| Ctrl+g `s` | `artisan app:shot` |
+| Ctrl+g `l` | `artisan app:logcat` |
+| Ctrl+g `d` | `artisan app:dark toggle` |
+| Ctrl+g `r` | `artisan app:record` |
+| Ctrl+g `b` | `artisan make:bug` |
+| Ctrl+g `t` | `artisan status` |
+| Ctrl+g `o` | `artisan open:folder` |
+| Ctrl+g `a` | `artisan` (search every command) |
+| Ctrl+g `?` | `artisan hotkeys` (this list, with your changes) |
+
+Change or add keys per project in `artisan.json`: `"hotkeys": {"u": "deploy:beta", "i": "app:install"}`. Another
+leader: `ARTISAN_HOTKEY_LEADER=Ctrl+k`. Off: `ARTISAN_NO_HOTKEYS=1`. PowerShell and zsh; bash 4+ (macOS's bash 3.2
+can't); only when the leader key isn't bound to something else already.
+
+**Prompt status.** Inside an Android project your prompt starts with `[v1.7(42) phase_3 · 5 open · 2 verify]`:
+versionName(versionCode), the latest phase, and the open / VERIFY ON DEVICE / blocked items of the latest version.
+Your own prompt is kept. oh-my-posh / starship: use `$env:ARTISAN_STATUS` (PowerShell). Off: `ARTISAN_NO_PROMPT=1`.
+
+**Git hooks.** `artisan hooks install` (also `uninstall`, `status`):
+
+- `pre-commit` runs `artisan check:staged` on the staged files and stops the commit when a `firebaseEvent` was
+  added without its event.md row (or removed with the row left), a name breaks the 30-character rule, or a new
+  string in `values/` is missing in a locale. Strings still waiting for translation are a reminder, not a stop.
+  Skip once: `git commit --no-verify` (or `ARTISAN_SKIP_HOOKS=1`).
+- `post-checkout`, `post-merge` refresh the prompt status in the background.
+- A hook you already had is kept as `<name>.local` and still runs first; `uninstall` puts it back. Teammates without
+  artisan on PATH aren't affected (the hooks do nothing).
 
 ## Notes workspace
 
@@ -144,16 +220,16 @@ Status markers: `[ ]` not started, `[~]` in progress, `[x]` done, `[-]` blocked.
 
 | Type this | What happens |
 |---|---|
-| `artisan make:plan [name]` | `plans/<snake_case>.md` from a template (refuses if a similar plan exists) and prints the link line for the phase file. `EditTextUndo` → `edit_text_undo.md`. In the `:ai` workspace (`plan/`) it creates a re-apply bundle instead: `plan/<snake_case>/overview.md` (guide for porting the feature into a new copy of the project) + `reference/` (final copies of the files as `<File>.txt`), and adds a row to `plan/MASTER_OVERVIEW.md` |
-| `artisan make:ai [x.y] [stage]` | Adds an `:ai` Gradle module that holds the AI-agent workspace in `ai/src/main/java/ai/`: `README.md` (rules for agents, keeping `:ai` out of production, tracking conventions), `assets/`, `workflow/v_x_y_alpha/` (`overview.md` + `phase_1.md`), `event/event.md` (pre-filled with every `firebaseEvent(` name per screen, or one empty table when there are none yet) and `plan/MASTER_OVERVIEW.md` (feature index and apply order for re-apply bundles; add bundles with `make:plan`). Adds `include(":ai")` to the settings file. The module is a plain `java-library` (plus the Kotlin JVM plugin when the version catalog already has it), and no other module may depend on it. Default version: `versionName` + `alpha`. When adb or `JAVA_HOME` is missing, it finishes by running `setup` |
+| `artisan make:plan [name]` | `plans/<snake_case>.md` from a template (refuses if a similar plan exists) and prints the link line for the phase file. `EditTextUndo` → `edit_text_undo.md`. In the `:ai` workspace the file goes in `plan/`. Sections: Goal, Context / relevant code, Steps, Verification, Notes for the next agent. One file, no folders (re-apply bundles come from `make:bundle`) |
+| `artisan make:ai [x.y] [stage]` | Adds an `:ai` Gradle module that holds the AI-agent workspace in `ai/src/main/java/ai/`: `README.md` (rules for agents, keeping `:ai` out of production, tracking conventions), `assets/`, `workflow/v_x_y_alpha/` (`overview.md` + `phase_1.md`), `event/event.md` (pre-filled with every `firebaseEvent(` name per screen, or one empty table when there are none yet) and `plan/MASTER_OVERVIEW.md` (feature index and apply order for re-apply bundles; add bundles with `make:bundle`). Adds `include(":ai")` to the settings file. The module is a plain `java-library` (plus the Kotlin JVM plugin when the version catalog already has it), and no other module may depend on it. Default version: `versionName` + `alpha`. When adb or `JAVA_HOME` is missing, it finishes by running `setup` |
 | `artisan make:version [x.y] [stage]` | `workflow/v_x_y/` (or `v_x_y_<stage>`, e.g. `1.9 alpha`) with `overview.md` + `phase_1.md`. Suggests the next version, and copies every open item from the previous version into "Carried over". Never touches `versionName` |
 | `artisan make:phase [summary]` | The next `phase_<n>.md` in the latest version, plus its row in `overview.md` |
-| `artisan make:bug` | Asks screen, area, problem, then appends `* [ ] **Screen – Area:** problem. VERIFY ON DEVICE` under `## Bugs` of the latest phase. Or in one go: `artisan make:bug "Home - Search bar: text overlaps icon"` |
+| `artisan make:bug [--shot]` | Asks screen, area, problem, then appends `* [ ] **Screen – Area:** problem. VERIFY ON DEVICE` under `## Bugs` of the latest phase. Or in one go: `artisan make:bug "Home - Search bar: text overlaps icon"`. `--shot` also takes a phone screenshot and puts its image link on the bug line |
 | `artisan del:asset` | Picker: all, or one file (size + date). Then the list, a "yes", and the notes lines that now link to deleted files |
 | `artisan del:asset img_*.png demo.mp4` | Only matching files (wildcards work); `-y` = no confirmation |
 | `artisan check:assets` | **Orphans** (asset files no note mentions, safe to delete) and **Missing** (notes linking to absent assets) |
 | `artisan check:links` | Relative markdown links and backticked repo paths (`` `app/src/...` ``) in the notes that point to missing files |
-| `artisan list:plans` | Every plan (file or `plan/<name>/` bundle) with its status, checklist progress (`3/6`) and last edit |
+| `artisan list:plans` | Every plan (file, or `plan/<name>/` bundle from `make:bundle`) with its status, checklist progress (`3/6`) and last edit |
 | `artisan list:verify` | Every `VERIFY ON DEVICE` line across versions and plans. `-md` = paste-ready markdown checklist |
 
 A note containing the text `artisan:ignore` (e.g. in an HTML comment) is skipped by the link/asset checks, which

@@ -30,7 +30,7 @@ private fun makeAi(ctx: Ctx) {
     Ui.say("  ${p.settingsFile.name}: added the :ai include", Tone.OK)
     if (events != null) Ui.say("  event.md: ${events.values.sumOf { it.size }} firebaseEvent name(s) from ${events.size} file(s), descriptions to fill in", Tone.DIM)
     else Ui.say("  event.md: no firebaseEvent calls found, an empty table is ready for the first one", Tone.DIM)
-    Ui.say("  plan/: start a re-apply bundle with: artisan make:plan <feature>", Tone.DIM)
+    Ui.say("  plan/: artisan make:plan <name> for a plan file, artisan make:bundle <feature> --since <tag> for a re-apply bundle", Tone.DIM)
     val notes = Project.find(p.root)?.notes
     if (notes != null && p.rel(notes.dir) != Project.AI_WORKSPACE) {
         Ui.say("  artisan still uses ${p.rel(notes.dir)} for notes. To switch: \"notes\": {\"dir\": \"${Project.AI_WORKSPACE}\"} in artisan.json", Tone.WARN)
@@ -124,19 +124,108 @@ private fun crashlyticsUrl(p: Project): String? {
 }
 
 internal fun eventDoc(p: Project, events: Map<String, List<String>>): String {
-    val sb = StringBuilder("# Firebase events\n\n")
+    val sb = StringBuilder("# Firebase Analytics events\n\n")
     crashlyticsUrl(p)?.let { sb.append("**Crashlytics:** [open crashes]($it)\n\n") }
+    val definedIn = firebaseEventDefinition(p)
+    val box = eventBoxDefinition(p)
     sb.append(
-        "These tables document, grouped by screen, the active `firebaseEvent` calls. Calls that are commented out are not\n" +
-            "included. Keep this file in sync with the code (see ../README.md, \"Analytics event sync\").\n",
+        """
+        |Every active `firebaseEvent(...)` call in the app, grouped by the screen (class) that fires it. Commented-out calls are
+        |not listed. Update this file **in the same change** as the code (see ../README.md, "Analytics event sync").
+        |
+        |## How firebaseEvent is wired
+        |
+        |- ${definedIn?.let { "Defined in `$it`" } ?: "Not in the app yet: `artisan make:analytics` adds it"} as `Context.firebaseEvent(name, bundle)` and
+        |  `Fragment.firebaseEvent(name, bundle)`. Each call logs to Firebase Analytics, prints `I/GlobalFirebaseEventNameTag <name>`
+        |  in debug builds, and shows the name in the event box when that's on.
+        |- **Event box** (${box?.let { "`$it`" } ?: "`EventLogBox`, from `artisan make:analytics`"}): a floating list of events as they fire, on every screen. For
+        |  testing, set `ENABLE_EVENT_BOX = true` (and `EventLogBox.init(this)` in `Application.onCreate()`). **Set it back to
+        |  `false` before a release.** Long-press a row to copy the name.
+        |- Without the box: `artisan app:logcat GlobalFirebaseEventNameTag` (or `adb logcat -s GlobalFirebaseEventNameTag`).
+        |- In code: `firebaseEvent("splash_on_create")`; with values: `firebaseEvent("home_contact_click", bundleOf("source" to "list"))`.
+        |- Not analytics: `logging(...)` lines (debug logs, ad-load plumbing, errors) are not listed here.
+        |
+        |## How to name an event
+        |
+        || Rule | Example |
+        ||---|---|
+        || snake_case: lowercase letters, digits and `_`, starting with a letter | `splash_on_create`, not `SplashActivity_onCreate` |
+        || Under 30 characters (Firebase allows 40; short names stay readable in the console) | `setting_theme_dialog_show` (25) |
+        || Shape: screen, then the thing, then the action | `home_contact_perm_grant` |
+        || One prefix per screen, used by all of its events | `splash_*`, `home_*`, `permi_*`, `setting_*` |
+        || Lifecycle | `_on_create`, `_on_resume`, `_on_pause`, `_on_destroy`, `_on_backpress` |
+        || Taps | `_click`, `_long_click`, `_swipe`, `_toggle_on` / `_toggle_off` |
+        || Dialogs | `_dialog_show`, `_dialog_dismiss`, `_dialog_ok_click`, `_dialog_cancel_click` |
+        || Permissions | `_ask`, `_grant`, `_deny_1st`, `_deny_2nd` (don't ask again), `_back`, `_settings_open` |
+        || Ads | `<screen>_<inter / nat / banner / open / reward>_<loading / loaded / failed / show / click>` |
+        || Too long: shorten the words, never the action | `activity` `act`, `fragment` `frag`, `dialog` `dlg`, `permission` `perm`, `notification` `noti`, `button` `btn` |
+        || Never rename a shipped event just for style | A new name is a new event in Firebase: the old history doesn't carry over |
+        |
+        |Add one: `artisan make:event <Screen> <event_name> "<when it fires>"` checks these rules, writes the row and prints the
+        |`firebaseEvent(...)` line. Compare the code and this file: `artisan check:events` (the git hook does it on every commit).
+        |
+        |## Row format
+        |
+        |Each screen: `## ClassName`, the file path, then one row per event:
+        |
+        |- **Event name**: in backticks.
+        |- **Fired from**: the method, view or callback that calls it (`onCreate()`, `btn_save` click, `phoneLauncher` result).
+        |- **When**: when it fires in user terms; every `Bundle` key and its values; say when personal data (numbers, names,
+        |  message text) is **not** logged.
+        |
+        |Sections whose title starts with `Example` are samples: artisan and the checks skip them. Keep them as a guide or
+        |delete them once real screens are here.
+        |
+        |## Example: SplashActivity (lifecycle)
+        |
+        |`app/src/main/java/com/example/app/SplashActivity.kt`
+        |
+        || Event name            | Fired from              | When                                                        |
+        ||-----------------------|-------------------------|-------------------------------------------------------------|
+        || `splash_on_create`    | `onCreate()`            | Splash screen created (cold start)                          |
+        || `splash_on_resume`    | `onResume()`            | Splash shown again, e.g. after the update dialog            |
+        || `splash_on_backpress` | `OnBackPressedCallback` | User presses back on the splash; the app closes             |
+        || `splash_to_home`      | `startTimer()` callback | Timer done, opening HomeActivity (permissions already given) |
+        |
+        |## Example: PermissionActivity (a permission flow)
+        |
+        |`app/src/main/java/com/example/app/PermissionActivity.kt`
+        |
+        || Event name                 | Fired from                      | When                                                                     |
+        ||----------------------------|---------------------------------|--------------------------------------------------------------------------|
+        || `permi_on_create`          | `onCreate()`                    | Permission screen created                                                |
+        || `permi_phone_ask`          | `ask()`                         | About to request `READ_PHONE_STATE` + `CALL_PHONE`                       |
+        || `permi_phone_grant`        | `phoneLauncher` result          | User allowed the phone permissions                                       |
+        || `permi_phone_deny_1st`     | `phoneLauncher` result          | First denial; the rationale can still be shown, so the app asks again    |
+        || `permi_phone_deny_2nd`     | `phoneLauncher` result          | Denied again / "don't ask again": the app stops asking                   |
+        || `permi_phone_settings_open`| rationale dialog, Settings tap  | User sent to the app's system settings to allow it by hand               |
+        || `permi_noti_ask`           | `ask()`                         | About to request `POST_NOTIFICATIONS` (Android 13+)                      |
+        || `permi_noti_grant`         | `notifiLauncher` result         | User allowed notifications                                               |
+        || `permi_noti_deny_1st`      | `notifiLauncher` result         | First denial of notifications                                            |
+        || `permi_back_dialog_show`   | `onBackPressed` before finishing| "Permissions needed" dialog shown                                        |
+        || `permi_back_dialog_ok_click` | dialog OK button              | User goes back to the permission flow                                    |
+        |
+        |## Example: SettingsFragment (dialogs and ads)
+        |
+        |`app/src/main/java/com/example/app/settings/SettingsFragment.kt`
+        |
+        || Event name                  | Fired from                       | When                                                                   |
+        ||-----------------------------|----------------------------------|------------------------------------------------------------------------|
+        || `setting_theme_dialog_show` | `showThemeDialog()`              | Theme picker opened                                                    |
+        || `setting_theme_select`      | theme list item click            | Theme chosen; `bundleOf("theme" to "dark" / "light" / "system")`        |
+        || `setting_rate_click`        | `btn_rate` click                 | User taps "Rate us"                                                    |
+        || `setting_nat_loading`       | before `loadAd(...)`             | Native ad requested                                                    |
+        || `setting_nat_loaded`        | `onAdLoaded()`                   | Native ad ready                                                        |
+        || `setting_nat_failed`        | `onAdFailedToLoad()`             | Native ad failed; `bundleOf("code" to <error code>)`                   |
+        |""".trimMargin(),
     )
-    val width = maxOf(31, (events.values.flatten().maxOfOrNull { it.length } ?: 0) + 3)
-    // No calls yet: one empty table to copy for the first screen.
-    for ((screen, names) in events.ifEmpty { mapOf("ScreenName" to emptyList()) }) {
+    // the app's real events, one section per class (make:event adds rows; make:ai pre-fills the names)
+    for ((screen, names) in events) {
+        val w = maxOf(26, (names.maxOfOrNull { it.length } ?: 0) + 2)
         sb.append("\n## $screen\n\n")
-        sb.append("| ${"Event name".padEnd(width)} | Description |\n")
-        sb.append("|${"-".repeat(width + 2)}| --- |\n")
-        names.forEach { sb.append("| ${"`$it`".padEnd(width)} | |\n") }
+        screenSource(p, screen)?.let { sb.append("`$it`\n\n") }
+        eventTable(w).forEach { sb.append(it).append('\n') }
+        names.forEach { sb.append("| ${"`$it`".padEnd(w)} |  |  |\n") }
     }
     return sb.toString()
 }
@@ -197,7 +286,8 @@ internal fun planIndexDoc(p: Project): String = """
     |
     |Each feature is a bundle: `plan/<feature>/overview.md` (self-contained re-apply guide), `reference/` (final source
     |of every new or modified file, with a `.txt` suffix so it never compiles) and, optionally, `apply_bundle.ps1`.
-    |Create one with `artisan make:plan <feature>`; it adds a row to the index below.
+    |Create one from git with `artisan make:bundle <feature> --since <tag>`; it adds a row to the index below.
+    |(Plain plan files, `plan/<name>.md`, come from `artisan make:plan <name>`.)
     |
     |## Instructions for the agent (read first)
     |

@@ -27,6 +27,8 @@ data class Config(
     /** Extra source globs (file names) counted by stats/list:todo, e.g. "helper_*.js". */
     val extraSources: List<String> = emptyList(),
     val commands: Map<String, CustomCommand> = emptyMap(),
+    /** Extra or changed hotkeys: key after the leader (Ctrl+g) -> artisan command, e.g. "u": "deploy:beta". */
+    val hotkeys: Map<String, String> = emptyMap(),
 )
 
 data class Module(val name: String, val dir: File) {
@@ -159,6 +161,9 @@ object Gradle {
     private fun value(build: String, key: String) = Regex("""\b$key\s*=?\s*["']([^"']+)["']""").find(build)?.groupValues?.get(1)
 
     fun applicationId(build: String) = value(build, "applicationId") ?: value(build, "namespace")
+
+    /** The code namespace (R and ViewBinding classes live in it); falls back to applicationId. */
+    fun namespace(build: String) = value(build, "namespace") ?: value(build, "applicationId")
     fun versionName(build: String) = value(build, "versionName")
     fun versionCode(build: String) = Regex("""\bversionCode\s*=?\s*(\d+)""").find(build)?.groupValues?.get(1)
 }

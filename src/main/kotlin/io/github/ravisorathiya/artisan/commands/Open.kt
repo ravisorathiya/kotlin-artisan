@@ -7,6 +7,7 @@ import io.github.ravisorathiya.artisan.core.Proc
 import io.github.ravisorathiya.artisan.core.Registry
 import io.github.ravisorathiya.artisan.core.Tone
 import io.github.ravisorathiya.artisan.core.Ui
+import io.github.ravisorathiya.artisan.project.Project
 import java.io.File
 
 private fun openUrl(url: String) {
@@ -34,6 +35,7 @@ fun registerOpen() {
     }
     Registry.add("open:studio", "open:studio", "This project in Android Studio") { studio(it) }
     Registry.add("open:report", "open:report", "Latest Gradle test/build report in the browser") { report(it) }
+    Registry.add("open:folder", "open:folder [which]", "Show a project folder in the file manager: apk, bundle, assets, plan, ...", FOLDERS.map { it.first to it.second }) { openFolder(it) }
 }
 
 private fun firebase(ctx: Ctx) {
@@ -78,6 +80,27 @@ private fun report(ctx: Ctx) {
     if (reports.isEmpty()) throw CliError("No Gradle reports yet - run the tests or a build first (e.g. gradlew test).")
     val tests = reports.filter { "/reports/tests/" in it.invariantSeparatorsPath }
     val pick = (tests.ifEmpty { reports }).maxBy { it.lastModified() }
-    Ui.say("Report: ${p.rel(pick)}  (${pick.dateTime()})", Tone.DIM)
+    Ui.sayFile("report", pick)
     Proc.open(pick.absolutePath)
+}
+
+/** open:folder targets: name, what it is, where (null = not available in this project). */
+private val FOLDERS: List<Triple<String, String, (Project) -> File?>> = listOf(
+    Triple("apk", "Built APKs (debug + release)", { p -> p.appModule?.let { File(it.dir, "build/outputs/apk") } }),
+    Triple("bundle", "Built AABs", { p -> p.appModule?.let { File(it.dir, "build/outputs/bundle") } }),
+    Triple("assets", "Notes screenshots and recordings", { p -> p.notes?.assets }),
+    Triple("workflow", "Notes: latest version folder", { p -> p.notes?.let { n -> n.versionFolders().lastOrNull() ?: n.workflow } }),
+    Triple("plan", "Plans / re-apply bundles", { p -> p.notes?.plans }),
+    Triple("res", "App resources", { p -> appRes(p) }),
+    Triple("reports", "Gradle reports", { p -> p.appModule?.let { File(it.dir, "build/reports") } }),
+    Triple("root", "The project folder", { p -> p.root }),
+)
+
+private fun openFolder(ctx: Ctx) {
+    val p = ctx.project
+    val key = ctx.arg(0) ?: FOLDERS[Ui.pick("Open folder", FOLDERS.map { it.first to it.second })].first
+    val target = FOLDERS.firstOrNull { it.first == key } ?: throw CliError("Use one of: ${FOLDERS.joinToString(", ") { it.first }}.")
+    val dir = target.third(p)?.takeIf { it.exists() } ?: throw CliError("No ${target.second.lowercase()} yet${target.third(p)?.let { " (${p.rel(it)})" } ?: ""}.")
+    Ui.sayFile(key, dir)
+    Proc.reveal(dir)
 }
