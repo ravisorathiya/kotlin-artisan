@@ -5,6 +5,7 @@ import io.github.ravisorathiya.artisan.core.Cancelled
 import io.github.ravisorathiya.artisan.core.CliError
 import io.github.ravisorathiya.artisan.core.Ctx
 import io.github.ravisorathiya.artisan.core.Os
+import io.github.ravisorathiya.artisan.core.Palette
 import io.github.ravisorathiya.artisan.core.Proc
 import io.github.ravisorathiya.artisan.core.Registry
 import io.github.ravisorathiya.artisan.core.Row
@@ -18,16 +19,20 @@ import java.io.File
 
 fun registerMisc() {
     Registry.add("list", "list", "Show this list") { Registry.printList() }
+    Registry.add("find", "find [words]", "Search every command as you type (plain `artisan` does the same)") { Palette.run(it.args.joinToString(" ")) }
+    Registry.alias("?", "find")
     Registry.add("version", "version", "kotlin-artisan and project versions") { version(it) }
     Registry.add("doctor", "doctor", "Check Java, SDK, adb, phone, git, notes") { doctor(it) }
-    Registry.add("init", "init [notes]", "Create artisan.json (or a notes workspace with: init notes)") { init(it) }
-    Registry.add("build:release", "build:release [apk|aab]", "Release APK or AAB + output path and size") { buildRelease(it) }
+    Registry.add("init", "init [notes]", "Create artisan.json (or a notes workspace with: init notes)", listOf("notes" to "Create a notes workspace instead")) { init(it) }
+    Registry.add("build:release", "build:release [apk|aab]", "Release APK or AAB + output path and size", RELEASE_KINDS) { buildRelease(it) }
 }
+
+private val RELEASE_KINDS = listOf("apk" to "Installable APK", "aab" to "Play Store bundle")
 
 /** Commands from artisan.json `commands`: { "deploy:beta": { "description": "...", "run": "./gradlew ..." } } */
 fun registerCustom(p: Project) {
     for ((name, c) in p.config.commands) {
-        Registry.add(name, name, c.description.ifEmpty { c.run }) {
+        Registry.add(name, name, c.description.ifEmpty { c.run }, custom = true) {
             Ui.say("> ${c.run}", Tone.DIM)
             val shell = if (Os.isWindows) listOf("cmd", "/c", c.run) else listOf("sh", "-c", c.run)
             val code = Proc.stream(shell, p.root)
@@ -91,6 +96,11 @@ private fun doctor(ctx: Ctx) {
         if (name != null && n.versionFolders().none { it.name == name || it.name.startsWith(name + "_") }) throw CliError("versionName $v but no workflow/$name")
         "${p.rel(n.dir)} (latest: ${n.versionFolders().lastOrNull()?.name ?: "-"}, ${n.assetFiles().size} assets)"
     }
+    check("Tab completion") {
+        val shell = Shell.current()
+        if (!Completion.installed(shell)) throw CliError("off for ${shell.id} (optional: artisan completion --install)")
+        "${shell.id}: ${Completion.file(shell).path}"
+    }
     Ui.table("Doctor", listOf("Check", "Result", "Detail"), rows)
     Ui.say(if (fails > 0) "  $fails problem(s)." else "  All good.", if (fails > 0) Tone.WARN else Tone.OK)
 }
@@ -123,7 +133,7 @@ private fun init(ctx: Ctx) {
 
 private fun buildRelease(ctx: Ctx) {
     val p = ctx.project
-    val kind = ctx.arg(0) ?: listOf("apk", "aab")[Ui.pick("Release build", listOf("apk" to "Installable APK", "aab" to "Play Store bundle"))]
+    val kind = ctx.arg(0) ?: RELEASE_KINDS[Ui.pick("Release build", RELEASE_KINDS)].first
     val aab = kind == "aab"
     val module = p.appModule ?: throw CliError("No app module found.")
     val taskName = module.name + ":" + if (aab) "bundleRelease" else "assembleRelease"

@@ -8,7 +8,20 @@ import io.github.ravisorathiya.artisan.core.Ui
 import java.io.File
 
 fun registerSetup() {
-    Registry.add("setup", "setup", "Put adb on PATH and set JAVA_HOME (reuses Android Studio's copies, else winget/brew)") { setupTools() }
+    Registry.add("setup", "setup", "adb on PATH, JAVA_HOME and Tab completion (reuses Android Studio's copies, else winget/brew)") {
+        setupTools()
+        setupCompletion()
+    }
+}
+
+/** Offers Tab completion for the shell artisan runs from, unless it's already there. */
+private fun setupCompletion() {
+    val shell = Shell.current()
+    if (Completion.installed(shell)) {
+        Ui.say("Tab completion: OK (${Completion.file(shell).path})", Tone.OK)
+        return
+    }
+    if (Ui.confirm("Turn on Tab completion for artisan in ${shell.id} (one line in your profile)?")) Completion.install(shell, ask = false)
 }
 
 /** True when adb is on PATH and JAVA_HOME is set: nothing for [setupTools] to do. */

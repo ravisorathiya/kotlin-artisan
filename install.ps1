@@ -141,7 +141,14 @@ try {
 Add-UserPath (Join-Path $dest 'bin')
 
 $javaMajor = Get-CurrentJavaMajor
+
+# Tab completion: one line in your PowerShell profile loads artisan's script (artisan refreshes it after updates).
+if ($javaMajor -ge 17 -and (Confirm-Step 'Turn on Tab completion for artisan in PowerShell (adds one line to your profile)?')) {
+    $ErrorActionPreference = 'Continue'
+    & (Join-Path $dest 'bin\artisan.bat') completion powershell --install -y
+    $ErrorActionPreference = 'Stop'
+}
 $adb = Get-Command adb -ErrorAction SilentlyContinue
 Write-Host ("  Java: " + $(if ($javaMajor -ge 17) { "OK ($javaMajor)" } else { 'missing - artisan will not start' }))
 Write-Host ("  adb:  " + $(if ($adb) { "OK ($($adb.Source))" } else { 'missing - app:* commands will fail' }))
-Write-Host "Installed kotlin-artisan $($release.tag_name). Open a new terminal and run: artisan doctor" -ForegroundColor Green
+Write-Host "Installed kotlin-artisan $($release.tag_name). Open a new terminal and run: artisan   (type to search every command)" -ForegroundColor Green

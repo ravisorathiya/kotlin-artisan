@@ -44,4 +44,23 @@ case ":$PATH:" in
   *":$links:"*) ;;
   *) echo "Add $links to your PATH, e.g.: echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.profile" ;;
 esac
-echo "Installed. Run: artisan doctor"
+# Tab completion for bash / zsh / fish (artisan refreshes the script after updates). `curl | sh` reads the
+# script from stdin, so the question goes to the terminal; ARTISAN_YES=1 answers yes.
+shell_name=$(basename "${SHELL:-}")
+case "$shell_name" in
+  bash|zsh|fish)
+    answer=n
+    if [ "${ARTISAN_YES:-}" = 1 ]; then
+      answer=y
+    elif [ -r /dev/tty ]; then
+      printf "Turn on Tab completion for artisan in %s? [Y/n] " "$shell_name"
+      read -r answer < /dev/tty || answer=n
+      [ -z "$answer" ] && answer=y
+    fi
+    case "$answer" in
+      y|Y|yes) "$dest/bin/artisan" completion "$shell_name" --install -y ||
+                 echo "Tab completion was not set up. Later: artisan completion --install" ;;
+      *) echo "Tab completion: run 'artisan completion --install' any time." ;;
+    esac ;;
+esac
+echo "Installed. Run: artisan   (type to search every command), or artisan doctor"

@@ -115,6 +115,11 @@ private val LANGUAGE_NAMES = mapOf(
 
 // ---------- commands ----------
 
+// Argument values, shared by the pickers, the palette and Tab completion.
+private val THEMES = listOf("on" to "Dark theme", "off" to "Light theme", "toggle" to "Switch dark / light")
+private val FONT_SCALES = listOf("0.85" to "Small", "1.0" to "Default", "1.15" to "Large", "1.3" to "Larger", "1.5" to "Huge", "2.0" to "Maximum")
+private val ROTATIONS = listOf("land" to "Lock landscape", "port" to "Lock portrait", "auto" to "Auto-rotate on")
+
 fun registerApp() {
     Registry.add("app:install", "app:install", "Build + install the debug APK and launch it") { install(it) }
     Registry.add("app:logcat", "app:logcat [tag]", "Stream logcat: app, crashes, or a tag") { logcat(it) }
@@ -125,10 +130,10 @@ fun registerApp() {
     Registry.add("app:shot", "app:shot [name]", "Phone screenshot -> notes assets") { shot(it) }
     Registry.add("app:record", "app:record [name] [sec]", "Phone screen recording -> notes assets (Enter stops)") { record(it) }
     Registry.add("app:lang", "app:lang [code]", "Set the app language (Android 13+)") { lang(it) }
-    Registry.add("app:dark", "app:dark [on|off]", "Dark / light theme") { dark(it) }
+    Registry.add("app:dark", "app:dark [on|off]", "Dark / light theme", THEMES) { dark(it) }
     Registry.add("app:light", "app:light", "Light theme") { ctx -> ctx.args = listOf("off"); dark(ctx) }
-    Registry.add("app:font", "app:font [scale]", "Font size, e.g. 1.3") { font(it) }
-    Registry.add("app:rotate", "app:rotate [mode]", "Lock landscape / portrait, or auto") { rotate(it) }
+    Registry.add("app:font", "app:font [scale]", "Font size, e.g. 1.3", FONT_SCALES + ("reset" to "Back to the default size")) { font(it) }
+    Registry.add("app:rotate", "app:rotate [mode]", "Lock landscape / portrait, or auto", ROTATIONS) { rotate(it) }
 }
 
 private fun install(ctx: Ctx) {
@@ -227,8 +232,8 @@ private fun dark(ctx: Ctx) {
     requireAdb()
     val now = "yes" in adbShell("cmd", "uimode", "night")
     val choice = ctx.arg(0) ?: run {
-        val items = listOf("dark" to "Dark theme", "light" to "Light theme", "toggle" to "Switch (now: ${if (now) "dark" else "light"})")
-        listOf("on", "off", "toggle")[Ui.pick("Theme", items)]
+        val items = THEMES.map { (k, d) -> k to if (k == "toggle") "$d (now: ${if (now) "dark" else "light"})" else d }
+        THEMES[Ui.pick("Theme", items)].first
     }
     val want = when (choice) {
         "on", "dark" -> true
@@ -244,8 +249,7 @@ private fun font(ctx: Ctx) {
     requireAdb()
     val arg = ctx.arg(0) ?: run {
         Ui.say("Current font scale: ${adbShell("settings", "get", "system", "font_scale")}", Tone.DIM)
-        val items = listOf("0.85" to "Small", "1.0" to "Default", "1.15" to "Large", "1.3" to "Larger", "1.5" to "Huge", "2.0" to "Maximum")
-        items[Ui.pick("Font size", items)].first
+        FONT_SCALES[Ui.pick("Font size", FONT_SCALES)].first
     }
     val scale = if (arg == "reset") "1.0" else arg
     val d = scale.toDoubleOrNull()
@@ -257,8 +261,7 @@ private fun font(ctx: Ctx) {
 private fun rotate(ctx: Ctx) {
     requireAdb()
     val mode = ctx.arg(0) ?: run {
-        val items = listOf("land" to "Lock landscape", "port" to "Lock portrait", "auto" to "Auto-rotate on")
-        items[Ui.pick("Rotation", items)].first
+        ROTATIONS[Ui.pick("Rotation", ROTATIONS)].first
     }
     when (mode) {
         "land" -> { adbShell("settings", "put", "system", "accelerometer_rotation", "0"); adbShell("settings", "put", "system", "user_rotation", "1") }

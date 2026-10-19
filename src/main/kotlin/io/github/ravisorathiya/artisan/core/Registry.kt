@@ -38,8 +38,14 @@ class Command(
     /** Shown in `list`, e.g. "make:plan [name]". */
     val usage: String,
     val description: String,
+    /** Values for the first argument with what each does: shown by the palette and Tab completion. */
+    val choices: List<Pair<String, String>> = emptyList(),
+    /** From artisan.json: belongs to one project, so it's left out of the shell completion scripts. */
+    val custom: Boolean = false,
     val run: (Ctx) -> Unit,
 ) {
+    /** The usage line has an [argument] after the name. */
+    val takesArgs: Boolean get() = usage.length > name.length
     val group: String get() = if (':' in name) name.substringBefore(':') else ""
 }
 
@@ -48,9 +54,18 @@ object Registry {
     private val aliases = mutableMapOf("help" to "list", "del:assets" to "del:asset")
     private val groupOrder = listOf("", "make", "del", "check", "list", "app", "open", "build")
 
-    fun add(name: String, usage: String, description: String, run: (Ctx) -> Unit) {
-        commands[name] = Command(name, usage, description, run)
+    fun add(
+        name: String, usage: String, description: String, choices: List<Pair<String, String>> = emptyList(),
+        custom: Boolean = false, run: (Ctx) -> Unit,
+    ) {
+        commands[name] = Command(name, usage, description, choices, custom, run)
     }
+
+    /** Every command in `list` order. */
+    fun all(): List<Command> = groups().values.flatten()
+
+    /** The command for a name or alias, case-insensitive. */
+    fun find(name: String): Command? = name.lowercase().let { commands[aliases[it] ?: it] }
 
     fun alias(from: String, to: String) {
         aliases[from] = to
@@ -74,13 +89,24 @@ object Registry {
             list[i].run(ctx)
             return
         }
-        val cmd = commands[aliases[key] ?: key]
+        val cmd = find(key)
         if (cmd != null) {
             cmd.run(ctx)
             return
         }
-        val near = commands.keys.filter { it.startsWith(key) || (key.length >= 3 && it.contains(key)) }
-        val hint = if (near.isNotEmpty()) "Did you mean: ${near.joinToString(", ")}" else "Run `artisan list` to see every command."
+        val near = Fuzzy.rank(key, all()).take(5)
+        // One clear guess (a typo like app:drak) in a terminal: offer to run it.
+        if (near.size == 1 && Ui.canAsk) {
+            Ui.say("Unknown command: $name", Tone.WARN)
+            val answer = Ui.readLine("Run artisan ${near[0].name}? [Y/n]").lowercase()
+            if (answer.isNotEmpty() && answer != "y" && answer != "yes") throw Cancelled
+            Ui.say("> artisan ${near[0].name}", Tone.DIM)
+            near[0].run(ctx)
+            return
+        }
+        val width = near.maxOfOrNull { it.usage.length } ?: 0
+        val hint = if (near.isNotEmpty()) "Did you mean:\n" + near.joinToString("\n") { "  ${it.usage.padEnd(width)}  ${it.description}" }
+        else "Run `artisan` to search every command as you type, or `artisan list`."
         throw CliError("Unknown command: $name\n$hint")
     }
 
@@ -89,6 +115,7 @@ object Registry {
         Ui.say("Usage:", Tone.WARN)
         Ui.say("  artisan <command> [args] [-y]")
         Ui.say("  artisan <group>              pick a command from that group")
+        Ui.say("  artisan                      search every command as you type (or: artisan find <words>)")
         Ui.say()
         Ui.say("Available commands:", Tone.WARN)
         val width = commands.values.maxOf { it.usage.length } + 2

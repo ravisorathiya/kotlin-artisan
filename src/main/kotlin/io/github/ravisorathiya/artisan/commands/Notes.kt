@@ -91,7 +91,7 @@ private fun writeUtf8(f: File, text: String) = f.writeText(text, Charsets.UTF_8)
 
 fun registerNotes() {
     Registry.add("status", "status", "Version, phase table and every open item") { status(it) }
-    Registry.add("make:plan", "make:plan [name]", "Create plans/<snake_case>.md (asks the name)") { makePlan(it) }
+    Registry.add("make:plan", "make:plan [name]", "New plan: plans/<name>.md, or a plan/<name>/ bundle in the :ai workspace") { makePlan(it) }
     Registry.add("make:version", "make:version [x.y] [stage]", "Create workflow/v_x_y(_stage) with overview.md + phase_1.md") { makeVersion(it) }
     Registry.add("make:phase", "make:phase [summary]", "Create the next phase_<n>.md + its overview row") { makePhase(it) }
     Registry.add("make:bug", "make:bug", "Add a bug line to the latest phase (asks screen, area, problem)") { makeBug(it) }
@@ -158,18 +158,106 @@ private fun makePlan(ctx: Ctx) {
     val raw = ctx.args.joinToString(" ").ifEmpty { Ui.ask("Plan name (e.g. watermark rotate)") }
     if (raw.isEmpty()) throw CliError("A plan name is required.")
     val name = snakeCase(raw)
-    notes.plans.mkdirs()
-    val file = File(notes.plans, "$name.md")
-    val similar = (notes.plans.listFiles() ?: emptyArray()).firstOrNull { it.extension == "md" && it.nameWithoutExtension.replace(Regex("[-_]"), "") == name.replace("_", "") }
-    if (file.exists() || similar != null) throw CliError("Plan already exists: ${ctx.project.rel(similar ?: file)}")
     val dir = notes.versionFolders().lastOrNull()
     val phase = dir?.let { phaseFiles(it).lastOrNull() }
     val where = when { phase != null -> "${dir.name}/${phase.nameWithoutExtension}"; dir != null -> dir.name; else -> "-" }
-    val title = name.split('_').joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }
-    writeUtf8(file, "# $title\n\nStatus: `[ ]` - Version/phase: $where\n\n## Problem\n\n## Relevant code\n\n## Plan\n\n## Status / verification\n\n## Left to do\n")
-    Ui.say("Created ${ctx.project.rel(file)}", Tone.OK)
-    if (phase != null) Ui.say("Link it under ## Changes in ${ctx.project.rel(phase)}:  [plans/$name.md](../../plans/$name.md)", Tone.DIM)
+    val p = ctx.project
+    if (notes.plans.name == "plan") {
+        // :ai workspace: a re-apply bundle folder, listed in MASTER_OVERVIEW.md
+        val files = createPlanBundle(notes, name, where)
+        files.forEach { Ui.say("${if (it.name == MASTER) "Updated" else "Created"} ${p.rel(it)}", Tone.OK) }
+        Ui.say("Put final copies of new/changed files in reference/ as <File>.txt so they never compile.", Tone.DIM)
+        if (phase != null) Ui.say("Link it under ## Changes in ${p.rel(phase)}:  [plan/$name](../../plan/$name/overview.md)", Tone.DIM)
+        return
+    }
+    notes.plans.mkdirs()
+    val file = File(notes.plans, "$name.md")
+    existingPlan(notes, name)?.let { throw CliError("Plan already exists: ${p.rel(it)}") }
+    writeUtf8(file, "# ${titleOf(name)}\n\nStatus: `[ ]` - Version/phase: $where\n\n## Problem\n\n## Relevant code\n\n## Plan\n\n## Status / verification\n\n## Left to do\n")
+    Ui.say("Created ${p.rel(file)}", Tone.OK)
+    if (phase != null) Ui.say("Link it under ## Changes in ${p.rel(phase)}:  [plans/$name.md](../../plans/$name.md)", Tone.DIM)
 }
+
+private const val MASTER = "MASTER_OVERVIEW.md"
+
+private fun titleOf(snake: String) = snake.split('_').joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }
+
+/** A plan file or bundle folder whose name matches [name] ignoring - and _, or null. */
+private fun existingPlan(notes: Notes, name: String): File? = (notes.plans.listFiles() ?: emptyArray()).firstOrNull {
+    (it.isDirectory || it.extension == "md") && it.nameWithoutExtension.replace(Regex("[-_]"), "") == name.replace(Regex("[-_]"), "")
+}
+
+/**
+ * :ai style plan: `plan/<name>/overview.md` + `reference/`, and a row in the MASTER_OVERVIEW.md feature index (when
+ * that file exists). Returns the files created or changed.
+ */
+internal fun createPlanBundle(notes: Notes, name: String, where: String): List<File> {
+    existingPlan(notes, name)?.let { throw CliError("Plan already exists: ${it.name}") }
+    val dir = File(notes.plans, name)
+    val title = titleOf(name)
+    val overview = File(dir, "overview.md")
+    File(dir, "reference").mkdirs()
+    File(dir, "reference/.gitkeep").createNewFile()
+    writeUtf8(overview, planBundleDoc(title, name, where))
+    val master = File(notes.plans, MASTER)
+    if (!master.isFile) return listOf(overview)
+    writeUtf8(master, addIndexRow(master.readText(), title, name))
+    return listOf(overview, master)
+}
+
+/** Appends `| n | **Title** | plan/name/ | ... |` to the "| # | Feature" table, keeping the file's line endings. */
+internal fun addIndexRow(master: String, title: String, name: String): String {
+    val nl = if ("\r\n" in master) "\r\n" else "\n"
+    val lines = master.split(nl).toMutableList()
+    val head = lines.indexOfFirst { Regex("""^\|\s*#\s*\|\s*Feature""").containsMatchIn(it) }
+    if (head < 0) return master
+    var end = head + 1
+    while (end < lines.size && lines[end].startsWith("|")) end++
+    val n = (head + 2 until end).count { Regex("""^\|\s*\d+\s*\|""").containsMatchIn(lines[it]) } + 1
+    lines.add(end, "| $n | **$title** | `plan/$name/` | none | Planned | **Yes** |")
+    return lines.joinToString(nl)
+}
+
+private fun planBundleDoc(title: String, name: String, where: String) = """
+    |# $title — Re-Apply Guide
+    |
+    |Status: `[ ]` - Version/phase: $where
+    |
+    |Purpose: when a new copy of this project arrives, give the agent this file and say "apply the $name plan".
+    |Everything below is already built and approved; this file lists exactly what to re-create so it wires in seamlessly.
+    |
+    |## Instructions for the agent (read first)
+    |
+    |1. Do not rewrite the feature from scratch and do not ask the developer to re-explain it: everything is specified
+    |   here and in `reference/` (final source of each new/modified file, `.txt` suffix so it never compiles).
+    |2. If `apply_bundle.ps1` exists, run it as a dry run, then `-Apply` for new files. For each `DIFFERS` file, diff the
+    |   project's copy against `reference/<name>.txt`: replace only when the difference is this feature alone;
+    |   otherwise merge section by section using "Modified files" below. Never drop the project's own changes.
+    |3. Check the preconditions, build, fix compile errors, and report what was added, replaced or merged.
+    |
+    |## What it does
+    |
+    |## New files
+    |
+    || Target path | Snapshot |
+    ||---|---|
+    |
+    |## Modified files
+    |
+    |_(per file: what changed and why, section by section, so it can be merged into a copy with its own edits)_
+    |
+    |## Strings / resources
+    |
+    |## Analytics events
+    |
+    |_(rows to merge into event/event.md)_
+    |
+    |## Preconditions
+    |
+    |## Device checklist
+    |
+    |- [ ]
+    |""".trimMargin()
 
 internal fun phaseSkeleton(version: String, n: Int) = "# $version - Phase $n\n\n## Changes\n\n## Bugs\n"
 
@@ -366,12 +454,20 @@ private fun listPlans(ctx: Ctx) {
     val label = mapOf('~' to "in progress", ' ' to "not started", '-' to "blocked", 'x' to "done", '?' to "-")
     val color = mapOf('~' to Tone.WARN, ' ' to null, '-' to Tone.BAD, 'x' to Tone.OK, '?' to Tone.DIM)
     class Plan(val mark: Char, val name: String, val progress: String, val date: String)
-    val plans = (notes.plans.listFiles() ?: emptyArray()).filter { it.extension == "md" }.map { f ->
+    // plans/<name>.md, or plan/<name>/overview.md bundles (:ai style; the index files aren't plans)
+    val files = (notes.plans.listFiles() ?: emptyArray()).mapNotNull { f ->
+        when {
+            f.isDirectory -> File(f, "overview.md").takeIf { it.isFile }?.let { f.name to it }
+            f.extension == "md" && f.name != MASTER && f.name != "overview.md" -> f.nameWithoutExtension to f
+            else -> null
+        }
+    }
+    val plans = files.map { (name, f) ->
         val lines = f.readLines()
         val mark = lines.take(15).firstNotNullOfOrNull { l -> if ("Status" in l) Regex("""\[([ x~-])\]""").find(l)?.groupValues?.get(1)?.first() else null } ?: '?'
         val boxes = lines.count { Regex("""^\s*[*-]\s*\[[ xX~-]\]""").containsMatchIn(it) }
         val done = lines.count { Regex("""^\s*[*-]\s*\[[xX]\]""").containsMatchIn(it) }
-        Plan(mark, f.nameWithoutExtension, if (boxes > 0) "$done/$boxes" else "", f.date())
+        Plan(mark, name, if (boxes > 0) "$done/$boxes" else "", f.date())
     }.sortedWith(compareBy({ order[it.mark] }, { it.name }))
     Ui.table("Plans (${plans.size})", listOf("Status", "Plan", "Checklist", "Updated"),
         plans.map { Row(listOf(label.getValue(it.mark), it.name, it.progress, it.date), colors = listOf(color[it.mark], null, null, Tone.DIM)) }, right = setOf(2))

@@ -2,10 +2,37 @@
 
 Run any command from any folder inside a Gradle project. `artisan` and `kotlin-artisan` are the same program.
 
+**Search as you type.** Run `artisan` with nothing after it (or `artisan find <words>`) and start typing. The list
+filters with every key: by name (`dar`), by word (`dark` → `app:dark`), by initials (`cs` → `check:strings`), by
+description (`translation` → `check:strings`), and through typos.
+
+| Key | Does |
+|---|---|
+| ↑ / ↓ (Ctrl+P / Ctrl+N), PgUp / PgDn | Move the highlight |
+| Tab | Fill in the highlighted command; press again for its values (`app:rotate ` → `land` / `port` / `auto`) |
+| Enter | Run it. A value that isn't in the list (`app:font 1.7`) runs as typed. The direct command is printed first |
+| Backspace, Ctrl+W, Ctrl+U | Delete a character, a word, everything |
+| Esc, Ctrl+C | Quit |
+
+When the output isn't a terminal (pipe, CI, AI agent), `artisan` prints the list and `artisan find <words>` prints
+the matching commands as a table.
+
+**Tab completion.** `artisan completion --install` turns it on for the shell you run it from (PowerShell, bash,
+zsh, fish; or name one: `artisan completion zsh --install`). It writes the script into artisan's state folder and
+adds one line, tagged `# kotlin-artisan completion`, to your profile (`$PROFILE`, `~/.bashrc`, `~/.zshrc`; fish
+reads `~/.config/fish/completions/artisan.fish` by itself). `artisan app:<Tab>` then completes commands with
+their descriptions, the values after a command, flags, and the commands in the nearest `artisan.json`. Typing part
+of a name works too: `artisan dark<Tab>` → `app:dark`. In PowerShell, Tab opens a menu with the description of the
+highlighted item (only when Tab still has the default binding; `ARTISAN_NO_MENU_TAB=1` leaves it alone); Windows
+PowerShell 5.1 completes the `--plain` / `--table` flags but not single-dash ones. The script is plain shell code,
+so Tab never starts Java, and artisan rewrites it after an update. `artisan completion <shell>` prints the script
+without installing anything. To turn it off, delete the tagged line. cmd.exe has no Tab completion API: use plain
+`artisan` there.
+
 **Pickers.** Type only a group (`artisan make`, `artisan app`, `artisan open`, `artisan check`) to pick one of its
 commands. A group with one command (`del`, `build`) runs it directly. Leave out a value and the command asks, as a
 picker when the choices are fixed. In a picker, type the number or the option's name; **Enter cancels**.
-A typo (`artisan mak`) suggests close matches.
+A typo (`artisan app:drak`) asks whether you meant `app:dark`; a vaguer one lists the closest matches.
 
 **Flags.** `-y` skips "yes" confirmations, `-v` shows details, `-md` prints markdown (`list:verify`),
 `--plain` / `--table` force the output style (below).
@@ -24,9 +51,11 @@ cut with `...` to fit the terminal.
 | Command | What it does |
 |---|---|
 | `list` | Every command, grouped (`help` works too) |
+| `find [words]` | Search every command as you type (same as plain `artisan`; `?` works too). Not in a terminal: prints the matches |
+| `completion [shell] [--install]` | Tab completion for `powershell`, `bash`, `zsh` or `fish` (default: the shell you're in). Prints the script, or with `--install` sets it up (asks before editing your profile; `-y` skips) |
 | `version` | kotlin-artisan version, project, versionName/versionCode, Java |
-| `doctor` | `OK`/`FAIL` per check: project, Java, Gradle wrapper, Android SDK (`local.properties` or `ANDROID_HOME`), app module + package, adb, the connected phone + its SDK, git, notes. A missing adb row says how to fix it (SDK folder to add to PATH, or `winget`/`brew`/`apt` command); see [setup.md](setup.md) |
-| `setup` | Checks adb and `JAVA_HOME`. For each one that's missing it offers a fix (asks first, `-y` skips): adds the Android SDK's `platform-tools` to your user PATH, otherwise installs adb with `winget` (Windows) or `brew` (macOS); sets `JAVA_HOME` to Android Studio's `jbr` (or the Java artisan runs on). On macOS/Linux it prints the `export` line for your shell profile instead of editing it |
+| `doctor` | `OK`/`FAIL` per check: project, Java, Gradle wrapper, Android SDK (`local.properties` or `ANDROID_HOME`), app module + package, adb, the connected phone + its SDK, git, notes, Tab completion. A missing adb row says how to fix it (SDK folder to add to PATH, or `winget`/`brew`/`apt` command); see [setup.md](setup.md) |
+| `setup` | Checks adb, `JAVA_HOME` and Tab completion. For each one that's missing it offers a fix (asks first, `-y` skips): adds the Android SDK's `platform-tools` to your user PATH, otherwise installs adb with `winget` (Windows) or `brew` (macOS); sets `JAVA_HOME` to Android Studio's `jbr` (or the Java artisan runs on). On macOS/Linux it prints the `export` line for your shell profile instead of editing it. Last, it offers `completion --install` when Tab completion is off |
 | `init` | Writes `artisan.json` with the detected values (shows it first, asks "yes") |
 | `init notes` | Creates the notes workspace (asks for the folder, default `notes/`) |
 | `status` | versionName / versionCode / package, then (with notes) the latest version's phase table and every open item |
@@ -100,8 +129,8 @@ Status markers: `[ ]` not started, `[~]` in progress, `[x]` done, `[-]` blocked.
 
 | Type this | What happens |
 |---|---|
-| `artisan make:plan [name]` | `plans/<snake_case>.md` from a template (refuses if a similar plan exists) and prints the link line for the phase file. `EditTextUndo` → `edit_text_undo.md` |
-| `artisan make:ai [x.y] [stage]` | Adds an `:ai` Gradle module that holds the AI-agent workspace in `ai/src/main/java/ai/`: `README.md` (rules for agents, keeping `:ai` out of production, tracking conventions), `assets/`, `workflow/v_x_y_alpha/` (`overview.md` + `phase_1.md`) and, when the code calls `firebaseEvent(`, `event/event.md` pre-filled with every event name per screen. Adds `include(":ai")` to the settings file. The module is a plain `java-library` (plus the Kotlin JVM plugin when the version catalog already has it), and no other module may depend on it. Default version: `versionName` + `alpha`. When adb or `JAVA_HOME` is missing, it finishes by running `setup` |
+| `artisan make:plan [name]` | `plans/<snake_case>.md` from a template (refuses if a similar plan exists) and prints the link line for the phase file. `EditTextUndo` → `edit_text_undo.md`. In the `:ai` workspace (`plan/`) it creates a re-apply bundle instead: `plan/<snake_case>/overview.md` (guide for porting the feature into a new copy of the project) + `reference/` (final copies of the files as `<File>.txt`), and adds a row to `plan/MASTER_OVERVIEW.md` |
+| `artisan make:ai [x.y] [stage]` | Adds an `:ai` Gradle module that holds the AI-agent workspace in `ai/src/main/java/ai/`: `README.md` (rules for agents, keeping `:ai` out of production, tracking conventions), `assets/`, `workflow/v_x_y_alpha/` (`overview.md` + `phase_1.md`), `event/event.md` (pre-filled with every `firebaseEvent(` name per screen, or one empty table when there are none yet) and `plan/MASTER_OVERVIEW.md` (feature index and apply order for re-apply bundles; add bundles with `make:plan`). Adds `include(":ai")` to the settings file. The module is a plain `java-library` (plus the Kotlin JVM plugin when the version catalog already has it), and no other module may depend on it. Default version: `versionName` + `alpha`. When adb or `JAVA_HOME` is missing, it finishes by running `setup` |
 | `artisan make:version [x.y] [stage]` | `workflow/v_x_y/` (or `v_x_y_<stage>`, e.g. `1.9 alpha`) with `overview.md` + `phase_1.md`. Suggests the next version, and copies every open item from the previous version into "Carried over". Never touches `versionName` |
 | `artisan make:phase [summary]` | The next `phase_<n>.md` in the latest version, plus its row in `overview.md` |
 | `artisan make:bug` | Asks screen, area, problem, then appends `* [ ] **Screen – Area:** problem. VERIFY ON DEVICE` under `## Bugs` of the latest phase. Or in one go: `artisan make:bug "Home - Search bar: text overlaps icon"` |
@@ -109,7 +138,7 @@ Status markers: `[ ]` not started, `[~]` in progress, `[x]` done, `[-]` blocked.
 | `artisan del:asset img_*.png demo.mp4` | Only matching files (wildcards work); `-y` = no confirmation |
 | `artisan check:assets` | **Orphans** (asset files no note mentions, safe to delete) and **Missing** (notes linking to absent assets) |
 | `artisan check:links` | Relative markdown links and backticked repo paths (`` `app/src/...` ``) in the notes that point to missing files |
-| `artisan list:plans` | Every plan with its status, checklist progress (`3/6`) and last edit |
+| `artisan list:plans` | Every plan (file or `plan/<name>/` bundle) with its status, checklist progress (`3/6`) and last edit |
 | `artisan list:verify` | Every `VERIFY ON DEVICE` line across versions and plans. `-md` = paste-ready markdown checklist |
 
 A note containing the text `artisan:ignore` (e.g. in an HTML comment) is skipped by the link/asset checks, which

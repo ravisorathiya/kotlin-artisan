@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.0
+
+- **Search as you type.** Plain `artisan` (or `artisan find <words>`) opens a live search over every command: each
+  key filters the list, ↑/↓ moves, **Tab** fills in the command and then its values (`on`/`off`,
+  `land`/`port`/`auto`, Firebase pages, ...), **Enter** runs it and prints the direct command so you learn it, Esc
+  quits. Matches by prefix, by word (`dark` → `app:dark`), by initials (`cs` → `check:strings`), by description
+  (`translation` → `check:strings`) and through typos. With no person at a terminal (pipes, CI, AI agents) it
+  prints the list or the matches instead.
+- **Tab completion** for PowerShell, bash, zsh and fish: `artisan completion --install` (or `artisan setup`, or the
+  installers) adds one line to your shell profile. Completes commands with their descriptions (PowerShell shows a
+  menu), their values, flags, and the `commands` of the nearest `artisan.json`. The script is static, so Tab never
+  waits for Java, and artisan rewrites it after an update. `artisan completion <shell>` prints it instead.
+- Unknown command: a single clear match (`artisan app:drak`) asks `Run artisan app:dark? [Y/n]`; otherwise the best
+  five matches are shown with their descriptions.
+- `make:ai` always creates `event/event.md` (an empty table when the app has no `firebaseEvent` calls yet) and
+  `plan/MASTER_OVERVIEW.md`, the entry point for re-applying shipped features to a new copy of the project.
+- In the `:ai` workspace, `make:plan <feature>` creates a re-apply bundle, `plan/<feature>/overview.md` +
+  `reference/`, and adds it to the `MASTER_OVERVIEW.md` feature index. `list:plans` lists bundles too.
+- `doctor` has a Tab completion row; `setup` offers to turn it on.
+
 ## 0.4.0
 
 - `artisan make:ai`: adds an `:ai` agent-workspace module (README with agent rules, `workflow/`, `assets/`,

@@ -93,6 +93,13 @@ object Ui {
     /** stdout is a real terminal (not a pipe/file). Works on every JDK, unlike System.console() on 22+. */
     val interactive: Boolean by lazy { runCatching { terminal.terminalInfo.outputInteractive }.getOrDefault(false) }
 
+    /**
+     * A person is at the keyboard: both ends are a terminal and compact output wasn't asked for. Extra prompts
+     * (did-you-mean, the live palette) only show then, never for scripts or AI agents.
+     */
+    val canAsk: Boolean
+        get() = interactive && !plain && !assumeYes && runCatching { terminal.terminalInfo.inputInteractive }.getOrDefault(false)
+
     /** Terminal width; 160 when output is piped/redirected (no real width to fit). */
     private fun width(): Int {
         System.getenv("COLUMNS")?.toIntOrNull()?.let { return it }
@@ -100,10 +107,18 @@ object Ui {
         return terminal.updateSize().width.takeIf { it >= 60 } ?: 160
     }
 
-    /** Box-drawing characters, or ASCII when the output encoding can't show them (would print '?'). */
-    private val box: CharArray by lazy {
+    /** The output encoding can show [chars]; otherwise they'd print as '?'. */
+    private fun canShow(chars: String): Boolean {
         val enc = System.getProperty("stdout.encoding") ?: Charset.defaultCharset().name()
-        val unicode = runCatching { Charset.forName(enc).newEncoder().canEncode("─│┌┼") }.getOrDefault(false)
+        return runCatching { Charset.forName(enc).newEncoder().canEncode(chars) }.getOrDefault(false)
+    }
+
+    /** Arrows and pointers for the palette (›▸↑↓…), or ASCII stand-ins. */
+    val unicode: Boolean by lazy { canShow("›▸↑↓…·") }
+
+    /** Box-drawing characters, or ASCII when the output encoding can't show them. */
+    private val box: CharArray by lazy {
+        val unicode = canShow("─│┌┼")
         //            H        V        TL       TM       TR       ML       MM       MR       BL       BM       BR
         if (unicode) charArrayOf('─', '│', '┌', '┬', '┐', '├', '┼', '┤', '└', '┴', '┘')
         else charArrayOf('-', '|', '+', '+', '+', '+', '+', '+', '+', '+', '+')

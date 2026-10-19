@@ -41,7 +41,7 @@ The tree below is an example, not fixed — **the current repository tree is the
 {{TREE}}
 ```
 
-Other categories (`plan/`, `migration/`, `investigations/`, `release-checks/`, ...) may be added when needed — don't create them preemptively just because they're mentioned here. Before adding anything: inspect the current tree, find the closest existing location, and create a new category only when nothing existing fits. The developer may rename/move/add/remove directories at any time.
+Other categories (`migration/`, `investigations/`, `release-checks/`, ...) may be added when needed — don't create them preemptively just because they're mentioned here. Before adding anything: inspect the current tree, find the closest existing location, and create a new category only when nothing existing fits. The developer may rename/move/add/remove directories at any time.
 
 ### Directory conventions
 
@@ -50,14 +50,12 @@ Other categories (`plan/`, `migration/`, `investigations/`, `release-checks/`, .
   - **`overview.md`** — release summary: the phase table (phase / file / summary / status), grouped highlights of what changed and why, and what's still open. Update it when items in that release's phases change status. It may also hold a release-level list (e.g. the release's feature/crash-fix list with its Crashlytics link) — if so, track those items there.
   - Keep the original wording of an item as given (it may be in another language, e.g. manager feedback); add your notes after it (` — root cause / change / VERIFY ON DEVICE`), not in place of it.
 - **`assets/`** — visual/reference material (screenshots, mockups) for tasks. Flat, named `img.png`, `img_1.png`, ... Reference the asset from the task item with a path relative to the Markdown file (from `workflow/v_x/phase_N.md` that's `../../assets/img_N.png`). Don't duplicate normal Android resources here. Split into subfolders only if it stops scaling.
-<!-- events -->
+- **`plan/`** — re-apply bundles: everything needed to port a shipped feature into a new zip/copy of this project without re-designing it. `MASTER_OVERVIEW.md` is the entry point (feature index, apply order, which snapshot wins). Each feature gets `plan/<feature>/`: `overview.md` (self-contained guide: new files, modified files with their per-section changes, preconditions, device checklist), `reference/` (final source of every new/modified file with a `.txt` suffix so it never compiles) and optionally `apply_bundle.ps1` (dry run by default). Update the bundle when the feature changes; never put secrets in snapshots.
 - **`event/`** — analytics/event instrumentation tracking: `event.md` lists every active `firebaseEvent` call, one table per screen (event name, description). Must stay in exact sync with the code — see [Analytics event sync](#analytics-event-sync--critical) below.
-<!-- /events -->
 
-The `artisan` CLI (kotlin-artisan) works on this folder: `artisan status`, `artisan make:phase`, `artisan make:bug`, `artisan make:version`, `artisan list:verify`, `artisan check:links`, `artisan app:shot`.
+The `artisan` CLI (kotlin-artisan) works on this folder: `artisan status`, `artisan make:plan`, `artisan list:plans`, `artisan make:phase`, `artisan make:bug`, `artisan make:version`, `artisan list:verify`, `artisan check:links`, `artisan app:shot`.
 
 ---
-<!-- events -->
 
 ## Analytics event sync — CRITICAL
 
@@ -88,7 +86,6 @@ Row rules:
 Before finishing any task that touched analytics, grep the changed files for `firebaseEvent(` and diff the event names against that screen's section in `event.md` — both directions (in code but not in the doc, and in the doc but not in code). Note: some calls span multiple lines (`firebaseEvent(\n "Name", ...)`) and some choose the name with `if/else`; a single-line grep misses them, so search for the event names too. When a task touches events on a screen, also report any pre-existing mismatches you notice on that screen.
 
 ---
-<!-- /events -->
 
 ## Agent workflow
 
@@ -153,9 +150,7 @@ Small bugs don't need the full format — use enough detail that the next agent 
 - **Don't invent ambiguous product behavior.** If it can't be safely determined from code, tracking notes, screenshots, repo instructions, or established app behavior, record the uncertainty and tag `ASK DEV`.
 - **A screenshot defines appearance, not business logic** — inspect the existing implementation, reuse existing resources, match the design without rewriting unrelated UI, and record any behavior that can't be determined from the image. Don't invent hidden interactions from visuals alone.
 - **Stop and ask the developer** when: a task is already `[-]` or tagged `ASK DEV`; required behavior is genuinely ambiguous; a change would alter major architecture without clear justification; a migration is destructive; an API/model/provider must be chosen; credentials or a secret-storage strategy are needed; a production dependency on `:ai` would be required; instructions conflict; or real-device behavior can't be safely inferred but the implementation depends on it. Don't guess just to complete a checklist.
-<!-- events -->
 - **Every `firebaseEvent` change ships with its `event/event.md` update** — added, removed, renamed, or changed events are synced in the same task. See [Analytics event sync](#analytics-event-sync--critical).
-<!-- /events -->
 - **Never store secrets here** — no API keys, tokens, passwords, keystores, private keys, signing passwords, or service-account/production credentials in any file or asset under `:ai`. Ask the developer how credentials should be provided instead.
 - **Before ending work on an incomplete task**, record: current status, what was discovered, what changed, what remains, important files/symbols, why it's incomplete, and what needs human/device verification — so the next agent doesn't repeat the investigation.
 

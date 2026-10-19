@@ -14,8 +14,16 @@ private fun openUrl(url: String) {
     Proc.open(url)
 }
 
+/** Firebase console pages: argument, label, URL path. */
+private val FIREBASE_PAGES = listOf(
+    Triple("overview", "Project overview", "overview"),
+    Triple("crash", "Crashlytics", "crashlytics"),
+    Triple("config", "Remote Config", "config"),
+    Triple("analytics", "Analytics", "analytics"),
+)
+
 fun registerOpen() {
-    Registry.add("open:firebase", "open:firebase [page]", "Firebase console: overview, crash, config, analytics") { firebase(it) }
+    Registry.add("open:firebase", "open:firebase [page]", "Firebase console: overview, crash, config, analytics", FIREBASE_PAGES.map { it.first to it.second }) { firebase(it) }
     Registry.add("open:play", "open:play", "Google Play Console") { openUrl("https://play.google.com/console/developers") }
     Registry.add("open:admob", "open:admob", "AdMob console") { openUrl("https://admob.google.com/") }
     Registry.add("open:app", "open:app", "App info screen on the phone") { ctx ->
@@ -29,12 +37,7 @@ fun registerOpen() {
 }
 
 private fun firebase(ctx: Ctx) {
-    val pages = listOf(
-        Triple("overview", "Project overview", "overview"),
-        Triple("crash", "Crashlytics", "crashlytics"),
-        Triple("config", "Remote Config", "config"),
-        Triple("analytics", "Analytics", "analytics"),
-    )
+    val pages = FIREBASE_PAGES
     val id = ctx.project.firebaseProjectId
         ?: throw CliError("No project_info.project_id in ${ctx.project.appModule?.let { ctx.project.rel(it.dir) } ?: "app"}/google-services.json.")
     val key = ctx.arg(0)

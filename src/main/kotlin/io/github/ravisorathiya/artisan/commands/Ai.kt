@@ -10,7 +10,7 @@ import io.github.ravisorathiya.artisan.project.Project
 import java.io.File
 
 fun registerAi() {
-    Registry.add("make:ai", "make:ai [x.y] [stage]", "Add the :ai agent-workspace module (README, workflow, events, assets)") { makeAi(it) }
+    Registry.add("make:ai", "make:ai [x.y] [stage]", "Add the :ai agent-workspace module (README, workflow, events, plans, assets)") { makeAi(it) }
 }
 
 private fun makeAi(ctx: Ctx) {
@@ -29,6 +29,8 @@ private fun makeAi(ctx: Ctx) {
     Ui.table("Created", listOf("File"), files.map { Row(p.rel(it)) })
     Ui.say("  ${p.settingsFile.name}: added the :ai include", Tone.OK)
     if (events != null) Ui.say("  event.md: ${events.values.sumOf { it.size }} firebaseEvent name(s) from ${events.size} file(s), descriptions to fill in", Tone.DIM)
+    else Ui.say("  event.md: no firebaseEvent calls found, an empty table is ready for the first one", Tone.DIM)
+    Ui.say("  plan/: start a re-apply bundle with: artisan make:plan <feature>", Tone.DIM)
     val notes = Project.find(p.root)?.notes
     if (notes != null && p.rel(notes.dir) != Project.AI_WORKSPACE) {
         Ui.say("  artisan still uses ${p.rel(notes.dir)} for notes. To switch: \"notes\": {\"dir\": \"${Project.AI_WORKSPACE}\"} in artisan.json", Tone.WARN)
@@ -51,9 +53,10 @@ internal fun scaffoldAi(p: Project, version: String, events: Map<String, List<St
     write("ai/.gitignore", "/build\n")
 
     val ws = Project.AI_WORKSPACE
-    write("$ws/README.md", aiReadme(p, version, events != null))
+    write("$ws/README.md", aiReadme(p, version))
     write("$ws/assets/.gitkeep", "")
-    if (events != null) write("$ws/event/event.md", eventDoc(p, events))
+    write("$ws/event/event.md", eventDoc(p, events.orEmpty()))
+    write("$ws/plan/MASTER_OVERVIEW.md", planIndexDoc(p))
     write("$ws/workflow/$version/overview.md", aiOverview(p, version))
     write("$ws/workflow/$version/phase_1.md", phaseSkeleton(version, 1))
 
@@ -128,7 +131,8 @@ internal fun eventDoc(p: Project, events: Map<String, List<String>>): String {
             "included. Keep this file in sync with the code (see ../README.md, \"Analytics event sync\").\n",
     )
     val width = maxOf(31, (events.values.flatten().maxOfOrNull { it.length } ?: 0) + 3)
-    for ((screen, names) in events) {
+    // No calls yet: one empty table to copy for the first screen.
+    for ((screen, names) in events.ifEmpty { mapOf("ScreenName" to emptyList()) }) {
         sb.append("\n## $screen\n\n")
         sb.append("| ${"Event name".padEnd(width)} | Description |\n")
         sb.append("|${"-".repeat(width + 2)}| --- |\n")
@@ -155,7 +159,7 @@ internal fun aiOverview(p: Project, version: String): String {
         |""".trimMargin()
 }
 
-internal fun aiReadme(p: Project, version: String, events: Boolean): String {
+internal fun aiReadme(p: Project, version: String): String {
     val app = p.appModule?.name ?: ":app"
     val others = p.modules.map { it.name }.filter { it != app && it != ":ai" }
     val graph = (if (others.isEmpty()) app else "$app ── ${others.joinToString(" / ")}").let { prod ->
@@ -166,19 +170,62 @@ internal fun aiReadme(p: Project, version: String, events: Boolean): String {
         add("ai/src/main/java/ai/")
         add("├── README.md                 (this file)")
         add("├── assets/                   (img.png, img_1.png, ... reference screenshots)")
-        if (events) {
-            add("├── event/")
-            add("│   └── event.md              (every active firebaseEvent, one table per screen)")
-        }
+        add("├── event/")
+        add("│   └── event.md              (every active firebaseEvent, one table per screen)")
+        add("├── plan/")
+        add("│   ├── MASTER_OVERVIEW.md    (feature index + apply order: start here)")
+        add("│   └── <feature>/            (overview.md, reference/*.txt, apply_bundle.ps1)")
         add("└── workflow/")
         add("    └── ${"$version/".padEnd(22)}(overview.md, phase_1.md)")
     }.joinToString("\n")
     val template = object {}.javaClass.getResource("/templates/ai/README.md")?.readText()?.replace("\r\n", "\n")
         ?: throw CliError("README template missing from the artisan install.")
     return template
-        .replace(Regex("""(?s)<!-- events -->\n(.*?)<!-- /events -->\n""")) { if (events) it.groupValues[1] else "" }
         .replace("{{PROD_LIST}}", (listOf(app) + others).joinToString(", ") { "`$it`" })
         .replace("{{GRAPH}}", graph)
         .replace("{{TREE}}", tree)
         .replace("{{VERSION_DIR}}", version)
 }
+
+/** plan/MASTER_OVERVIEW.md: the entry point for re-applying every shipped feature bundle to a new project copy. */
+internal fun planIndexDoc(p: Project): String = """
+    |# MASTER — Re-apply every shipped feature to a new project copy
+    |
+    |**Start here.** This is the single entry point for porting the features built in `${p.root.name}` into a new
+    |zip/copy of the same project. When a new copy arrives, copy the whole `plan/` folder into its `ai/src/main/java/ai/`
+    |and say: **"apply the plan MASTER_OVERVIEW"**.
+    |
+    |Each feature is a bundle: `plan/<feature>/overview.md` (self-contained re-apply guide), `reference/` (final source
+    |of every new or modified file, with a `.txt` suffix so it never compiles) and, optionally, `apply_bundle.ps1`.
+    |Create one with `artisan make:plan <feature>`; it adds a row to the index below.
+    |
+    |## Instructions for the agent (read first)
+    |
+    |1. Do not re-design or rewrite any feature, and do not ask the developer to re-explain it. Each one is fully
+    |   specified in its own `overview.md` plus `reference/` snapshots. This file says **which bundles, in which order,
+    |   and which snapshot wins** where bundles touch the same file.
+    |2. For each bundle with **Apply? = Yes**, in the order of section 2:
+    |   - Run its script as a dry run first: `powershell -ExecutionPolicy Bypass -File apply_bundle.ps1`.
+    |     `ADD` = new file missing, `identical` = already applied, `DIFFERS` = needs a merge or a replace,
+    |     `TARGET MISSING` = moved or renamed in the new copy, so find it.
+    |   - Then `-Apply` (new files only). Use `-Apply -IncludeModified` only when the target's copy of a modified file
+    |     has no changes of its own; otherwise **merge by hand** following the bundle's `overview.md`. Never drop the
+    |     new copy's own changes.
+    |   - No script: follow the bundle's `overview.md` checklist.
+    |3. Analytics: merge the bundle's event rows into `ai/src/main/java/ai/event/event.md`. Copy rows only; never
+    |   replace the file.
+    |4. Build (`gradlew assembleDebug`) and fix compile errors.
+    |5. Report what was added, replaced and merged, and what could not be applied. Then hand the developer each
+    |   bundle's device checklist.
+    |
+    |---
+    |
+    |## 1. Feature index
+    |
+    || # | Feature | Folder | Script | State | Apply? |
+    ||---|---|---|---|---|---|
+    |
+    |## 2. Apply order and why
+    |
+    |_(list the bundles in dependency order; for a file several bundles touch, the later bundle's snapshot wins)_
+    |""".trimMargin()

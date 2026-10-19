@@ -1,12 +1,14 @@
 package io.github.ravisorathiya.artisan
 
 import io.github.ravisorathiya.artisan.commands.addInclude
+import io.github.ravisorathiya.artisan.commands.createPlanBundle
 import io.github.ravisorathiya.artisan.commands.firebaseEvents
 import io.github.ravisorathiya.artisan.commands.glob
 import io.github.ravisorathiya.artisan.commands.scaffoldAi
 import io.github.ravisorathiya.artisan.commands.snakeCase
 import io.github.ravisorathiya.artisan.commands.stringKeys
 import io.github.ravisorathiya.artisan.commands.versionFolderName
+import io.github.ravisorathiya.artisan.core.CliError
 import io.github.ravisorathiya.artisan.project.Gradle
 import io.github.ravisorathiya.artisan.project.Project
 import java.io.File
@@ -14,6 +16,7 @@ import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -230,15 +233,36 @@ class AiScaffoldTest {
     }
 
     @Test
-    fun `no firebaseEvent means no event folder or section`() {
+    fun `event and plan folders are scaffolded even without firebaseEvent`() {
         write("settings.gradle", "include ':app'\n")
         write("app/build.gradle", "apply plugin: 'com.android.application'")
         val p = assertNotNull(Project.find(tmp))
         assertNull(firebaseEvents(p))
         scaffoldAi(p, "v_1_0_alpha", null)
         assertTrue(File(tmp, "ai/build.gradle").readText().contains("id 'java-library'"))
-        assertTrue(!File(tmp, "${Project.AI_WORKSPACE}/event").exists())
-        assertTrue("Analytics event sync" !in File(tmp, "${Project.AI_WORKSPACE}/README.md").readText())
+        val ws = File(tmp, Project.AI_WORKSPACE)
+        assertTrue("| Event name" in File(ws, "event/event.md").readText())
+        assertTrue("| # | Feature |" in File(ws, "plan/MASTER_OVERVIEW.md").readText())
+        val readme = File(ws, "README.md").readText()
+        assertTrue("Analytics event sync" in readme && "MASTER_OVERVIEW.md" in readme)
+        assertEquals("plan", assertNotNull(Project.find(tmp)?.notes).plans.name)
+    }
+
+    @Test
+    fun `make plan in the ai workspace creates a bundle and an index row`() {
+        write("settings.gradle", "include ':app'\n")
+        write("app/build.gradle", "apply plugin: 'com.android.application'")
+        scaffoldAi(assertNotNull(Project.find(tmp)), "v_1_0_alpha", null)
+        val notes = assertNotNull(Project.find(tmp)?.notes)
+        createPlanBundle(notes, "dynamic_island", "v_1_0_alpha/phase_1")
+        createPlanBundle(notes, "video_calling", "-")
+        assertTrue(File(notes.plans, "dynamic_island/overview.md").readText().startsWith("# Dynamic Island — Re-Apply Guide"))
+        assertTrue(File(notes.plans, "dynamic_island/reference").isDirectory)
+        val master = File(notes.plans, "MASTER_OVERVIEW.md").readText()
+        assertTrue("| 1 | **Dynamic Island** | `plan/dynamic_island/` |" in master)
+        assertTrue("| 2 | **Video Calling** | `plan/video_calling/` |" in master)
+        assertTrue(master.indexOf("| 2 | **Video") < master.indexOf("## 2. Apply order"))
+        assertFailsWith<CliError> { createPlanBundle(notes, "dynamic-island", "-") }
     }
 
     @Test

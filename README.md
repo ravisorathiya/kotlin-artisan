@@ -35,6 +35,7 @@ anywhere a JDK runs (Windows, macOS, Linux).
 |---|---|
 | ⚡ **Zero setup** | Run it anywhere inside a Gradle project. It finds the root, the modules (Kotlin or Groovy DSL), the app module, `applicationId`, version, and Firebase project by itself. |
 | 🧰 **Easy tool setup** | Missing Java or adb? The Windows installer and `artisan setup` reuse Android Studio's JDK and SDK, or install them with `winget` / `brew`. Guide: [docs/setup.md](docs/setup.md). |
+| ⌨️ **Suggestions as you type** | Run `artisan` and type: the command list filters with every key (`dark`, `translation`, even `drak`), Tab fills in values, Enter runs. `artisan app:<Tab>` completes in PowerShell, bash, zsh and fish, with descriptions. |
 | 🔢 **Pickers instead of memorising** | `artisan make`, `artisan app` and `artisan open` show just that group's commands. Leave out a value (`artisan app:font`) and it shows the choices. |
 | 🎨 **Readable output** | Coloured boxed tables that fit your terminal. |
 | 📱 **Phone switches for QA** | Dark/light, font scale, rotation, per-app language, screenshot, screen recording, logcat. |
@@ -84,6 +85,8 @@ git clone https://github.com/ravisorathiya/kotlin-artisan && cd kotlin-artisan
 ## 30-second tour
 
 ```sh
+artisan                        # type to search every command; Tab fills in, Enter runs
+artisan app:<Tab>              # Tab completion with descriptions (artisan completion --install)
 artisan doctor                 # Java, SDK, adb, phone, git: what's OK, what's missing
 artisan setup                  # put adb on PATH + set JAVA_HOME (SDK copy, else winget/brew)
 artisan app:install            # build + install + launch the debug app
@@ -101,9 +104,9 @@ artisan list                   # everything
 
 | Group | Commands |
 |---|---|
-| — | `list` `version` `doctor` `setup` `init [notes]` `status` `stats` |
+| — | `find [words]` `list` `version` `doctor` `setup` `completion [shell]` `init [notes]` `status` `stats` |
 | `self:` | `update` |
-| `make:` | `plan` `version` `phase` `bug` |
+| `make:` | `plan` `version` `phase` `bug` `ai` |
 | `del:` | `asset` |
 | `check:` | `links` `assets` `strings [lang] [-v]` |
 | `list:` | `verify [-md]` `plans` `todo [module] [-v]` |
@@ -173,7 +176,9 @@ coding agents.
 
 For AI agents specifically, `artisan make:ai` adds an `:ai` Gradle module with the same workspace in
 `ai/src/main/java/ai/` (visible in Android Studio, never shipped): an agent README with the working rules,
-`workflow/v_1_0_alpha/`, `assets/`, and `event/event.md` pre-filled from the app's `firebaseEvent(...)` calls.
+`workflow/v_1_0_alpha/`, `assets/`, `event/event.md` pre-filled from the app's `firebaseEvent(...)` calls, and
+`plan/` for re-apply bundles (`make:plan <feature>` adds one to `plan/MASTER_OVERVIEW.md`), so a shipped feature
+can be ported into a new copy of the project without re-designing it.
 The notes commands find it without any config.
 
 ## Contributing

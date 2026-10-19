@@ -149,13 +149,15 @@ private fun unzip(zip: File, dest: File) {
  * command, prints its one-line notice on stderr (so piped output stays clean). Off with ARTISAN_NO_UPDATE_CHECK=1
  * and on CI.
  */
+/** Where artisan keeps its own files (update check, completion scripts): not the install dir, which updates replace. */
+internal val stateDir: File by lazy {
+    System.getenv("LOCALAPPDATA")?.takeIf { Os.isWindows }?.let { File(it, "kotlin-artisan-state") }
+        ?: File(System.getProperty("user.home"), ".cache/kotlin-artisan")
+}
+
 object UpdateCheck {
     private const val DAY_MS = 24 * 60 * 60 * 1000L
-    private val stateFile: File by lazy {
-        val base = System.getenv("LOCALAPPDATA")?.takeIf { Os.isWindows }?.let { File(it, "kotlin-artisan-state") }
-            ?: File(System.getProperty("user.home"), ".cache/kotlin-artisan")
-        File(base, "update.json")
-    }
+    private val stateFile: File by lazy { File(stateDir, "update.json") }
     @Volatile private var latest: String? = null
     private var worker: Thread? = null
 

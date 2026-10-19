@@ -1,6 +1,8 @@
 package io.github.ravisorathiya.artisan
 
+import io.github.ravisorathiya.artisan.commands.Completion
 import io.github.ravisorathiya.artisan.commands.registerAi
+import io.github.ravisorathiya.artisan.commands.registerCompletion
 import io.github.ravisorathiya.artisan.commands.registerApp
 import io.github.ravisorathiya.artisan.commands.registerCode
 import io.github.ravisorathiya.artisan.commands.registerCustom
@@ -13,6 +15,7 @@ import io.github.ravisorathiya.artisan.commands.UpdateCheck
 import io.github.ravisorathiya.artisan.core.Cancelled
 import io.github.ravisorathiya.artisan.core.CliError
 import io.github.ravisorathiya.artisan.core.Ctx
+import io.github.ravisorathiya.artisan.core.Palette
 import io.github.ravisorathiya.artisan.core.Registry
 import io.github.ravisorathiya.artisan.core.Tone
 import io.github.ravisorathiya.artisan.core.Ui
@@ -22,9 +25,10 @@ val VERSION: String = Ctx::class.java.`package`?.implementationVersion ?: "dev"
 
 fun main(argv: Array<String>) {
     val ctx = Ctx(argv.drop(1))
-    val command = argv.firstOrNull() ?: "list"
     Ui.assumeYes = ctx.yes
     Ui.plain = ctx.plain ?: (System.getenv("ARTISAN_PLAIN")?.let { it != "0" } ?: !Ui.interactive)
+    // No command: the live search for a person at a terminal, the plain list for scripts and agents.
+    val command = argv.firstOrNull() ?: if (Palette.available) "find" else "list"
     UpdateCheck.start()
     val code = try {
         registerMisc()
@@ -35,8 +39,10 @@ fun main(argv: Array<String>) {
         registerOpen()
         registerUpdate()
         registerSetup()
+        registerCompletion()
         ctx.projectOrNull?.let { registerCustom(it) }
         Registry.dispatch(command, ctx)
+        runCatching { Completion.refresh() }
         UpdateCheck.notifyIfNewer(command)
         0
     } catch (e: Cancelled) {

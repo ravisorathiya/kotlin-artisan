@@ -82,13 +82,25 @@ Same idea as the Windows installer, from inside artisan: it puts the SDK's adb o
 brew) and sets `JAVA_HOME` to Android Studio's JDK. Each step asks first. `artisan make:ai` runs it too when
 something is missing.
 
+## Tab completion
+
+```sh
+artisan completion --install
+```
+
+Adds one line to your shell profile (PowerShell `$PROFILE`, `~/.bashrc`, `~/.zshrc`; fish needs none) so
+`artisan app:<Tab>` completes commands, their values and flags. The installers and `artisan setup` offer it too.
+Open a new terminal afterwards. In PowerShell, profiles only run when the execution policy allows local scripts;
+if it doesn't, artisan prints the `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` line that fixes it. No Tab
+completion in your shell (cmd.exe)? Run plain `artisan` and type to search.
+
 ## Check
 
 ```sh
 artisan doctor
 ```
 
-The `Java`, `Android SDK`, `adb` and `Phone` rows should say `OK`. When adb is missing, the row tells you how to
+The `Java`, `Android SDK`, `adb` and `Phone` rows should say `OK` (`Tab completion` is optional). When adb is missing, the row tells you how to
 get it.
 
 ## Troubleshooting
