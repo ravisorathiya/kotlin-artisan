@@ -153,6 +153,12 @@ namespace KotlinArtisan
             {
                 // already registered (the profile ran twice)
             }
+            // PSReadLine gives predictors about 20 ms per keystroke: load the data and JIT the matching now, in the
+            // background, so the first suggestion isn't dropped.
+            ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try { ArtisanPredictor.Instance.Suggest("artisan a"); } catch (Exception) { }
+            });
         }
 
         public void OnRemove(PSModuleInfo psModuleInfo) =>

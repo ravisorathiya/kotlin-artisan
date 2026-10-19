@@ -19,12 +19,14 @@ $env:ARTISAN_COMPLETION_DATA = $data
 
 Import-Module $Dll
 Import-Module $Dll   # a profile that runs twice must not fail
+# PSReadLine allows ~20 ms per keystroke; a cold CI runner needs longer for the first call, so the checks below wait up
+# to 2 s and test the answers, not the runner.
 
 $client = [System.Management.Automation.Subsystem.Prediction.PredictionClient]::new('smoke-test', 'Terminal')
 function Get-Suggestions([string]$line) {
     $tokens = $null
     $ast = [System.Management.Automation.Language.Parser]::ParseInput($line, [ref]$tokens, [ref]$null)
-    $all = [System.Management.Automation.Subsystem.Prediction.CommandPrediction]::PredictInputAsync($client, $ast, $tokens).GetAwaiter().GetResult()
+    $all = [System.Management.Automation.Subsystem.Prediction.CommandPrediction]::PredictInputAsync($client, $ast, $tokens, 2000).GetAwaiter().GetResult()
     @(($all | Where-Object Name -eq 'artisan').Suggestions | Where-Object { $_ } | ForEach-Object SuggestionText)
 }
 
@@ -40,10 +42,10 @@ $failed = 0
 foreach ($case in $cases.GetEnumerator()) {
     $got = @(Get-Suggestions $case.Key)
     if ($got.Count -gt 0 -and $got[0] -eq $case.Value) { Write-Host "ok    [$($case.Key)] -> [$($got[0])]" }
-    else { Write-Host "FAIL  [$($case.Key)] expected [$($case.Value)], got [$($got -join '] [')]"; $failed++ }
+    else { Write-Host "::error::predictor [$($case.Key)] expected [$($case.Value)], got [$($got -join '] [')]"; $failed++ }
 }
 foreach ($line in 'git st', 'artisan app:dark on x') {
     $got = @(Get-Suggestions $line)
-    if ($got.Count -eq 0) { Write-Host "ok    [$line] -> nothing" } else { Write-Host "FAIL  [$line] expected nothing, got [$($got -join '] [')]"; $failed++ }
+    if ($got.Count -eq 0) { Write-Host "ok    [$line] -> nothing" } else { Write-Host "::error::predictor [$line] expected nothing, got [$($got -join '] [')]"; $failed++ }
 }
 if ($failed -gt 0) { exit 1 }
