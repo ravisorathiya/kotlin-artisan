@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://ravisorathiya.github.io/open-source/kotlin-artisan"><img src=".github/assets/banner.png" alt="kotlin-artisan: type a word, your Android project does the rest" width="100%"></a>
+  <a href="https://kotlin-artisan.netlify.app"><img src=".github/assets/banner.png" alt="kotlin-artisan: type a word, your Android project does the rest" width="100%"></a>
 </p>
 
 <p align="center">
@@ -10,11 +10,11 @@
 </p>
 
 <p align="center">
-  <b><a href="https://ravisorathiya.github.io/open-source/kotlin-artisan">Website</a></b> ·
+  <b><a href="https://kotlin-artisan.netlify.app">Website</a></b> ·
   <a href="#install">Install</a> ·
   <a href="#30-second-tour">30-second tour</a> ·
-  <a href="docs/commands.md">All commands</a> ·
-  <a href="docs/workflow.md">A day with artisan</a>
+  <a href="https://kotlin-artisan.netlify.app/commands/overview">All commands</a> ·
+  <a href="https://kotlin-artisan.netlify.app/guides/a-day-with-artisan">A day with artisan</a>
 </p>
 
 # kotlin-artisan
@@ -35,7 +35,7 @@ anywhere a JDK runs (Windows, macOS, Linux).
 | Feature | What you get |
 |---|---|
 | ⚡ **Zero setup** | Run it anywhere inside a Gradle project. It finds the root, the modules (Kotlin or Groovy DSL), the app module, `applicationId`, version, and Firebase project by itself. |
-| 🧰 **Easy tool setup** | Missing Java or adb? The Windows installer and `artisan setup` reuse Android Studio's JDK and SDK, or install them with `winget` / `brew`. Guide: [docs/setup.md](docs/setup.md). |
+| 🧰 **Easy tool setup** | Missing Java or adb? The Windows installer and `artisan setup` reuse Android Studio's JDK and SDK, or install them with `winget` / `brew`. Guide: [Setup](https://kotlin-artisan.netlify.app/getting-started/setup). |
 | ⌨️ **Suggestions as you type** | At your normal prompt, `artisan da` shows `app:dark` in gray as you type; → accepts (PowerShell 5.1 and 7, zsh, fish). Or run `artisan` and type to search every command (`dark`, `translation`, even `drak`). `artisan app:<Tab>` completes with descriptions. |
 | 🏭 **Generators for the repetitive parts** | `make:string` (every locale at once), `make:event` + `check:events` (event.md in sync, naming rules checked), `make:screen`, `bump`, `make:bundle` (git diff → re-apply bundle), `make:analytics` (firebaseEvent + event box). |
 | ⌨️ **In your terminal, not only a CLI** | Ctrl+g hotkeys (`i` install, `s` screenshot, `l` logcat...), project status in your prompt, git hooks that stop commits with event.md or translations out of sync, clickable output paths. |
@@ -50,7 +50,7 @@ anywhere a JDK runs (Windows, macOS, Linux).
 
 Needs Java 17+ (Android Studio's bundled JDK works) and, for the phone commands, `adb` on your PATH. The Windows
 installer sets both up for you: it reuses Android Studio's copies or installs them with `winget`. For macOS/Linux or
-manual setup, see [docs/setup.md](docs/setup.md).
+manual setup, see the [setup guide](https://kotlin-artisan.netlify.app/getting-started/setup).
 
 **Windows (PowerShell)**
 ```powershell
@@ -128,7 +128,7 @@ artisan list                   # everything
   <img src=".github/assets/stats.svg" alt="artisan stats: Kotlin and Java lines per module" width="49%" align="top">
 </p>
 
-Full reference with examples: [docs/commands.md](docs/commands.md). How it all fits into a working day: [docs/workflow.md](docs/workflow.md).
+Full reference with examples: [kotlin-artisan.netlify.app](https://kotlin-artisan.netlify.app/commands/overview). How it all fits into a working day: [A day with artisan](https://kotlin-artisan.netlify.app/guides/a-day-with-artisan).
 
 Flags: `-y` skips "yes" confirmations, `-v` shows details, `-md` prints markdown (`list:verify`).
 

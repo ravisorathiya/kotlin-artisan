@@ -133,7 +133,7 @@ private fun init(ctx: Ctx) {
     Ui.say(text)
     if (!Ui.confirm("Write this to ${p.rel(file)}?")) throw Cancelled
     file.writeText(text + "\n")
-    Ui.say("Created ${file.name}. Every key is optional; see docs/commands.md for the rest (logcat.tags, commands, ...).", Tone.OK)
+    Ui.say("Created ${file.name}. Every key is optional; see https://kotlin-artisan.netlify.app/getting-started/configuration for the rest (logcat.tags, commands, ...).", Tone.OK)
 }
 
 private fun buildRelease(ctx: Ctx) {

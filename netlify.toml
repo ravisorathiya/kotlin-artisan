@@ -1,0 +1,10 @@
+# The docs site in website/ (Nuxt + Docus), served at https://kotlin-artisan.netlify.app
+[build]
+  base = "website"
+  command = "npm ci && npm run generate"
+  publish = ".output/public"
+  # Skip the build when nothing under website/ (or the version in build.gradle.kts) changed
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ../build.gradle.kts"
+
+[build.environment]
+  NODE_VERSION = "22"

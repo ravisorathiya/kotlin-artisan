@@ -7,3 +7,7 @@ local.properties
 predictor/bin/
 predictor/obj/
 .DS_Store
+website/node_modules/
+website/.nuxt/
+website/.output/
+website/.data/

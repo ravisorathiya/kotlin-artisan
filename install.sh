@@ -8,7 +8,7 @@ repo="ravisorathiya/kotlin-artisan"
 dest="$HOME/.kotlin-artisan"
 links="$HOME/.local/bin"
 
-guide="https://github.com/$repo/blob/main/docs/setup.md"
+guide="https://kotlin-artisan.netlify.app/getting-started/setup"
 case "$(uname -s)" in
   Darwin) java_fix="brew install --cask temurin@21   (or: export JAVA_HOME=\"/Applications/Android Studio.app/Contents/jbr/Contents/Home\")"
           adb_fix="brew install android-platform-tools   (or add ~/Library/Android/sdk/platform-tools to PATH)" ;;
