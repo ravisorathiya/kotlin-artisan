@@ -43,7 +43,7 @@ internal fun adbMissingHint(): String {
         Os.isWindows -> "run artisan setup, or: winget install Google.PlatformTools"
         Os.isMac -> "run artisan setup, or: brew install android-platform-tools"
         else -> "install it: sudo apt install adb"
-    } + " (guide: docs/setup.md)"
+    } + " (guide: https://kotlin-artisan.netlify.app/getting-started/setup)"
 }
 
 /** Fails clearly when adb is missing or no phone is connected; prints the device serial. */

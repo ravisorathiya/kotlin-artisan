@@ -1,0 +1,26 @@
+/* Docus already imports Tailwind CSS v4 and Nuxt UI before this file; only add to them here. */
+@source "./components";
+@source "./pages";
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* The terminal look of artisan's own output (see .github/assets/*.svg) */
+  --color-term-bg: #0b1220;
+  --color-term-border: #1e293b;
+  --color-term-text: #e2e8f0;
+  --color-term-dim: #64748b;
+}
+
+@utility term-glow {
+  box-shadow: 0 0 0 1px var(--color-term-border), 0 30px 80px -20px color-mix(in oklab, var(--color-emerald-500) 35%, transparent);
+}
+
+@keyframes caret {
+  50% { opacity: 0; }
+}
+
+@utility caret {
+  animation: caret 1s step-end infinite;
+}

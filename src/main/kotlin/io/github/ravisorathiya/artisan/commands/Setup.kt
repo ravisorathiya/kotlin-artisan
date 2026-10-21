@@ -94,6 +94,6 @@ private fun powershell(script: String, value: String, done: String): Boolean {
 private fun install(cmd: List<String>): Boolean {
     Ui.say("> ${cmd.joinToString(" ")}", Tone.DIM)
     val code = Proc.stream(cmd)
-    if (code != 0) Ui.say("${cmd.first()} failed (exit $code). Guide: docs/setup.md", Tone.BAD)
+    if (code != 0) Ui.say("${cmd.first()} failed (exit $code). Guide: https://kotlin-artisan.netlify.app/getting-started/setup", Tone.BAD)
     return code == 0
 }
