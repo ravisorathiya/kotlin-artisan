@@ -7,6 +7,20 @@
 
 It is written by AI agents for AI agents. It doesn't need to be polished, but it does need to be accurate, concise, and useful to an agent reading it cold.
 
+> ### This folder is also a website. [Open it](http://127.0.0.1:5173/)
+>
+> `artisan ai:site` serves this folder on this machine only and opens the browser. Nothing to install: one page
+> (`index.html` + `site/`), Tailwind and Alpine.js from a CDN.
+>
+> - **For everyone:** [Home](http://127.0.0.1:5173/#/) · [Releases](http://127.0.0.1:5173/#/releases) ·
+>   [Coming soon](http://127.0.0.1:5173/#/soon) · [Suggest a feature / report a bug](http://127.0.0.1:5173/#/request)
+> - **Dev:** [Dashboard](http://127.0.0.1:5173/#/dev) · [Workflow](http://127.0.0.1:5173/#/dev/workflow) ·
+>   [Plans](http://127.0.0.1:5173/#/dev/plans) · [Requests inbox](http://127.0.0.1:5173/#/dev/requests) ·
+>   [Work reports](http://127.0.0.1:5173/#/dev/reports) · [Analytics events](http://127.0.0.1:5173/#/dev/events)
+>
+> Edit any note and the open page follows within a couple of seconds. The site is a view of these files, never the
+> source of truth.
+
 ---
 
 ## Purpose — track here
@@ -52,6 +66,12 @@ Other categories (`migration/`, `investigations/`, `release-checks/`, ...) may b
 - **`assets/`** — visual/reference material (screenshots, mockups) for tasks. Flat, named `img.png`, `img_1.png`, ... Reference the asset from the task item with a path relative to the Markdown file (from `workflow/v_x/phase_N.md` that's `../../assets/img_N.png`). Don't duplicate normal Android resources here. Split into subfolders only if it stops scaling.
 - **`plan/`** — plans and re-apply bundles. A plan is one file, `plan/<name>.md` (`artisan make:plan <name>`): goal, context, steps, verification, notes for the next agent. Re-apply bundles (`artisan make:bundle <feature> --since <tag>`): everything needed to port a shipped feature into a new zip/copy of this project without re-designing it. `MASTER_OVERVIEW.md` is the entry point (feature index, apply order, which snapshot wins). Each feature gets `plan/<feature>/`: `overview.md` (self-contained guide: new files, modified files with their per-section changes, preconditions, device checklist), `reference/` (final source of every new/modified file with a `.txt` suffix so it never compiles) and optionally `apply_bundle.ps1` (dry run by default). Update the bundle when the feature changes; never put secrets in snapshots.
 - **`event/`** — analytics/event instrumentation tracking: `event.md` lists every active `firebaseEvent` call, one table per screen (event name, fired from, when). Its top part explains how `firebaseEvent` and the event box are wired, the naming rules, and sample sections (`## Example: ...`) to copy. Must stay in exact sync with the code — see [Analytics event sync](#analytics-event-sync--critical) below.
+
+- **`requests/`** — feature requests and bug reports sent from the site's Request page, one `.md` per submission. Triage them by [requests/README.md](requests/README.md): ask before deciding, change the front-matter only, never delete.
+- **`reports/`** — daily work reports written from the site (`reports/<YYYY-MM-DD>.md`, `reports/final/<date>.md`); see [reports/README.md](reports/README.md).
+- **`app.json`** — what the site's home page and forms show: app name, tagline, `areas` (used to tag requests and work), `features` (groups of what the app offers). Keep `features` in plain user language.
+- **`workflow/<version>/release.json`** — the version's public, plain-English release notes (phases, `changes`, `bugs` with `fixed` / `verify` / `open`), shown on the site's Releases and Coming soon pages. Update it when a phase's user-visible work changes; copy the previous version's shape for a new one.
+- **`index.html` + `site/`** — the site itself (`artisan ai:site`). Not notes: don't put task content there. Its brand colour is `window.BRAND` at the top of `index.html`.
 
 The `artisan` CLI (kotlin-artisan) works on this folder: `artisan status`, `artisan make:plan`, `artisan list:plans`, `artisan make:phase`, `artisan make:bug`, `artisan make:version`, `artisan list:verify`, `artisan check:links`, `artisan app:shot`.
 

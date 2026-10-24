@@ -6,31 +6,34 @@ import io.github.ravisorathiya.artisan.core.Registry
 import io.github.ravisorathiya.artisan.core.Row
 import io.github.ravisorathiya.artisan.core.Tone
 import io.github.ravisorathiya.artisan.core.Ui
+import io.github.ravisorathiya.artisan.project.Notes
 import io.github.ravisorathiya.artisan.project.Project
 import java.io.File
 
 fun registerAi() {
-    Registry.add("make:ai", "make:ai [x.y] [stage]", "Add the :ai agent-workspace module (README, workflow, events, plans, assets)") { makeAi(it) }
+    Registry.add("make:ai", "make:ai [x.y] [stage]", "Add the :ai agent-workspace module (README, workflow, events, plans, assets, site)") { makeAi(it) }
+    registerAiSite()
 }
 
 private fun makeAi(ctx: Ctx) {
     val p = ctx.project
     val module = File(p.root, "ai")
-    if (module.exists()) throw CliError("${p.rel(module)}/ already exists.")
-    if (p.modules.any { it.name == ":ai" }) throw CliError(":ai is already included in ${p.settingsFile.name}.")
+    if (module.exists() || p.modules.any { it.name == ":ai" }) return addSiteOnly(p, module)
 
     val suggest = (p.versionName?.let { Regex("""^(\d+)\.(\d+)""").find(it)?.value } ?: "1.0") + " alpha"
     val ver = ctx.args.joinToString(" ").ifEmpty { Ui.ask("Version folder", suggest) }
     val version = versionFolderName(ver) ?: throw CliError("Version must look like 1.2 or 1.2 alpha (got '$ver').")
 
     val events = firebaseEvents(p)
-    val files = scaffoldAi(p, version, events)
+    val site = askSite(p)
+    val files = scaffoldAi(p, version, events, site)
 
     Ui.table("Created", listOf("File"), files.map { Row(p.rel(it)) })
     Ui.say("  ${p.settingsFile.name}: added the :ai include", Tone.OK)
     if (events != null) Ui.say("  event.md: ${events.values.sumOf { it.size }} firebaseEvent name(s) from ${events.size} file(s), descriptions to fill in", Tone.DIM)
     else Ui.say("  event.md: no firebaseEvent calls found, an empty table is ready for the first one", Tone.DIM)
     Ui.say("  plan/: artisan make:plan <name> for a plan file, artisan make:bundle <feature> --since <tag> for a re-apply bundle", Tone.DIM)
+    Ui.say("  Site: artisan ai:site opens it at http://127.0.0.1:$SITE_PORT/ (${site.name}, colour ${site.primary}, ${site.areas.size} areas)", Tone.DIM)
     val notes = Project.find(p.root)?.notes
     if (notes != null && p.rel(notes.dir) != Project.AI_WORKSPACE) {
         Ui.say("  artisan still uses ${p.rel(notes.dir)} for notes. To switch: \"notes\": {\"dir\": \"${Project.AI_WORKSPACE}\"} in artisan.json", Tone.WARN)
@@ -43,8 +46,24 @@ private fun makeAi(ctx: Ctx) {
     }
 }
 
+/**
+ * make:ai on a project that already has `ai/`: adds the workspace site when it's missing (the questions, then
+ * index.html, site/, app.json, requests/, reports/); otherwise there's nothing to do.
+ */
+private fun addSiteOnly(p: Project, module: File) {
+    val ws = p.notes?.dir?.takeIf { it.absoluteFile.normalize().startsWith(module.absoluteFile.normalize()) } ?: File(p.root, Project.AI_WORKSPACE)
+    if (!ws.isDirectory) throw CliError("${p.rel(module)}/ already exists but has no workspace at ${p.rel(ws)}.")
+    if (File(ws, "site/app.js").isFile) throw CliError("${p.rel(module)}/ already exists, site included. Open it: artisan ai:site")
+    if (File(ws, "index.html").isFile) throw CliError("${p.rel(ws)}/index.html already exists (another site?). Move it aside to add the artisan site.")
+    Ui.say("${p.rel(module)}/ already exists: adding the workspace site to it.", Tone.INFO)
+    val latest = Notes(ws).versionFolders().lastOrNull()?.name
+    val files = scaffoldSite(p, latest, askSite(p), ws)
+    Ui.table("Created", listOf("File"), files.map { Row(p.rel(it)) })
+    Ui.say("  Open it: artisan ai:site (http://127.0.0.1:$SITE_PORT/)", Tone.OK)
+}
+
 /** Writes the :ai module and its include. Returns the files created (settings file not included). */
-internal fun scaffoldAi(p: Project, version: String, events: Map<String, List<String>>?): List<File> {
+internal fun scaffoldAi(p: Project, version: String, events: Map<String, List<String>>?, site: SiteAnswers = siteDefaults(p)): List<File> {
     val created = mutableListOf<File>()
     fun write(path: String, text: String) = File(p.root, path).also { it.parentFile.mkdirs(); it.writeText(text, Charsets.UTF_8); created += it }
 
@@ -59,6 +78,7 @@ internal fun scaffoldAi(p: Project, version: String, events: Map<String, List<St
     write("$ws/plan/MASTER_OVERVIEW.md", planIndexDoc(p))
     write("$ws/workflow/$version/overview.md", aiOverview(p, version))
     write("$ws/workflow/$version/phase_1.md", phaseSkeleton(version, 1))
+    created += scaffoldSite(p, version, site, File(p.root, ws))
 
     p.settingsFile.writeText(addInclude(p.settingsFile.readText(), kts))
     return created
@@ -258,14 +278,18 @@ internal fun aiReadme(p: Project, version: String): String {
     val tree = buildList {
         add("ai/src/main/java/ai/")
         add("├── README.md                 (this file)")
+        add("├── index.html + site/        (the workspace as a site: artisan ai:site)")
+        add("├── app.json                  (app name, tagline, areas, feature groups for the site)")
         add("├── assets/                   (img.png, img_1.png, ... reference screenshots)")
         add("├── event/")
         add("│   └── event.md              (every active firebaseEvent, one table per screen)")
         add("├── plan/")
         add("│   ├── MASTER_OVERVIEW.md    (feature index + apply order: start here)")
         add("│   └── <feature>/            (overview.md, reference/*.txt, apply_bundle.ps1)")
+        add("├── requests/                 (feature requests / bug reports sent from the site)")
+        add("├── reports/                  (daily work reports written from the site)")
         add("└── workflow/")
-        add("    └── ${"$version/".padEnd(22)}(overview.md, phase_1.md)")
+        add("    └── ${"$version/".padEnd(22)}(overview.md, phase_1.md, release.json)")
     }.joinToString("\n")
     val template = object {}.javaClass.getResource("/templates/ai/README.md")?.readText()?.replace("\r\n", "\n")
         ?: throw CliError("README template missing from the artisan install.")
