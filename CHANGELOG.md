@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0: the :ai workspace as a site
 
 - `make:ai` now adds a site to the workspace: one `index.html` (Tailwind + Alpine.js from a CDN, no build step)
   with a public view (home, releases, coming soon, request form) and a dev view (dashboard, workflow, plans,
