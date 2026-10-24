@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- `make:ai` now adds a site to the workspace: one `index.html` (Tailwind + Alpine.js from a CDN, no build step)
+  with a public view (home, releases, coming soon, request form) and a dev view (dashboard, workflow, plans,
+  events, assets, requests inbox, work reports). It asks four plain questions first (app name, one line about the
+  app, main colour as a word or a hex, main parts of the app), each pre-filled from the project. On a project that
+  already has `ai/`, it adds only the site.
+- `ai:site [--port 5173] [--no-open]`: serves the workspace on 127.0.0.1 and opens it. Edits to the notes show up
+  live; the request form and work reports save plain `.md` files.
+
 ## 0.7.0: the daily Android loop
 
 **Generators**
