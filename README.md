@@ -72,7 +72,7 @@ artisan self:update        # downloads and installs the latest release (asks fir
 ```
 
 artisan also checks GitHub at most once a day in the background. When a newer release exists, it prints one line
-after your command: `kotlin-artisan 0.3.0 is available (you have 0.2.0). Update: artisan self:update`. The check
+after your command: `kotlin-artisan 0.9.0 is available (you have 0.8.0). Update: artisan self:update`. The check
 never slows a command by more than ~1.5 s, stays quiet when you're offline, and is off on CI. Turn it off with
 `ARTISAN_NO_UPDATE_CHECK=1`.
 
@@ -184,12 +184,18 @@ and `check:assets` keep it tidy. It's plain markdown, so it works for a team, or
 coding agents.
 
 For AI agents specifically, `artisan make:ai` adds an `:ai` Gradle module with the same workspace in
-`ai/src/main/java/ai/` (visible in Android Studio, never shipped): an agent README with the working rules,
-`workflow/v_1_0_alpha/`, `assets/`, `event/event.md` pre-filled from the app's `firebaseEvent(...)` calls, and
-`plan/` for plans (`make:plan <name>`: one `.md` file) and re-apply bundles (`make:bundle <feature> --since <tag>`
-snapshots what changed into `plan/<feature>/` and lists it in `plan/MASTER_OVERVIEW.md`), so a shipped feature can
-be ported into a new copy of the project without re-designing it.
-The notes commands find it without any config.
+`ai/src/main/java/ai/` (visible in Android Studio, never shipped). It's plain markdown, grouped by folder:
+
+| Where | What goes there |
+|---|---|
+| `README.md` | The agent rules: a quick map, a start-here checklist, one section per folder, how to write notes, analytics sync |
+| `workflow/v_1_0_alpha/` | Bug lists and feedback rounds, one `phase_N.md` each, plus `overview.md` |
+| `plan/` | Plans (`make:plan <name>`: one `.md` file) and re-apply bundles (`make:bundle <feature> --since <tag>`), indexed in `plan/MASTER_OVERVIEW.md` |
+| `event/event.md` | Every `firebaseEvent(...)` call, pre-filled from the app, one table per screen |
+| `assets/` | Screenshots and recordings |
+
+A re-apply bundle snapshots what changed into `plan/<feature>/`, so a shipped feature can be ported into a new copy
+of the project without re-designing it. The notes commands find the workspace without any config.
 
 ## Contributing
 
