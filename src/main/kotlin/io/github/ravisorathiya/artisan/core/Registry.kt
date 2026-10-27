@@ -61,7 +61,7 @@ class Ctx(args: List<String>, val cwd: File = File(System.getProperty("user.dir"
         val FLAGS = setOf("-y", "--yes", "-v", "-md", "--plain", "--table")
 
         /** Options that take the next word as their value. */
-        val VALUE_OPTIONS = setOf("--module", "--package", "--since", "--screen", "--from", "--port")
+        val VALUE_OPTIONS = setOf("--module", "--package", "--since", "--screen", "--from")
     }
 }
 

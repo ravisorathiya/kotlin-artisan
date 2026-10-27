@@ -1,135 +1,106 @@
 <!-- artisan:ignore (example paths below are not real links) -->
 # `:ai` — AI Agent Workspace
 
-> **Agent-only workspace. Not application code. Not product documentation. Never ship this module with the app.**
+> **Agent-only workspace. Not application code, not product docs. Never ship this module with the app.**
 
-`:ai` is persistent, repo-local working memory for AI coding agents: implementation context, bug/feature progress, investigation findings, screenshots, migration state, verification status, and handoff notes — so a task started by one agent/model can be picked up cold by another without repeating the investigation.
-
-It is written by AI agents for AI agents. It doesn't need to be polished, but it does need to be accurate, concise, and useful to an agent reading it cold.
-
-> ### This folder is also a website. [Open it](http://127.0.0.1:5173/)
->
-> `artisan ai:site` serves this folder on this machine only and opens the browser. Nothing to install: one page
-> (`index.html` + `site/`), Tailwind and Alpine.js from a CDN.
->
-> - **For everyone:** [Home](http://127.0.0.1:5173/#/) · [Releases](http://127.0.0.1:5173/#/releases) ·
->   [Coming soon](http://127.0.0.1:5173/#/soon) · [Suggest a feature / report a bug](http://127.0.0.1:5173/#/request)
-> - **Dev:** [Dashboard](http://127.0.0.1:5173/#/dev) · [Workflow](http://127.0.0.1:5173/#/dev/workflow) ·
->   [Plans](http://127.0.0.1:5173/#/dev/plans) · [Requests inbox](http://127.0.0.1:5173/#/dev/requests) ·
->   [Work reports](http://127.0.0.1:5173/#/dev/reports) · [Analytics events](http://127.0.0.1:5173/#/dev/events)
->
-> Edit any note and the open page follows within a couple of seconds. The site is a view of these files, never the
-> source of truth.
+Repo-local working memory for AI coding agents: what's being worked on, what changed and why, what's left, and what
+still needs a human or a device — so the next agent (or model) can pick a task up cold without repeating the work.
+Written by agents for agents: it doesn't need polish, but it must be accurate, short and useful.
 
 ---
 
-## Purpose — track here
+## Quick map
 
-Bug fixes and status · feature/migration progress · investigation findings and repro steps · screenshots/mockups · relevant files/classes/functions · implementation decisions · known limitations and regression risks · device-verification requirements · pending human decisions · notes for the next agent.
-
----
-
-## Isolation from production
-
-`:ai` is registered as a Gradle `java-library` module only so it's visible/organized in Android Studio's project view. That registration does **not** make it part of the app.
-
-**Hard rule: no production module may depend on `:ai`.** Never add `implementation(project(":ai"))` (or equivalent) from {{PROD_LIST}}, or any other production module:
-
-```text
-{{GRAPH}}
-```
-
-Nothing here may ship as app code, resources, assets, dependencies, APK/AAB content, runtime config, or production API integration. Never store production Kotlin/Java code, Activities/Fragments/ViewModels, Compose UI, XML resources, repositories, services, API clients, or credentials/keystores/private user data here — implement real functionality in the appropriate production module instead.
-
-If the app later gets a real AI feature, that's production code in a real module (`:ai-core`, `:ai-provider`, `:feature-ai`, ...) — `:ai` stays an agent workspace and should never gradually turn into that. If any proposed change would make `:ai` a runtime dependency, **stop and ask the developer**.
-
-Repo-level `AGENTS.md`/`CLAUDE.md` tell an agent *how* to work here; `:ai` records *what's* being worked on, done, and remaining. On conflict, repo-level instructions win.
+| Where | What goes there | artisan |
+|---|---|---|
+| [`workflow/<version>/`](#workflow) | Bug lists, feature requests, crash fixes, QA/manager feedback — one folder per release | `make:version`, `make:phase`, `make:bug`, `list:verify`, `status` |
+| [`plan/`](#plan) | One file per plan; re-apply bundles for porting a shipped feature | `make:plan`, `list:plans`, `make:bundle` |
+| [`event/event.md`](#event) | Every active `firebaseEvent`, one table per screen | `make:event`, `check:events` |
+| [`assets/`](#assets) | Screenshots, mockups, screen recordings | `app:shot`, `app:record`, `make:bug --shot` |
+| `README.md` | These rules | `check:links` |
 
 ---
 
-## Structure
+## Start here
 
-The tree below is an example, not fixed — **the current repository tree is the source of truth.** Don't force new work into an outdated structure just because this README shows it.
+Before changing production code:
+
+1. Read the repo's `AGENTS.md` / `CLAUDE.md`, then this README.
+2. Look at the current `:ai` tree (it may differ from the example below).
+3. Open the newest `workflow/v_*` folder: its `overview.md`, then the relevant `phase_N.md`. Read the whole task entry.
+4. Open any screenshots it references, then the actual production code, earlier notes and pending verification.
+5. Only then change code. Search for an existing implementation, utility or earlier fix first — extend, don't duplicate.
+
+**Source of truth, in order:** (1) the developer's current instruction, (2) repo `AGENTS.md`/`CLAUDE.md`,
+(3) the production source code, (4) the current task/checklist, (5) older agent notes, (6) examples in this README.
+Old notes go stale: never change working code just to match one. Repo-level instructions say *how* to work; `:ai`
+records *what* is being worked on. On conflict, repo-level instructions win.
+
+---
+
+## Folders
+
+The tree is an example — **the repository is the source of truth**:
 
 ```text
 {{TREE}}
 ```
 
-Other categories (`migration/`, `investigations/`, `release-checks/`, ...) may be added when needed — don't create them preemptively just because they're mentioned here. Before adding anything: inspect the current tree, find the closest existing location, and create a new category only when nothing existing fits. The developer may rename/move/add/remove directories at any time.
+Add a new category (`migration/`, `investigations/`, `release-checks/`, ...) only when nothing existing fits; don't
+create folders ahead of time. The developer may rename, move, add or remove folders at any time.
 
-### Directory conventions
+### workflow
 
-- **`workflow/`** — all task tracking (bug lists, feature requests, crash fixes, manager/QA feedback), one folder per release: `v_<major>_<minor>_<stage>/` (e.g. `{{VERSION_DIR}}`). **Work for the current release goes in the newest version folder** — don't add new items to an older release's files.
-  - **`phase_N.md`** — one file per bug list / feedback round, in the order it was received. Each starts with a header naming its source (e.g. `Bug List 2`, `Bug List 3 ~ From Manager`) followed by the checklist. A new list from the developer/manager/QA → a new `phase_N+1.md`; follow-ups on an existing item → update that item in place rather than duplicating it.
-  - **`overview.md`** — release summary: the phase table (phase / file / summary / status), grouped highlights of what changed and why, and what's still open. Update it when items in that release's phases change status. It may also hold a release-level list (e.g. the release's feature/crash-fix list with its Crashlytics link) — if so, track those items there.
-  - Keep the original wording of an item as given (it may be in another language, e.g. manager feedback); add your notes after it (` — root cause / change / VERIFY ON DEVICE`), not in place of it.
-- **`assets/`** — visual/reference material (screenshots, mockups) for tasks. Flat, named `img.png`, `img_1.png`, ... Reference the asset from the task item with a path relative to the Markdown file (from `workflow/v_x/phase_N.md` that's `../../assets/img_N.png`). Don't duplicate normal Android resources here. Split into subfolders only if it stops scaling.
-- **`plan/`** — plans and re-apply bundles. A plan is one file, `plan/<name>.md` (`artisan make:plan <name>`): goal, context, steps, verification, notes for the next agent. Re-apply bundles (`artisan make:bundle <feature> --since <tag>`): everything needed to port a shipped feature into a new zip/copy of this project without re-designing it. `MASTER_OVERVIEW.md` is the entry point (feature index, apply order, which snapshot wins). Each feature gets `plan/<feature>/`: `overview.md` (self-contained guide: new files, modified files with their per-section changes, preconditions, device checklist), `reference/` (final source of every new/modified file with a `.txt` suffix so it never compiles) and optionally `apply_bundle.ps1` (dry run by default). Update the bundle when the feature changes; never put secrets in snapshots.
-- **`event/`** — analytics/event instrumentation tracking: `event.md` lists every active `firebaseEvent` call, one table per screen (event name, fired from, when). Its top part explains how `firebaseEvent` and the event box are wired, the naming rules, and sample sections (`## Example: ...`) to copy. Must stay in exact sync with the code — see [Analytics event sync](#analytics-event-sync--critical) below.
+**What goes here:** all task tracking, one folder per release, `v_<major>_<minor>_<stage>/` (e.g. `{{VERSION_DIR}}`).
+**Work for the current release goes in the newest version folder** — never add items to an older release.
 
-- **`requests/`** — feature requests and bug reports sent from the site's Request page, one `.md` per submission. Triage them by [requests/README.md](requests/README.md): ask before deciding, change the front-matter only, never delete.
-- **`reports/`** — daily work reports written from the site (`reports/<YYYY-MM-DD>.md`, `reports/final/<date>.md`); see [reports/README.md](reports/README.md).
-- **`app.json`** — what the site's home page and forms show: app name, tagline, `areas` (used to tag requests and work), `features` (groups of what the app offers). Keep `features` in plain user language.
-- **`workflow/<version>/release.json`** — the version's public, plain-English release notes (phases, `changes`, `bugs` with `fixed` / `verify` / `open`), shown on the site's Releases and Coming soon pages. Update it when a phase's user-visible work changes; copy the previous version's shape for a new one.
-- **`index.html` + `site/`** — the site itself (`artisan ai:site`). Not notes: don't put task content there. Its brand colour is `window.BRAND` at the top of `index.html`.
+- **`phase_N.md`** — one file per bug list / feedback round, in the order received. Starts with a header naming its
+  source (`Bug List 2`, `Bug List 3 ~ From Manager`), then the checklist.
+  - New list from the developer/manager/QA → new `phase_N+1.md`.
+  - Follow-up on an existing item → update that item in place; don't duplicate it.
+- **`overview.md`** — the release summary: phase table (phase / file / summary / status), highlights of what changed
+  and why, and what's still open. Update it when items change status. If it holds a release-level list (e.g. the
+  crash-fix list with its Crashlytics link), track those items there.
+- Keep an item's original wording (it may be in another language); add your notes after it
+  (` — root cause / change / VERIFY ON DEVICE`), never in place of it.
 
-The `artisan` CLI (kotlin-artisan) works on this folder: `artisan status`, `artisan make:plan`, `artisan list:plans`, `artisan make:phase`, `artisan make:bug`, `artisan make:version`, `artisan list:verify`, `artisan check:links`, `artisan app:shot`.
+### plan
 
----
+**What goes here:** plans and re-apply bundles.
 
-## Analytics event sync — CRITICAL
+- **Plan** — one file, `plan/<name>.md` (`artisan make:plan <name>`): goal, context, steps, verification, notes for
+  the next agent.
+- **Re-apply bundle** — `artisan make:bundle <feature> --since <tag>`: everything needed to port a shipped feature into
+  a new copy of this project without re-designing it. Each one is `plan/<feature>/`:
+  - `overview.md` — self-contained guide: new files, modified files and their changes, preconditions, device checklist.
+  - `reference/` — final source of every new/modified file, with a `.txt` suffix so it never compiles.
+  - `apply_bundle.ps1` (optional) — dry run by default.
+- **`MASTER_OVERVIEW.md`** — the entry point for bundles: feature index, apply order, which snapshot wins.
+- Update a bundle when its feature changes. Never put secrets in snapshots.
 
-`event/event.md` is the analytics team's reference for what the app sends to Firebase. If it drifts from the code, dashboards and funnels get built on events that don't exist or miss events that do. **Keeping it in sync is mandatory, not optional cleanup — it is part of the same change as the code edit.**
+### event
 
-Whenever you touch a `firebaseEvent(...)` call in production code, update `event.md` **in the same task**:
+**What goes here:** `event.md` — every active `firebaseEvent` call, one table per screen (event name, fired from,
+when). Its top part explains the wiring, the event box, the naming rules and `## Example: ...` sections to copy.
+It must match the code exactly — see [Analytics event sync](#analytics-event-sync--critical).
 
-- **Added** an event → add a row under that screen's table (create the `## <Screen>` section if it doesn't exist).
-- **Removed** an event (deleted or commented out) → delete its row. Commented-out calls are not active and must not be listed.
-- **Renamed** an event → update the name in its row.
-- **Split / merged** an event (e.g. `X_Toggle` → `X_Toggle_ON` / `X_Toggle_OFF`) → replace the old row with the new ones.
-- **Changed parameters or trigger** (added/removed a `Bundle` key, new `source` value, moved to a different branch) → update the description.
-- **Moved** an event to another screen/class → move its row to that screen's table.
+### assets
 
-Naming (event.md's "How to name an event" has the full table and samples):
+**What goes here:** screenshots, mockups and recordings for tasks. Not normal Android resources.
 
-- **`snake_case`, under 30 characters, `<screen>_<thing>_<action>`**: `splash_on_create`, `permi_phone_deny_1st`, `setting_theme_dialog_show`, `setting_nat_loaded`. One prefix per screen, reused by all its events — check that screen's section before inventing a new one.
-- Actions come from a small set: lifecycle `on_create` / `on_resume` / `on_backpress`, taps `click`, dialogs `dialog_show` / `dialog_dismiss` / `dialog_ok_click`, permissions `ask` / `grant` / `deny_1st` / `deny_2nd` / `back`, ads `loading` / `loaded` / `failed` / `show` / `click`.
-- Too long: shorten the words (`act`, `frag`, `dlg`, `perm`, `noti`, `btn`), never the action. If the file already uses another style throughout (older apps), follow the file — and never rename a shipped event just for style: Firebase treats the new name as a new event.
-- `artisan make:event <Screen> <event_name> "<when>"` checks all of this and writes the row; `artisan check:events` compares code and file.
-
-Row rules:
-
-- Each screen section: `## ClassName`, the file path in backticks, then a table: **Event name** (backticks) · **Fired from** (method / view / callback) · **When**. Keep the column padding the section already uses:
-  ```markdown
-  | Event name           | Fired from   | When                        |
-  |----------------------|--------------|-----------------------------|
-  | `splash_on_create`   | `onCreate()` | Splash screen created       |
-  ```
-- Describe *when* the event fires in user/app terms, and name every `Bundle` parameter and its possible values. Say explicitly when personal data (numbers, names, message text, URIs) is **not** logged.
-- One row per event name per screen — no duplicates.
-- Don't document events that use `logging()` instead of `firebaseEvent()` (ad-load plumbing, error logs).
-
-Wiring: every event goes through the app's `firebaseEvent(...)` (event.md says where it's defined; `artisan make:analytics` adds it to an app that has none). To watch events while testing, turn on the event box (`ENABLE_EVENT_BOX = true` + `EventLogBox.init(this)` in `Application.onCreate()`) or run `artisan app:logcat GlobalFirebaseEventNameTag`. **The event box must be off (`false`) in any release build** — say so in your notes if you turned it on.
-
-Before finishing any task that touched analytics, grep the changed files for `firebaseEvent(` and diff the event names against that screen's section in `event.md` — both directions (in code but not in the doc, and in the doc but not in code). Note: some calls span multiple lines (`firebaseEvent(\n "Name", ...)`) and some choose the name with `if/else`; a single-line grep misses them, so search for the event names too. When a task touches events on a screen, also report any pre-existing mismatches you notice on that screen.
+- Flat, named `img.png`, `img_1.png`, ... Split into subfolders only when it stops scaling.
+- Link from the task with a path relative to the Markdown file: from `workflow/v_x/phase_N.md` that's
+  `../../assets/img_N.png`.
 
 ---
 
-## Agent workflow
+## Writing notes
 
-Before modifying production code: read root `AGENTS.md`/`CLAUDE.md` → read this README → inspect the current `:ai` tree → open the newest `workflow/v_*` folder (its `overview.md`, then the relevant `phase_N.md`) and fully read the relevant task entry → inspect any referenced screenshots/mockups → inspect the actual production code → check previous implementation notes and pending verification → only then start changing code.
+**Checklist states:** `[ ]` not done · `[~]` in progress · `[x]` done · `[-]` blocked / needs a human.
+`[ x ]` and `[]` also work — within one file, match the style it already uses.
 
-**Source of truth, in order:** (1) the developer's current explicit instruction, (2) repo-level `AGENTS.md`/`CLAUDE.md`, (3) current production source code, (4) the current task/checklist, (5) historical notes from previous agents, (6) examples in this README. Old AI notes go stale — never modify working production code just to match an outdated note, and don't blindly trust old notes over the current codebase.
-
-Before building something new, search for an existing implementation, component, utility, prior fix, or tracking entry — prefer extending existing patterns over duplicating systems.
-
----
-
-## Tracking conventions
-
-**Checklist states:** `[ ]` not done · `[~]` in progress · `[x]` done · `[-]` blocked / needs human input. `[ x ]` also means done and `[]` not done — within one file, match the style it already uses.
-
-**Verification tags** (for things an AI agent can't fully verify itself): `VERIFY ON DEVICE`, `TEST OEM DEVICE`, `ASK DEV` — add project-specific ones (e.g. `TEST WITHOUT SIM`) when needed.
+**Verification tags**, for what an agent can't check itself: `VERIFY ON DEVICE`, `TEST OEM DEVICE`, `ASK DEV`.
+Add project-specific ones (e.g. `TEST WITHOUT SIM`) when needed.
 
 ```markdown
 - [~] Fix the download progress notification
@@ -137,13 +108,13 @@ Before building something new, search for an existing implementation, component,
   - VERIFY ON DEVICE — test when leaving the screen during a download.
 ```
 
-Don't mark a task `[x]` just because it compiles — compilation, unit tests, and static inspection are not device/runtime verification. Never claim "tested on device" / "verified on Samsung" etc. unless it actually happened; leave the task marked appropriately and say what's still untested otherwise.
+- **Compiling is not done.** Builds, unit tests and reading code are not device verification. Never write "tested on
+  device" unless it happened; leave the item open and say what's untested.
+- **Say what changed and why** ("Popup now opens only from the button, not from route updates"), not just "Fixed".
+  Record root cause, key decisions, files changed, preserved behaviour, limitations and pending checks — not a log of
+  every command you ran.
 
-**Good notes explain what changed and why** ("Removed automatic popup trigger from route updates; popup now opens only from explicit button interaction"), not just "Fixed." Record root cause, key decisions, files changed, preserved behavior, known limitations, and pending verification/dev decisions — not a transcript of actions taken ("opened file, read function, ran command...").
-
-### Task format
-
-For non-trivial tasks, leave enough for a new agent to continue cold:
+**Task format** — for non-trivial tasks, enough for a new agent to continue cold:
 
 ```markdown
 ## TASK-018 — Search results flicker
@@ -168,22 +139,113 @@ VERIFY ON DEVICE — fast typing, slow network, rotation while searching.
 Existing repository caching; paging setup.
 ```
 
-Small bugs don't need the full format — use enough detail that the next agent doesn't have to repeat the investigation.
+Small bugs don't need the full format — just enough that the next agent doesn't repeat the investigation.
 
 ---
 
-## Working rules
+## Analytics event sync — CRITICAL
 
-- **Smallest sensible change.** Preserve existing architecture and behavior unless the task requires otherwise; don't rename/reorganize unrelated code, add a new dependency without a clear need, or replace working code just because another approach looks cleaner. If a larger refactor is genuinely necessary, explain why in the tracking file.
-- **Don't invent ambiguous product behavior.** If it can't be safely determined from code, tracking notes, screenshots, repo instructions, or established app behavior, record the uncertainty and tag `ASK DEV`.
-- **A screenshot defines appearance, not business logic** — inspect the existing implementation, reuse existing resources, match the design without rewriting unrelated UI, and record any behavior that can't be determined from the image. Don't invent hidden interactions from visuals alone.
-- **Stop and ask the developer** when: a task is already `[-]` or tagged `ASK DEV`; required behavior is genuinely ambiguous; a change would alter major architecture without clear justification; a migration is destructive; an API/model/provider must be chosen; credentials or a secret-storage strategy are needed; a production dependency on `:ai` would be required; instructions conflict; or real-device behavior can't be safely inferred but the implementation depends on it. Don't guess just to complete a checklist.
-- **Every `firebaseEvent` change ships with its `event/event.md` update** — added, removed, renamed, or changed events are synced in the same task. See [Analytics event sync](#analytics-event-sync--critical).
-- **Never store secrets here** — no API keys, tokens, passwords, keystores, private keys, signing passwords, or service-account/production credentials in any file or asset under `:ai`. Ask the developer how credentials should be provided instead.
-- **Before ending work on an incomplete task**, record: current status, what was discovered, what changed, what remains, important files/symbols, why it's incomplete, and what needs human/device verification — so the next agent doesn't repeat the investigation.
+`event/event.md` is the analytics team's reference for what the app sends to Firebase. If it drifts from the code,
+dashboards get built on events that don't exist. **Updating it is part of the same change as the code edit.**
+
+### When the code changes
+
+| You… | Then in `event.md` |
+|---|---|
+| Added an event | Add a row under that screen (create the `## <Screen>` section if needed) |
+| Removed or commented out an event | Delete its row — commented-out calls are not listed |
+| Renamed an event | Update the name |
+| Split / merged an event (`X_Toggle` → `X_Toggle_ON` / `X_Toggle_OFF`) | Replace the old row with the new ones |
+| Changed parameters or the trigger | Update the description |
+| Moved an event to another screen | Move its row to that screen's table |
+
+### Naming
+
+Full table and samples are in `event.md` ("How to name an event").
+
+- **`snake_case`, under 30 characters, `<screen>_<thing>_<action>`**: `splash_on_create`, `permi_phone_deny_1st`,
+  `setting_theme_dialog_show`. One prefix per screen — check that screen's section before inventing one.
+- Actions: lifecycle `on_create` / `on_resume` / `on_backpress` · taps `click` · dialogs `dialog_show` /
+  `dialog_dismiss` / `dialog_ok_click` · permissions `ask` / `grant` / `deny_1st` / `deny_2nd` / `back` · ads
+  `loading` / `loaded` / `failed` / `show` / `click`.
+- Too long: shorten the words (`act`, `frag`, `dlg`, `perm`, `noti`, `btn`), never the action. If the file already
+  uses another style, follow it. **Never rename a shipped event for style** — Firebase treats it as a new event.
+- `artisan make:event <Screen> <event_name> "<when>"` checks this and writes the row.
+
+### Row format
+
+- Each screen: `## ClassName`, the file path in backticks, then a table. Keep the padding the section already uses:
+  ```markdown
+  | Event name           | Fired from   | When                        |
+  |----------------------|--------------|-----------------------------|
+  | `splash_on_create`   | `onCreate()` | Splash screen created       |
+  ```
+- **When**: in user/app terms; name every `Bundle` key and its values; say when personal data (numbers, names,
+  message text, URIs) is **not** logged.
+- One row per event per screen. Don't list `logging()` calls (ad plumbing, error logs).
+
+### Wiring and testing
+
+Every event goes through the app's `firebaseEvent(...)` (`event.md` says where; `artisan make:analytics` adds it).
+To watch events: the event box (`ENABLE_EVENT_BOX = true` + `EventLogBox.init(this)` in `Application.onCreate()`) or
+`artisan app:logcat GlobalFirebaseEventNameTag`. **The event box must be `false` in any release build** — note it if
+you turned it on.
+
+### Before finishing
+
+Run `artisan check:events`, and grep the changed files for `firebaseEvent(`: diff the names against that screen's
+section both ways. Calls can span lines or pick the name with `if/else`, so search for the names too. Report any
+older mismatches you notice on a screen you touched.
+
+---
+
+## Rules
+
+### Keep `:ai` out of production
+
+`:ai` is a Gradle `java-library` only so it shows up in Android Studio. That does **not** make it part of the app.
+
+**Hard rule: no production module may depend on `:ai`.** Never add `implementation(project(":ai"))` (or similar)
+from {{PROD_LIST}} or any other production module:
+
+```text
+{{GRAPH}}
+```
+
+- Nothing here ships: no app code, resources, assets, dependencies, APK/AAB content, runtime config or API
+  integration. Real functionality goes in a real module.
+- A real AI feature in the app is production code in its own module (`:ai-core`, `:feature-ai`, ...). `:ai` stays a
+  workspace. If a change would make `:ai` a runtime dependency, **stop and ask the developer**.
+- **Never store secrets here**: no API keys, tokens, passwords, keystores, signing passwords or credentials, in any
+  file or asset. Ask the developer how credentials should be provided.
+
+### Working rules
+
+- **Smallest sensible change.** Keep the existing architecture and behaviour; don't rename or reorganise unrelated
+  code, add a dependency without need, or replace working code because another way looks cleaner. If a big refactor
+  is truly needed, explain why in the task.
+- **Don't invent product behaviour.** If the code, notes, screenshots or repo instructions don't settle it, record
+  the doubt and tag `ASK DEV`.
+- **A screenshot shows appearance, not logic.** Reuse existing resources, match the design without rewriting
+  unrelated UI, and note what the image can't tell you.
+- **Every `firebaseEvent` change ships with its `event.md` update** — see [Analytics event sync](#analytics-event-sync--critical).
+- **Before stopping on an unfinished task**, write down: status, what you found, what changed, what's left, key
+  files/symbols, why it's unfinished, and what needs a human or device.
+
+### When to stop and ask the developer
+
+- The task is already `[-]` or tagged `ASK DEV`.
+- The required behaviour is genuinely ambiguous, or instructions conflict.
+- The change alters major architecture, or a migration is destructive.
+- An API, model or provider must be chosen, or credentials / secret storage are needed.
+- A production module would need to depend on `:ai`.
+- The implementation depends on real-device behaviour that can't be safely inferred.
+
+Don't guess just to tick a checklist.
 
 ---
 
 ## Core principle
 
-`:ai` is persistent working memory for coding agents, so the next one can understand what happened, what changed, what remains, and what still needs human verification — without reconstructing the task from scratch.
+`:ai` is working memory: the next agent should see what happened, what changed, what's left and what still needs a
+human — without rebuilding the task from scratch.

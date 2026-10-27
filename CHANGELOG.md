@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0: the :ai site is gone
+
+- Removed `ai:site` and the workspace site. `make:ai` writes only the notes (README, `workflow/`, `plan/`,
+  `event/event.md`, `assets/`) and asks only for the version folder again.
+- The workspace README is regrouped by category: a quick map (folder, what goes there, the artisan command), a
+  start-here checklist, one section per folder, writing notes, analytics event sync and the rules.
+- Existing workspaces from 0.8.0 can delete `index.html`, `site/`, `app.json`, `requests/`, `reports/` and
+  `workflow/*/release.json`.
+
 ## 0.8.0: the :ai workspace as a site
 
 - `make:ai` now adds a site to the workspace: one `index.html` (Tailwind + Alpine.js from a CDN, no build step)
