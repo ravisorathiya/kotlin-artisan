@@ -212,7 +212,7 @@ Full table and samples are in `event.md` ("How to name an event").
 ### Wiring and testing
 
 Every event goes through the app's `firebaseEvent(...)` (`event.md` says where; `artisan make:analytics` adds it).
-To watch events: the event box (`ENABLE_EVENT_BOX = true` + `EventLogBox.init(this)` in `Application.onCreate()`) or
+To watch events: the event box, the [Event Box](https://github.com/JpOriginDev/event-box) library (`ENABLE_EVENT_BOX = true` in `DebugConfig.kt`, set up by `Analytics.init(this)` in `Application.onCreate()`) or
 `artisan app:logcat GlobalFirebaseEventNameTag`. **The event box must be `false` in any release build** — note it if
 you turned it on.
 

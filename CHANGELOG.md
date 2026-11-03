@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.10.2: the event box is the Event Box library
+
+- `make:analytics` uses the [Event Box](https://github.com/JpOriginDev/event-box) library
+  (`com.github.JpOriginDev:event-box:1.3.1`, `OGEventBoxLog`) instead of writing an `EventLogBox.kt` class. It adds
+  the dependency to the module and the JitPack repository to `settings.gradle(.kts)` when it's missing. It writes two
+  files, like the Zombie app's analytics module:
+  - `DebugConfig.kt`: `ENABLE_EVENT_BOX`, the bypass rules, `firebaseEvent()` (top-level, `Context.` and `Fragment.`,
+    safe from background threads) and `logging()`. Debug builds warn in logcat when a name isn't snake_case or is 30+
+    characters.
+  - `Analytics.kt`: `Analytics.init(this)` for `Application.onCreate()`, the Firebase instance and the event box.
+  - No `BuildConfig` is needed any more: debug builds are detected from `android:debuggable`.
+- **The bypass is fully customisable** in `DebugConfig.kt`, snake_case like the names. `EVENT_BOX_BYPASS` turns it on or off. `EVENT_BOX_BYPASS_SUFFIXES`
+  (lifecycle by default), `_PREFIXES` and `_NAMES` hide events, and `EVENT_BOX_ALWAYS_SHOW` overrides them.
+  Hidden events still go to Firebase and logcat. The box also turns itself back on when a session ends or an SDK
+  sharing it switches it off, as in the BlueMessage app.
+- `make:ai` offers `make:analytics` when the app has no `firebaseEvent` yet. Enter or `-y` means yes; scripts and
+  agents get a hint instead. `make:analytics` also refuses when the app already has its own `firebaseEvent`,
+  including a top-level one.
+- event.md, the analytics skill and the workspace README describe the library. Apps that already have
+  `EventLogBox.kt` keep working, and event.md names it.
+
 ## 0.10.1: a simpler event sheet
 
 - `event_sheet.xlsx` now has two columns, Event Name and Description, with each screen as a bold row above its

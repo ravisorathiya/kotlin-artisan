@@ -1,51 +1,47 @@
 package {{PACKAGE}}
 
+import android.app.Application
 import android.content.Context
-import android.os.Bundle
-import android.util.Log
-import androidx.core.os.bundleOf
-import androidx.fragment.app.Fragment
+import android.content.pm.ApplicationInfo
 import com.google.firebase.analytics.FirebaseAnalytics
-import {{NAMESPACE}}.BuildConfig
+import com.ogmediaapps.eventbox.OGEventBoxLog
 
-/**
- * Analytics for the whole app (added by `artisan make:analytics`). Every event goes through [firebaseEvent], and
- * every event is listed in ai/.../event/event.md (`artisan make:event` adds the row, `artisan check:events` compares).
- *
- * Names: snake_case, under 30 characters, `<screen>_<thing>_<action>` (e.g. `splash_on_create`,
- * `setting_theme_dialog_show`). See event.md for the full rules.
- */
+/** Firebase Analytics and the event box. Switches and firebaseEvent are in DebugConfig.kt. */
+object Analytics {
+    @Volatile
+    private var appContext: Context? = null
 
-/** true shows the floating event log ([EventLogBox]) on every screen, for testing. Keep false in release builds. */
-const val ENABLE_EVENT_BOX = false
+    @Volatile
+    private var instance: FirebaseAnalytics? = null
 
-private var analytics: FirebaseAnalytics? = null
+    /** Resolved on the first event, so FirebaseApp may be initialised after [init]. */
+    internal val firebaseAnalytics: FirebaseAnalytics?
+        get() = instance ?: appContext?.let { FirebaseAnalytics.getInstance(it) }?.also { instance = it }
 
-/** Logs [name] to Firebase Analytics (plus logcat `GlobalFirebaseEventNameTag` in debug builds and the event box). */
-fun Context.firebaseEvent(name: String, bundle: Bundle = bundleOf()) {
-    try {
-        val fa = analytics ?: FirebaseAnalytics.getInstance(applicationContext).also { analytics = it }
-        fa.logEvent(name, bundle)
-        if (ENABLE_EVENT_BOX) EventLogBox.log(name)
-        if (BuildConfig.DEBUG) Log.i("GlobalFirebaseEventNameTag", name)
-    } catch (e: Exception) {
-        logging("GlobalFirebaseEventNameTag_Error " + e.stackTraceToString(), e)
+    /** Debug build (android:debuggable): logcat lines only then. */
+    internal var debuggable = false
+        private set
+
+    /** Call once from Application.onCreate(), before any Activity starts. */
+    fun init(app: Application) {
+        if (appContext != null) return
+        appContext = app.applicationContext
+        debuggable = (app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        try {
+            OGEventBoxLog.setDebugModeEnabled(ENABLE_EVENT_BOX)
+                .setDebugModeDurationHours(0.5)
+                .install(app)
+            OGEventBoxLog.setEnabled(app, ENABLE_EVENT_BOX)
+        } catch (e: Exception) {
+            logging("Analytics.init", e)
+        }
     }
-}
 
-fun Fragment.firebaseEvent(name: String, bundle: Bundle = bundleOf()) {
-    try {
-        context?.firebaseEvent(name, bundle)
-    } catch (e: Exception) {
-        logging("GlobalFirebaseEventNameTag_Error " + e.stackTraceToString(), e)
+    /** A session ends after its duration, and an SDK sharing the box may switch it off: turn it back on while testing. */
+    internal fun ensureEventBox() {
+        if (!ENABLE_EVENT_BOX || OGEventBoxLog.isActive) return
+        val context = appContext ?: return
+        OGEventBoxLog.setDebugModeEnabled(true).setDebugModeDurationHours(0.5)
+        OGEventBoxLog.setEnabled(context, true)
     }
-}
-
-/** Debug-only log line (not analytics: use [firebaseEvent] for events). */
-fun logging(message: String) {
-    if (BuildConfig.DEBUG) Log.d("GlobalAppDebugLogger", message)
-}
-
-fun logging(tag: String, throwable: Throwable) {
-    if (BuildConfig.DEBUG) Log.e("GlobalAppErrorLogger", "[$tag] ${throwable.message}", throwable)
 }

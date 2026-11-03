@@ -259,28 +259,68 @@ internal fun firebaseEventDefinition(p: Project): String? =
         .firstOrNull { f -> Regex("""fun\s+(Context|Fragment|Activity)\.firebaseEvent\s*\(""").containsMatchIn(f.readText()) }
         ?.let { p.rel(it) }
 
-/** Where the event box lives, if the app has one (EventLogBox / EventLogBoxAlpha). */
-internal fun eventBoxDefinition(p: Project): String? =
-    p.codeModules.filter { it.name != ":ai" }.asSequence()
+/** The Event Box library (https://github.com/JpOriginDev/event-box), the floating list of events for testers. */
+internal const val EVENT_BOX_GROUP = "com.github.JpOriginDev:event-box"
+internal const val EVENT_BOX_VERSION = "1.3.1"
+
+/** Where the event box comes from: the Event Box dependency, or an older in-app EventLogBox class. Null when none. */
+internal fun eventBoxDefinition(p: Project): String? {
+    p.codeModules.filter { it.name != ":ai" }.firstNotNullOfOrNull { m ->
+        m.buildFile?.readText()?.let { Regex(Regex.escape(EVENT_BOX_GROUP) + """:[\w.\-]+""").find(it)?.value }
+    }?.let { return it }
+    return p.codeModules.filter { it.name != ":ai" }.asSequence()
         .flatMap { m -> sourceFiles(m, listOf(Regex("""^EventLogBox\w*\.kt$"""))).asSequence() }
         .firstOrNull()?.let { p.rel(it) }
+}
+
+/** Adds `implementation("group:name:version")` to the build file's dependencies block, unless the library is there. */
+internal fun addDependency(build: String, coordinate: String): String? {
+    val lib = coordinate.substringBeforeLast(':')
+    if (lib in build) return null
+    val nl = if ("\r\n" in build) "\r\n" else "\n"
+    val block = Regex("""(?m)^dependencies\s*\{[ \t]*\r?\n""").findAll(build).lastOrNull() ?: return build.trimEnd() + nl + nl + "dependencies {" + nl + "    implementation(\"$coordinate\")" + nl + "}" + nl
+    val indent = Regex("""(?m)^([ \t]+)\S""").find(build, block.range.last + 1)?.groupValues?.get(1) ?: "    "
+    return build.substring(0, block.range.last + 1) + indent + "implementation(\"$coordinate\")" + nl + build.substring(block.range.last + 1)
+}
+
+/** Adds the JitPack repository to dependencyResolutionManagement { repositories { } }. Null when it's there or can't be placed. */
+internal fun addJitpack(settings: String, kts: Boolean): String? {
+    if ("jitpack.io" in settings) return null
+    val drm = Regex("""dependencyResolutionManagement\s*\{""").find(settings) ?: return null
+    val repos = Regex("""(?m)^([ \t]*)repositories\s*\{[ \t]*\r?\n""").find(settings, drm.range.last) ?: return null
+    val nl = if ("\r\n" in settings) "\r\n" else "\n"
+    val indent = repos.groupValues[1] + "    "
+    val line = if (kts) "maven(\"https://jitpack.io\")" else "maven { url 'https://jitpack.io' }"
+    // after the repositories' last entry: insert before the block's closing brace
+    var depth = 1
+    var i = repos.range.last + 1
+    while (i < settings.length && depth > 0) {
+        when (settings[i]) { '{' -> depth++; '}' -> depth-- }
+        if (depth > 0) i++
+    }
+    if (depth != 0) return null
+    val lineStart = settings.lastIndexOf('\n', i - 1) + 1
+    return settings.substring(0, lineStart) + indent + line + nl + settings.substring(lineStart)
+}
 
 internal fun registerAnalytics() {
     Registry.add(
         "make:analytics", "make:analytics [--package x.y]",
-        "Add firebaseEvent() + logging() and the floating event box (EventLogBox) to the app, if it has none",
+        "Add firebaseEvent() + logging() and the Event Box library (floating event list for testers) to the app, if it has none",
     ) { makeAnalytics(it) }
 }
 
-private fun makeAnalytics(ctx: Ctx) {
+internal fun makeAnalytics(ctx: Ctx) {
     val p = ctx.project
     firebaseEventDefinition(p)?.let { throw CliError("firebaseEvent is already defined in $it. event.md documents how it's wired (artisan make:ai).") }
+    if (findFirebaseEvent(p) != null) throw CliError("The app already has its own firebaseEvent. Keep it; event.md documents how it's wired.")
     val module = moduleOption(p, ctx.option("--module"))
-    val build = module.buildFile?.readText() ?: ""
+    val buildFile = module.buildFile
+    val build = buildFile?.readText() ?: ""
     val namespace = io.github.ravisorathiya.artisan.project.Gradle.namespace(build) ?: p.packageName ?: throw CliError("No namespace in ${module.name}.")
     val pkg = ctx.option("--package")?.let { if (it.startsWith(namespace)) it else "$namespace.${it.trimStart('.')}" } ?: "$namespace.analytics"
     val dir = File(sourceRoot(module), pkg.replace('.', '/'))
-    val files = listOf("Analytics.kt", "EventLogBox.kt").map { File(dir, it) }
+    val files = listOf("DebugConfig.kt", "Analytics.kt").map { File(dir, it) }
     files.firstOrNull { it.exists() }?.let { throw CliError("${p.rel(it)} already exists.") }
     dir.mkdirs()
     for (f in files) {
@@ -288,12 +328,26 @@ private fun makeAnalytics(ctx: Ctx) {
             ?: throw CliError("Template ${f.name} missing from the artisan install.")
         f.writeText(t.replace("{{PACKAGE}}", pkg).replace("{{NAMESPACE}}", namespace))
     }
-    Ui.say("Added firebaseEvent(), logging() and the event box in $pkg", Tone.OK)
+    Ui.say("Added firebaseEvent(), the event box switches and bypass rules, and logging() in $pkg", Tone.OK)
     files.forEach { Ui.sayFile(it.name.padEnd(15), it) }
+
+    // the Event Box library: dependency + JitPack
+    val coordinate = "$EVENT_BOX_GROUP:$EVENT_BOX_VERSION"
+    if (buildFile != null) addDependency(build, coordinate)?.let {
+        buildFile.writeText(it)
+        Ui.say("  ${p.rel(buildFile)}: implementation(\"$coordinate\")", Tone.OK)
+    }
+    val settings = p.settingsFile
+    val jitpack = addJitpack(settings.readText(), settings.name.endsWith(".kts"))
+    when {
+        jitpack != null -> { settings.writeText(jitpack); Ui.say("  ${settings.name}: JitPack repository (maven(\"https://jitpack.io\"))", Tone.OK) }
+        "jitpack.io" !in settings.readText() -> Ui.say("  Add maven(\"https://jitpack.io\") to your dependency repositories (Event Box is on JitPack).", Tone.WARN)
+    }
+
     Ui.say("Still to do (once):", Tone.WARN)
     Ui.say("  1. Firebase Analytics in ${module.name}'s dependencies (com.google.firebase:firebase-analytics) and google-services.json.")
-    if (!Regex("""buildConfig\s*(=\s*)?true""").containsMatchIn(build)) Ui.say("  2. android { buildFeatures { buildConfig = true } } in ${p.rel(module.buildFile ?: module.dir)} (BuildConfig.DEBUG).")
-    Ui.say("  3. In Application.onCreate():  if (ENABLE_EVENT_BOX) EventLogBox.init(this)   (import $pkg.*)")
-    Ui.say("  Event box on: set ENABLE_EVENT_BOX = true in Analytics.kt while testing; false before release.", Tone.DIM)
+    Ui.say("  2. In Application.onCreate():  Analytics.init(this)   (import $pkg.Analytics)")
+    Ui.say("  Event box on: ENABLE_EVENT_BOX = true in DebugConfig.kt while testing; false before release.", Tone.DIM)
+    Ui.say("  What the box shows: the Bypass section of DebugConfig.kt (lifecycle hidden by default; add suffixes, prefixes, names, or always-show names).", Tone.DIM)
     Ui.say("  Then each event: artisan make:event <Screen> <name>  ->  firebaseEvent(\"<name>\")", Tone.DIM)
 }

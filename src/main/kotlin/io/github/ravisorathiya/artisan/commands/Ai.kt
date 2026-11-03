@@ -58,6 +58,7 @@ private fun makeAi(ctx: Ctx) {
             empty = "Nothing to add")
         if (added.any { it.parentFile.name == "skill" }) Ui.say("  Mention skill/ and scripts/ in the workspace README (see artisan's template) so agents find them.", Tone.DIM)
         if (p.modules.none { it.name == ":ai" }) Ui.say("  :ai isn't in ${p.settingsFile.name}; add include(\":ai\") to see it in Android Studio.", Tone.WARN)
+        offerAnalytics(ctx)
         return
     }
     if (p.modules.any { it.name == ":ai" }) throw CliError(":ai is already included in ${p.settingsFile.name}.")
@@ -81,10 +82,27 @@ private fun makeAi(ctx: Ctx) {
         Ui.say("  artisan still uses ${p.rel(notes.dir)} for notes. To switch: \"notes\": {\"dir\": \"${Project.AI_WORKSPACE}\"} in artisan.json", Tone.WARN)
     }
     Ui.say("  No production module may depend on :ai. Sync Gradle in Android Studio.", Tone.WARN)
+    offerAnalytics(ctx)
     // Agents drive the phone through artisan (app:shot, app:logcat, ...), so make sure adb and JAVA_HOME are there.
     if (!toolsReady()) {
         Ui.head("Tools")
         setupTools()
+    }
+}
+
+/** Every project needs the firebaseEvent setup: when the app has none, offer make:analytics (Enter = yes, -y = yes). */
+private fun offerAnalytics(ctx: Ctx) {
+    val p = ctx.project
+    if (findFirebaseEvent(p) != null) return
+    Ui.head("Analytics")
+    if (!Ui.offer("No firebaseEvent in the app yet. Add it with the Event Box library now (artisan make:analytics)?")) {
+        Ui.say("  Later: artisan make:analytics (firebaseEvent, bypass rules, the Event Box library and JitPack)", Tone.DIM)
+        return
+    }
+    try {
+        makeAnalytics(ctx)
+    } catch (e: CliError) {
+        Ui.say("  make:analytics: ${e.message}", Tone.WARN)
     }
 }
 
@@ -187,9 +205,14 @@ internal fun eventDoc(p: Project, events: Map<String, List<String>>): String {
         |- ${definedIn?.let { "Defined in `$it`" } ?: "Not in the app yet: `artisan make:analytics` adds it"} as `Context.firebaseEvent(name, bundle)` and
         |  `Fragment.firebaseEvent(name, bundle)`. Each call logs to Firebase Analytics, prints `I/GlobalFirebaseEventNameTag <name>`
         |  in debug builds, and shows the name in the event box when that's on.
-        |- **Event box** (${box?.let { "`$it`" } ?: "`EventLogBox`, from `artisan make:analytics`"}): a floating list of events as they fire, on every screen. For
-        |  testing, set `ENABLE_EVENT_BOX = true` (and `EventLogBox.init(this)` in `Application.onCreate()`). **Set it back to
-        |  `false` before a release.** Long-press a row to copy the name.
+        |- **Event box** (${box?.let { "`$it`" } ?: "the [Event Box](https://github.com/JpOriginDev/event-box) library, from `artisan make:analytics`"}): a floating
+        |  bubble that lists events as they fire (with their parameters, and a warning when one breaks a Firebase limit), on every
+        |  screen. For testing, set `ENABLE_EVENT_BOX = true` in `DebugConfig.kt`; `Analytics.init(this)` in
+        |  `Application.onCreate()` sets it up. **Set it back to `false` before a release.**
+        |- **Bypass** (the Bypass section of `DebugConfig.kt`) controls what the box shows. Hidden events still go to Firebase and
+        |  logcat. `EVENT_BOX_BYPASS = false` shows everything. Otherwise `EVENT_BOX_BYPASS_SUFFIXES` (lifecycle by default:
+        |  `_on_create`, `_on_resume`, ...), `_PREFIXES` and `_NAMES` hide events, and `EVENT_BOX_ALWAYS_SHOW` wins over them.
+        |  The rules are snake_case like the names.
         |- Without the box: `artisan app:logcat GlobalFirebaseEventNameTag` (or `adb logcat -s GlobalFirebaseEventNameTag`).
         |- In code: `firebaseEvent("splash_on_create")`; with values: `firebaseEvent("home_contact_click", bundleOf("source" to "list"))`.
         |- Not analytics: `logging(...)` lines (debug logs, ad-load plumbing, errors) are not listed here.

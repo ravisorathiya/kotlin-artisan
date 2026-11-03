@@ -94,6 +94,10 @@ object Ui {
         if (open) Proc.reveal(f)
     }
 
+    /** A yes/no offer: `-y` = yes, Enter = yes for a person at the keyboard, no for scripts and agents. */
+    fun offer(question: String): Boolean =
+        assumeYes || (canAsk && readLine("$question [Y/n]").lowercase().let { it.isEmpty() || it == "y" || it == "yes" })
+
     /** Asks for the word "yes" unless `-y` was passed. */
     fun confirm(question: String): Boolean {
         if (assumeYes) return true

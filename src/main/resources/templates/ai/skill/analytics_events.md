@@ -9,12 +9,27 @@ managers read the generated `event/event_sheet.xlsx`. Use this skill whenever yo
 - `artisan make:analytics` adds:
   - `Context.firebaseEvent(name, bundle)` and `Fragment.firebaseEvent(...)`, which log to Firebase and print `I/GlobalFirebaseEventNameTag <name>` in debug builds;
   - `logging(...)` for debug logs that are not analytics;
-  - `EventLogBox`, the floating list of events for testing.
+  - `DebugConfig.kt`: `firebaseEvent(...)` (top-level, `Context.` and `Fragment.`), `ENABLE_EVENT_BOX`, the bypass rules
+    and `logging(...)`. In debug builds it warns in logcat when a name isn't snake_case or is 30+ characters.
+  - `Analytics.kt`: `Analytics.init(app)`, the Firebase instance and the event box. The box is the [Event Box](https://github.com/JpOriginDev/event-box) library
+    (`com.github.JpOriginDev:event-box`, on JitPack), a floating bubble listing events with their parameters.
+    It warns when an event breaks a Firebase limit. make:analytics adds the dependency and the JitPack repository.
 - Then:
   - add `com.google.firebase:firebase-analytics` and `google-services.json`;
-  - set `buildConfig = true`;
-  - put `if (ENABLE_EVENT_BOX) EventLogBox.init(this)` in `Application.onCreate()`.
+  - put `Analytics.init(this)` in `Application.onCreate()`.
 - If the app already has its own `firebaseEvent` (top-level or an extension), keep it. The top of event.md says where it lives.
+- **Every project needs this setup.** `artisan make:ai` offers `make:analytics` when the app has no `firebaseEvent` yet.
+- **Bypass** (the Bypass section of `DebugConfig.kt`, fully customisable, snake_case like the names): events kept out of the box so it shows what you're testing. They
+  still go to Firebase and logcat.
+
+  | Constant | Default | Effect |
+  |---|---|---|
+  | `EVENT_BOX_BYPASS` | `true` | `false` shows every event in the box |
+  | `EVENT_BOX_BYPASS_SUFFIXES` | lifecycle: `_on_create`, `_on_resume`, `_on_pause`, `_on_destroy`, `_on_backpress`, ... | Name endings to hide (any case; `_onCreate` matches too) |
+  | `EVENT_BOX_BYPASS_PREFIXES` | none | Name starts to hide, e.g. `appopen_` |
+  | `EVENT_BOX_BYPASS_NAMES` | none | Exact names to hide |
+  | `EVENT_BOX_ALWAYS_SHOW` | none | Exact names always shown, even when a rule hides them |
+- Already using `OGEventBoxLog` elsewhere (an SDK that shares the box)? Keep one setup: the app's own `firebaseEvent` logs to it.
 - **`ENABLE_EVENT_BOX` must be `false` in any release build.** If you turned it on, note it in the task.
 
 ## 2. Naming

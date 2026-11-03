@@ -7,7 +7,10 @@ import io.github.ravisorathiya.artisan.commands.StatusCache
 import io.github.ravisorathiya.artisan.commands.TRANSLATE_MARKER
 import io.github.ravisorathiya.artisan.commands.AI_TEMPLATE_FILES
 import io.github.ravisorathiya.artisan.commands.EventFn
+import io.github.ravisorathiya.artisan.commands.addDependency
 import io.github.ravisorathiya.artisan.commands.addEventRow
+import io.github.ravisorathiya.artisan.commands.addJitpack
+import io.github.ravisorathiya.artisan.commands.eventBoxDefinition
 import io.github.ravisorathiya.artisan.commands.addUsesPermissions
 import io.github.ravisorathiya.artisan.commands.eventSheetBytes
 import io.github.ravisorathiya.artisan.commands.findFirebaseEvent
@@ -429,6 +432,39 @@ class WorkflowTest {
         val ext = permissionFlowSource("com.demo.analytics", EventFn("com.demo.analytics.firebaseEvent", true))
         assertTrue("import com.demo.analytics.firebaseEvent" !in ext && "context.firebaseEvent(name)" in ext)
         assertTrue(p.root.isDirectory)
+    }
+
+
+    @Test
+    fun `make analytics wires the Event Box library and JitPack`() {
+        val coord = "com.github.JpOriginDev:event-box:1.3.1"
+        val kts = "android { }\n\ndependencies {\n    implementation(libs.core)\n}\n"
+        assertEquals("android { }\n\ndependencies {\n    implementation(\"$coord\")\n    implementation(libs.core)\n}\n", addDependency(kts, coord))
+        assertNull(addDependency("dependencies {\n    implementation 'com.github.JpOriginDev:event-box:1.2.0'\n}\n", coord), "already there, any version")
+        assertTrue(addDependency("android { }\n", coord)!!.endsWith("dependencies {\n    implementation(\"$coord\")\n}\n"))
+
+        val settings = "pluginManagement {\n    repositories {\n        google()\n    }\n}\ndependencyResolutionManagement {\n    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)\n    repositories {\n        google()\n        mavenCentral()\n    }\n}\ninclude(\":app\")\n"
+        val added = assertNotNull(addJitpack(settings, kts = true))
+        assertTrue("        mavenCentral()\n        maven(\"https://jitpack.io\")\n    }\n}\ninclude" in added, added)
+        assertTrue(added.startsWith("pluginManagement {\n    repositories {\n        google()\n    }\n}"), "pluginManagement left alone")
+        assertTrue("maven { url 'https://jitpack.io' }" in assertNotNull(addJitpack(settings, kts = false)))
+        assertNull(addJitpack(added, kts = true))
+        assertNull(addJitpack("include ':app'\n", kts = false), "no dependencyResolutionManagement: say so instead")
+
+        // DebugConfig.kt: switches, bypass rules (snake_case), firebaseEvent; Analytics.kt: init + the library
+        val config = assertNotNull(javaClass.getResource("/templates/analytics/DebugConfig.kt.stub")).readText()
+        assertTrue("const val ENABLE_EVENT_BOX = false" in config && "const val EVENT_BOX_BYPASS = true" in config)
+        assertTrue(listOf("EVENT_BOX_BYPASS_SUFFIXES", "EVENT_BOX_BYPASS_PREFIXES", "EVENT_BOX_BYPASS_NAMES", "EVENT_BOX_ALWAYS_SHOW", "\"_on_create\"").all { it in config })
+        assertTrue("fun firebaseEvent(name: String" in config && "fun Context.firebaseEvent(" in config && "fun Fragment.firebaseEvent(" in config)
+        assertTrue("OGEventBoxLog.log(name, bundle)" in config && "BuildConfig" !in config)
+        val init = assertNotNull(javaClass.getResource("/templates/analytics/Analytics.kt.stub")).readText()
+        assertTrue("object Analytics" in init && "fun init(app: Application)" in init && ".install(app)" in init)
+        assertNull(javaClass.getResource("/templates/analytics/EventLogBox.kt.stub"))
+
+        val p = project()
+        assertNull(eventBoxDefinition(p))
+        write("app/build.gradle.kts", File(tmp, "app/build.gradle.kts").readText() + "\ndependencies {\n    implementation(\"$coord\")\n}\n")
+        assertEquals(coord, eventBoxDefinition(assertNotNull(Project.find(tmp))))
     }
 
 }

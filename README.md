@@ -37,7 +37,7 @@ anywhere a JDK runs (Windows, macOS, Linux).
 | ⚡ **Zero setup** | Run it anywhere inside a Gradle project. It finds the root, the modules (Kotlin or Groovy DSL), the app module, `applicationId`, version, and Firebase project by itself. |
 | 🧰 **Easy tool setup** | Missing Java or adb? The Windows installer and `artisan setup` reuse Android Studio's JDK and SDK, or install them with `winget` / `brew`. Guide: [Setup](#setup-java-and-adb). |
 | ⌨️ **Suggestions as you type** | At your normal prompt, `artisan da` shows `app:dark` in gray as you type; → accepts (PowerShell 5.1 and 7, zsh, fish). Or run `artisan` and type to search every command (`dark`, `translation`, even `drak`). `artisan app:<Tab>` completes with descriptions. |
-| 🏭 **Generators for the repetitive parts** | `make:string` (every locale at once), `make:event` + `check:events` (event.md and its Excel sheet in sync, naming rules checked), `make:permission` (the full ask/deny/Settings flow with events), `make:screen`, `bump`, `make:bundle` (git diff → re-apply bundle), `make:analytics` (firebaseEvent + event box). |
+| 🏭 **Generators for the repetitive parts** | `make:string` (every locale at once), `make:event` + `check:events` (event.md and its Excel sheet in sync, naming rules checked), `make:permission` (the full ask/deny/Settings flow with events), `make:screen`, `bump`, `make:bundle` (git diff → re-apply bundle), `make:analytics` (firebaseEvent + the [Event Box](https://github.com/JpOriginDev/event-box) library). |
 | ⌨️ **In your terminal, not only a CLI** | Ctrl+g hotkeys (`i` install, `s` screenshot, `l` logcat...), project status in your prompt, git hooks that stop commits with event.md or translations out of sync, clickable output paths. |
 | 🔢 **Pickers instead of memorising** | `artisan make`, `artisan app` and `artisan open` show just that group's commands. Leave out a value (`artisan app:font`) and it shows the choices. |
 | 🎨 **Readable output** | Coloured boxed tables that fit your terminal. |
@@ -244,7 +244,8 @@ Run `make:ai` again in a project that already has the workspace: it adds only th
 
 **Events out of the box.**
 
-- `make:analytics` adds `firebaseEvent()` and the event box.
+- `make:analytics` adds `firebaseEvent()` and the [Event Box](https://github.com/JpOriginDev/event-box) library
+  (dependency, JitPack repository, `DebugConfig.kt` with the bypass rules, `Analytics.init(this)`).
 - `make:event` adds a row, checking the name: snake_case, under 30 characters.
 - `check:events` compares the code and event.md both ways.
 - `artisan hooks install` stops a commit when they disagree. The hook also rebuilds `event_sheet.xlsx` and stages it,
