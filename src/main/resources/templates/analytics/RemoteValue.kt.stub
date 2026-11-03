@@ -1,4 +1,4 @@
-package {{PACKAGE}}
+package {{PACKAGE}}.remote
 
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty

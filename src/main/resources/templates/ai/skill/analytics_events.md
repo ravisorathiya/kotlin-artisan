@@ -18,17 +18,17 @@ managers read the generated `event/event_sheet.xlsx`. Use this skill whenever yo
   `google-services.json`, the google-services and Crashlytics plugins are added to the app.
 - **Copied from the app:** compileSdk, minSdk, compileOptions and the Kotlin JVM target.
 
-The module is the app's **central place for Firebase**. One BOM covers Analytics, Crashlytics, Messaging and Remote
-Config. Timber and coroutines are `api`, so every module gets them. The files are in the app's base package, so code
-there needs no import:
+The module is the app's **central place for Firebase**, under package `<app>.firebase` with one folder per feature (`events/`, `remote/`, `crash/`, `messaging/`, `log/`). One BOM covers Analytics, Crashlytics, Messaging and Remote
+Config. Timber and coroutines are `api`, so every module gets them. Import what you use, e.g.
+`import <app>.firebase.events.firebaseEvent` and `import <app>.firebase.remote.AdsConstant`:
 
 | File | What's in it |
 |---|---|
 | `DebugConfig.kt` | settings only: the event box switch, bypass rules, log tags, Crashlytics and Remote Config switches |
-| `FirebaseEvents.kt` | `firebaseEvent(...)` (top-level and `Context.`), for any thread. The event box part runs on Main through a coroutine. Debug builds warn about bad names |
+| `events/FirebaseEvents.kt` | `firebaseEvent(...)` (top-level and `Context.`), for any thread. The event box part runs on Main through a coroutine. Debug builds warn about bad names |
 | `Analytics.kt` | `Analytics.init(app)`: Firebase, a Timber `DebugTree` for debug builds, Crashlytics collection, the [Event Box](https://github.com/JpOriginDev/event-box) |
-| `Crash.kt`, `RemoteConfig.kt`, `Messaging.kt` | `Crash.log/record/setKey`, `RemoteConfig.fetch/bool/string/long`, `Messaging.token/subscribe` |
-| `Logging.kt` | `logging(...)` through Timber; caught errors become Crashlytics non-fatals in release |
+| `crash/`, `remote/`, `messaging/` | `Crash.log/record/setKey`, `RemoteConfig.fetch/bool/string/long`, `Messaging.token/subscribe` |
+| `log/Logging.kt` | `logging(...)` through Timber; caught errors become Crashlytics non-fatals in release |
 | `README.md` | how to use all of it |
 
 A new module that should use it: `implementation(project(":core:firebase"))`.

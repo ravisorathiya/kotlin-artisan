@@ -213,10 +213,14 @@ internal fun isAndroidModule(build: String, toml: String?): Boolean =
 
 // ---------- the plan ----------
 
-/** The module's code files, in the app's base package. */
+/** The module's code files, under <app package>.firebase: one subpackage (folder) per feature. */
 internal val ANALYTICS_SOURCES = listOf(
-    "DebugConfig.kt", "FirebaseEvents.kt", "Analytics.kt", "Logging.kt", "Crash.kt",
-    "AdsConstant.kt", "RemoteValue.kt", "RemoteConfig.kt", "Messaging.kt",
+    "Analytics.kt", "DebugConfig.kt",
+    "events/FirebaseEvents.kt",
+    "remote/AdsConstant.kt", "remote/RemoteValue.kt", "remote/RemoteConfig.kt",
+    "crash/Crash.kt",
+    "messaging/Messaging.kt",
+    "log/Logging.kt",
 )
 
 internal class AnalyticsModulePlan(
@@ -384,18 +388,19 @@ internal fun planAnalyticsModule(p: Project, modulePath: String = ":core:firebas
         append("\ndependencies {\n").append(deps.joinToString("") { if (it.isEmpty()) "\n" else "    $it\n" }).append("}\n")
     }
 
-    // the code: the app's base package, so code there calls firebaseEvent() without an import
+    // the code: <app package>.firebase, one subpackage (folder) per feature
+    val pkg = "$namespace.firebase"
     fun stubText(name: String) = (object {}.javaClass.getResource("/templates/analytics/$name.stub")?.readText()?.replace("\r\n", "\n")
-        ?: throw CliError("Template $name missing from the artisan install.")).replace("{{PACKAGE}}", namespace).replace("{{NAMESPACE}}", namespace)
+        ?: throw CliError("Template $name missing from the artisan install.")).replace("{{PACKAGE}}", pkg).replace("{{NAMESPACE}}", namespace)
         .replace("{{MODULE}}", module).replace("{{BOM}}", catalogVersion(toml ?: "", "com.google.firebase:firebase-bom") ?: bom)
-    val src = "$dir/src/main/java/${namespace.replace('.', '/')}"
+    val src ="$dir/src/main/java/${pkg.replace('.', '/')}"
     val created = linkedMapOf(
         "$dir/${if (kts) "build.gradle.kts" else "build.gradle"}" to build,
         "$dir/README.md" to stubText("README.md"),
         "$dir/src/main/AndroidManifest.xml" to "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n\n    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\" />\n\n</manifest>\n",
         "$dir/.gitignore" to "/build\n",
     )
-    for (f in ANALYTICS_SOURCES) created["$src/$f"] = stubText(f)
+    for (f in ANALYTICS_SOURCES) created["$src/$f"] = stubText(f.substringAfterLast('/'))
 
     // settings: include + JitPack; root / catalog edits from above
     val changed = linkedMapOf<String, String>()
@@ -451,7 +456,7 @@ internal fun planAnalyticsModule(p: Project, modulePath: String = ":core:firebas
     if (rootBuildFile != null && rootBuild != rootBuildFile.readText()) changed[p.rel(rootBuildFile)] = rootBuild!!
     if (tomlFile != null && toml != tomlFile.readText()) changed[p.rel(tomlFile)] = toml!!
     val bomFile = if (catalogDeps) p.rel(tomlFile!!) else "$dir/${if (kts) "build.gradle.kts" else "build.gradle"}"
-    return AnalyticsModulePlan(module, namespace, created, changed, wired, skipped, notes, catalogVersion(toml ?: "", "com.google.firebase:firebase-bom") ?: bom, bomFile, appBom)
+    return AnalyticsModulePlan(module, pkg, created, changed, wired, skipped, notes, catalogVersion(toml ?: "", "com.google.firebase:firebase-bom") ?: bom, bomFile, appBom)
 }
 
 /** Writes [plan]. Every file was worked out first, so nothing is half-written when a step can't be planned. */

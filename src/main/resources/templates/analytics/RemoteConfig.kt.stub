@@ -1,4 +1,4 @@
-package {{PACKAGE}}
+package {{PACKAGE}}.remote
 
 import android.os.Bundle
 import com.google.firebase.remoteconfig.ConfigUpdate
@@ -14,6 +14,10 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
+import {{PACKAGE}}.Analytics
+import {{PACKAGE}}.DebugConfig
+import {{PACKAGE}}.events.firebaseEvent
+import {{PACKAGE}}.log.logging
 
 /**
  * Firebase Remote Config, driven by the `by remote...` properties of AdsConstant (and any holder object passed to

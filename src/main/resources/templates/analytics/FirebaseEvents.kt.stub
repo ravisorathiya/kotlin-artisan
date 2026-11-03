@@ -1,4 +1,4 @@
-package {{PACKAGE}}
+package {{PACKAGE}}.events
 
 import android.content.Context
 import android.os.Bundle
@@ -6,6 +6,9 @@ import com.ogmediaapps.eventbox.OGEventBoxLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import {{PACKAGE}}.Analytics
+import {{PACKAGE}}.DebugConfig
+import {{PACKAGE}}.log.logging
 
 /*
  * firebaseEvent: every analytics event of the app goes through here (added by `artisan make:firebase`).

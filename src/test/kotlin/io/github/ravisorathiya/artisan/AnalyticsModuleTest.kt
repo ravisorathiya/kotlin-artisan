@@ -148,12 +148,19 @@ class AnalyticsModuleTest {
         assertTrue(plan.notes.any { "google-services.json" in it && "com.google.firebase.crashlytics" in it })
 
         // the code: every file in the app's base package; DebugConfig is settings only; Timber and coroutines, no Handler
-        for (f in ANALYTICS_SOURCES) assertTrue(read("core/firebase/src/main/java/com/demo/fx/$f").startsWith("package com.demo.fx\n"), f)
-        val config = read("core/firebase/src/main/java/com/demo/fx/DebugConfig.kt")
+        // one folder per feature, and each file's package matches its folder
+        val base = "core/firebase/src/main/java/com/demo/fx/firebase"
+        for (f in ANALYTICS_SOURCES) {
+            val pkg = "com.demo.fx.firebase" + f.substringBeforeLast('/', "").let { if (it.isEmpty()) "" else ".$it" }
+            assertTrue(read("$base/$f").startsWith("package $pkg\n"), "$f: package $pkg")
+        }
+        assertEquals("com.demo.fx.firebase", plan.pkg)
+        assertTrue("import com.demo.fx.firebase.events.firebaseEvent" in read("$base/remote/RemoteConfig.kt"))
+        val config = read("$base/DebugConfig.kt")
         assertTrue("object DebugConfig" in config && "fun " !in config && "import" !in config, "settings only")
-        val events = read("core/firebase/src/main/java/com/demo/fx/FirebaseEvents.kt")
+        val events = read("$base/events/FirebaseEvents.kt")
         assertTrue("Dispatchers.Main" in events && "Handler" !in events && "Timber" in events)
-        assertTrue("Timber.plant(Timber.DebugTree())" in read("core/firebase/src/main/java/com/demo/fx/Analytics.kt"))
+        assertTrue("Timber.plant(Timber.DebugTree())" in read("$base/Analytics.kt"))
         val readme = read("core/firebase/README.md")
         assertTrue("# `:core:firebase`" in readme && "35.1.0" in readme && "AdsConstant" in readme && "{{" !in readme, readme.take(300))
 
@@ -262,8 +269,8 @@ class AnalyticsModuleTest {
         val q = assertNotNull(Project.find(tmp))
         val plan = planAnalyticsModule(q, latest = latest)
         applyAnalyticsModule(q, plan)
-        val src = "core/firebase/src/main/java/com/demo/fx"
-        val consts = read("$src/AdsConstant.kt")
+        val src = "core/firebase/src/main/java/com/demo/fx/firebase"
+        val consts = read("$src/remote/AdsConstant.kt")
         assertTrue("object AdsConstant" in consts && "by remoteAdUnit(" in consts && "by remoteString(" in consts && "by remoteInt(" in consts)
         // the keys every app has, with the More Apps fallback pair and a banner sample
         for (key in listOf(
@@ -275,9 +282,9 @@ class AnalyticsModuleTest {
             "googleInterMaxInterAdsShow", "googleInterGapBetweenTwoInter", "googleInterCountDownTimer", "firstTime",
         )) assertTrue(Regex("""var $key by remote\w+\(""").containsMatchIn(consts), key)
         assertTrue("legacyKeys = listOf(\"moreAppAccountName\")" in consts)
-        val values = read("$src/RemoteValue.kt")
+        val values = read("$src/remote/RemoteValue.kt")
         assertTrue(listOf("fun remoteString(", "fun remoteAdUnit(", "fun remoteInt(", "fun remoteLong(", "fun remoteDouble(", "fun remoteBoolean(", "object RemoteRegistry").all { it in values })
-        val rc = read("$src/RemoteConfig.kt")
+        val rc = read("$src/remote/RemoteConfig.kt")
         assertTrue("addOnConfigUpdateListener" in rc && "fun awaitFetch(" in rc && "fun onApplied(" in rc && "LOCAL MISSING" in rc && "RemoteRegistry.apply" in rc)
         assertTrue("fun init(app: Application, vararg remoteHolders: Any = arrayOf(AdsConstant))" in read("$src/Analytics.kt") && "RemoteConfig.start(*remoteHolders)" in read("$src/Analytics.kt"))
         assertTrue("REMOTE_CONFIG_TIMEOUT_MILLIS" in read("$src/DebugConfig.kt") && "REMOTE_CONFIG_LIVE_UPDATES" in read("$src/DebugConfig.kt"))
@@ -291,7 +298,7 @@ class AnalyticsModuleTest {
         assertEquals(MODULE_EVENTS.size, documentModuleEvents(q, plan))
         val doc = parseEventDoc(read("ai/src/main/java/ai/event/event.md"))
         assertEquals(MODULE_EVENTS.map { it.first }, doc.getValue("RemoteConfig").map { it.first })
-        assertTrue("`$src/RemoteConfig.kt`" in read("ai/src/main/java/ai/event/event.md"), "the section names its source file")
+        assertTrue("`$src/remote/RemoteConfig.kt`" in read("ai/src/main/java/ai/event/event.md"), "the section names its source file")
         assertTrue(File(tmp, "ai/src/main/java/ai/event/event_sheet.xlsx").isFile)
         assertEquals(null, documentModuleEvents(q, plan), "second time: nothing to add")
     }

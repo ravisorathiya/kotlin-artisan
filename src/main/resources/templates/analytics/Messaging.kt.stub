@@ -1,7 +1,8 @@
-package {{PACKAGE}}
+package {{PACKAGE}}.messaging
 
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.tasks.await
+import {{PACKAGE}}.log.logging
 
 /**
  * Firebase Cloud Messaging (push). See README.md in this module.

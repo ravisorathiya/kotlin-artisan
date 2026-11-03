@@ -7,19 +7,39 @@ The app's single place for Firebase:
 - logging, through Timber.
 
 Every Android module depends on it, so this all works from anywhere.
-Created by `artisan make:firebase`. The code lives in package `{{PACKAGE}}`.
+Created by `artisan make:firebase`. The code is under package `{{PACKAGE}}`, one folder (subpackage) per feature:
 
-| File | What's in it |
-|---|---|
-| `DebugConfig.kt` | **Settings only**: event box on/off, bypass rules, log tags, Crashlytics and Remote Config switches |
-| `FirebaseEvents.kt` | `firebaseEvent(name, bundle)` |
-| `Analytics.kt` | `Analytics.init(app)`, `setUserId`, `setUserProperty` |
-| `Crash.kt` | `Crash.log`, `Crash.record`, `Crash.setKey` |
-| `AdsConstant.kt` | **Ad units and remote switches**: one line per key (`var homeNativeAd by remoteAdUnit("...")`) |
-| `RemoteValue.kt` | `remoteString` / `remoteAdUnit` / `remoteInt` / `remoteLong` / `remoteDouble` / `remoteBoolean` |
-| `RemoteConfig.kt` | fetch + live updates for every `by remote...` property, `awaitFetch`, `onApplied`, the audit table |
-| `Messaging.kt` | `Messaging.token`, `subscribe`, `unsubscribe`, `setAutoInit` |
-| `Logging.kt` | `logging(message)`, `logging(tag, throwable)` |
+```text
+{{PACKAGE}}
+├── Analytics.kt          Analytics.init(app), setUserId, setUserProperty
+├── DebugConfig.kt        settings only: event box, bypass rules, log tags, Crashlytics and Remote Config switches
+├── events/
+│   └── FirebaseEvents.kt firebaseEvent(name, bundle)
+├── remote/
+│   ├── AdsConstant.kt    ad units and remote switches: one line per key
+│   ├── RemoteValue.kt    remoteString / remoteAdUnit / remoteInt / remoteLong / remoteDouble / remoteBoolean
+│   └── RemoteConfig.kt   fetch + live updates of every `by remote...` property, awaitFetch, onApplied, the audit
+├── crash/
+│   └── Crash.kt          Crash.log, Crash.record, Crash.setKey
+├── messaging/
+│   └── Messaging.kt      Messaging.token, subscribe, unsubscribe, setAutoInit
+└── log/
+    └── Logging.kt        logging(message), logging(tag, throwable)
+```
+
+Imports (Android Studio adds them on its own):
+
+```kotlin
+import {{PACKAGE}}.Analytics
+import {{PACKAGE}}.events.firebaseEvent
+import {{PACKAGE}}.remote.AdsConstant
+import {{PACKAGE}}.remote.RemoteConfig
+import {{PACKAGE}}.crash.Crash
+import {{PACKAGE}}.messaging.Messaging
+import {{PACKAGE}}.log.logging
+```
+
+A new feature goes in its own folder (e.g. `ads/`, `billing/`) with a matching package.
 
 ## Dependencies
 

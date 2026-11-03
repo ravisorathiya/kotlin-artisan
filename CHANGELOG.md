@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.14.0: the Firebase module, one folder per feature
+
+- `make:firebase` writes the code under package `<app>.firebase`, one folder (subpackage) per feature:
+  - `Analytics.kt` and `DebugConfig.kt` at the root;
+  - `events/FirebaseEvents.kt`;
+  - `remote/AdsConstant.kt`, `remote/RemoteValue.kt` and `remote/RemoteConfig.kt`;
+  - `crash/Crash.kt`, `messaging/Messaging.kt` and `log/Logging.kt`.
+- **Callers import what they use**, e.g. `import <app>.firebase.events.firebaseEvent` and
+  `import <app>.firebase.remote.AdsConstant`. `make:permission` writes the right import, and the module README lists them.
+- Modules made with 0.13 keep working as they are. Only newly generated modules use the new layout.
+
 ## 0.13.1: the keys every app has, in AdsConstant
 
 - `AdsConstant` starts with the keys every app uses:

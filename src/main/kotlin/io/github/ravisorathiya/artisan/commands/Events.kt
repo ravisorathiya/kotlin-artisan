@@ -334,13 +334,14 @@ internal fun makeAnalytics(ctx: Ctx) {
         plan.created.keys.map { Row(listOf(it, "created"), colors = listOf(null, Tone.OK)) } +
             plan.changed.keys.map { Row(listOf(it, "changed"), colors = listOf(null, Tone.WARN)) },
     )
-    Ui.say("firebaseEvent(), Analytics and the bypass rules are in package ${plan.pkg} (no import needed there).", Tone.OK)
+    Ui.say("Code in ${plan.pkg}: events/ remote/ crash/ messaging/ log/. Use it with:", Tone.OK)
+    Ui.say("  import ${plan.pkg}.events.firebaseEvent      import ${plan.pkg}.remote.AdsConstant      import ${plan.pkg}.Analytics", Tone.DIM)
     if (plan.wired.isNotEmpty()) Ui.say("  implementation(project(\"${plan.module}\")) added to ${plan.wired.joinToString(", ")}", Tone.OK)
     plan.skipped.forEach { (m, why) -> Ui.say("  $m: skipped, $why", Tone.DIM) }
     plan.notes.forEach { Ui.say("  $it", Tone.WARN) }
 
     Ui.say("Still to do (once):", Tone.WARN)
-    Ui.say("  1. In Application.onCreate():  Analytics.init(this)   (import ${plan.pkg}.Analytics if it's in another package)")
+    Ui.say("  1. In Application.onCreate():  Analytics.init(this)   (import ${plan.pkg}.Analytics)")
     Ui.say("  2. Sync Gradle in Android Studio.")
     Ui.say("  Event box on: ENABLE_EVENT_BOX = true in DebugConfig.kt while testing; false before release.", Tone.DIM)
     Ui.say("  What the box shows: the Bypass section of DebugConfig (lifecycle hidden by default; add suffixes, prefixes, names, or always-show names).", Tone.DIM)

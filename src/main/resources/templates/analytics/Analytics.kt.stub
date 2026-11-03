@@ -10,6 +10,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import timber.log.Timber
+import {{PACKAGE}}.log.logging
+import {{PACKAGE}}.remote.AdsConstant
+import {{PACKAGE}}.remote.RemoteConfig
 
 /** Sets up Firebase for the app: call [init] once from Application.onCreate(). See README.md in this module. */
 object Analytics {

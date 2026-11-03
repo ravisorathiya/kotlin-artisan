@@ -1,4 +1,4 @@
-package {{PACKAGE}}
+package {{PACKAGE}}.crash
 
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import timber.log.Timber

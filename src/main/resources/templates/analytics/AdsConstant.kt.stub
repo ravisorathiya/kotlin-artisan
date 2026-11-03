@@ -1,4 +1,4 @@
-package {{PACKAGE}}
+package {{PACKAGE}}.remote
 
 /**
  * Ad units and remote switches, one place. Add a line and it's live: the property name is the Remote Config key,
