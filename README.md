@@ -235,7 +235,7 @@ Studio and never shipped. It's plain markdown, grouped by folder:
 | `workflow/v_1_0_alpha/` | Bug lists and feedback rounds, one `phase_N.md` each, plus `overview.md` |
 | `plan/` | Plans (`make:plan <name>`: one `.md` file) and re-apply bundles (`make:bundle <feature> --since <tag>`), indexed in `plan/MASTER_OVERVIEW.md` |
 | `event/event.md` | Every `firebaseEvent(...)` call, pre-filled from the app, one table per screen |
-| `event/event_sheet.xlsx` | The same events as a spreadsheet for product and QA. Generated, never edited by hand |
+| `event/event_sheet.xlsx` | The same events as a simple sheet for product and QA (Event Name, Description). Generated, never edited by hand |
 | `skill/` | Reusable how-tos every project gets: `permission.md`, `analytics_events.md`, `crash_hardening.md` |
 | `scripts/` | Helper scripts agents run (rules in its README; `recolor.py` makes theme image variants) |
 | `assets/` | Screenshots and recordings |

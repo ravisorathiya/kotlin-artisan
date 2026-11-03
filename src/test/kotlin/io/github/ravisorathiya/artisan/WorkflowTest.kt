@@ -360,13 +360,16 @@ class WorkflowTest {
         val a = eventSheetBytes(doc, "demo")
         assertTrue(a.contentEquals(eventSheetBytes(doc, "demo")))
         val files = unzip(a)
-        assertTrue(listOf("[Content_Types].xml", "xl/workbook.xml", "xl/styles.xml", "xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml").all { it in files }, files.keys.toString())
+        assertTrue(listOf("[Content_Types].xml", "xl/workbook.xml", "xl/styles.xml", "xl/worksheets/sheet1.xml").all { it in files }, files.keys.toString())
+        assertTrue("xl/worksheets/sheet2.xml" !in files, "one tab only")
         val sheet = files.getValue("xl/worksheets/sheet1.xml")
-        assertTrue("main_on_create" in sheet && "OldAct_Open" in sheet && "splash_sample" !in sheet)
-        assertTrue("Home opened &amp; ready" in sheet)
-        assertTrue("""<mergeCell ref="B2:B3"/>""" in sheet, sheet)
-        assertTrue("""<autoFilter ref="A1:E4"/>""" in sheet)
-        assertTrue("<v>3</v>" in files.getValue("xl/worksheets/sheet2.xml"))
+        // two columns: Event Name, Description; each screen a merged bold row above its events
+        assertTrue("""<c r="A1" s="1" t="inlineStr"><is><t xml:space="preserve">Event Name</t></is></c><c r="B1" s="1" t="inlineStr"><is><t xml:space="preserve">Description</t></is></c>""" in sheet)
+        assertTrue("""<c r="A2" s="3" t="inlineStr"><is><t xml:space="preserve">MainActivity</t>""" in sheet)
+        assertTrue("""<c r="A3" s="2" t="inlineStr"><is><t xml:space="preserve">main_on_create</t></is></c><c r="B3" s="2" t="inlineStr"><is><t xml:space="preserve">Home opened &amp; ready</t>""" in sheet, sheet)
+        assertTrue("""<c r="A6" s="2" t="inlineStr"><is><t xml:space="preserve">OldAct_Open</t></is></c><c r="B6" s="2" t="inlineStr"><is><t xml:space="preserve">Old screen opened</t>""" in sheet)
+        assertTrue("""<mergeCell ref="A2:B2"/><mergeCell ref="A5:B5"/>""" in sheet, sheet)
+        assertTrue("splash_sample" !in sheet && "onCreate()" !in sheet && "C1" !in sheet)
     }
 
     @Test

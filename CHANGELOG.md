@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.1: a simpler event sheet
+
+- `event_sheet.xlsx` now has two columns, Event Name and Description, with each screen as a bold row above its
+  events. The Screens tab, No, Fired from and the filter are gone. The Description is the When text of event.md.
+- `make:permission` writes descriptions in plain words ("User allowed contacts access") instead of permission
+  constants.
+
 ## 0.10.0: event sheet, skills, scripts and make:permission
 
 - **The docs website is gone** (`website/`, `netlify.toml`). The README is the reference now: it gains the setup

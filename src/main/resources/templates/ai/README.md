@@ -89,7 +89,7 @@ create folders ahead of time. The developer may rename, move, add or remove fold
   - Its top part explains the wiring, the event box and the naming rules, plus `## Example: ...` sections to copy.
   - It must match the code exactly. See [Analytics event sync](#analytics-event-sync--critical).
 - **`event_sheet.xlsx`**: the same events as a spreadsheet for product, QA and managers.
-  - The Events tab has No, Screen, Event name, Fired from and When. The Screens tab has Screen, Source file and Events.
+  - Two columns: Event Name and Description (the When text). Each screen is a bold row above its events.
   - **Generated from event.md, never edit it.** `make:event`, `make:permission`, `check:events`, `event:sheet` and the pre-commit hook rebuild it, and the hook stages it with event.md.
 
 ### skill
@@ -205,7 +205,7 @@ Full table and samples are in `event.md` ("How to name an event").
   |----------------------|--------------|-----------------------------|
   | `splash_on_create`   | `onCreate()` | Splash screen created       |
   ```
-- **When**: in user/app terms; name every `Bundle` key and its values; say when personal data (numbers, names,
+- **When**: in user/app terms (it is the sheet's Description, so no method names or permission constants); name every `Bundle` key and its values; say when personal data (numbers, names,
   message text, URIs) is **not** logged.
 - One row per event per screen. Don't list `logging()` calls (ad plumbing, error logs).
 

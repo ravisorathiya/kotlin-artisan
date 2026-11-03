@@ -48,10 +48,13 @@ managers read the generated `event/event_sheet.xlsx`. Use this skill whenever yo
 | Change the trigger or the Bundle | Update **When**: every Bundle key and its values; say when personal data is **not** logged |
 | Add permissions to a screen | `artisan make:permission`: the five events per key and the three Settings events in one go |
 
-**The sheet is generated.** `event/event_sheet.xlsx` has two tabs:
+**The sheet is generated.** `event/event_sheet.xlsx` is kept simple: two columns, **Event Name** and
+**Description**. Each screen is a bold row above its events. The Description is the **When** text of event.md, so
+write When for the person reading the sheet:
 
-- Events: No, Screen, Event name, Fired from, When;
-- Screens: Screen, Source file, Events.
+- Plain words a non-technical reader understands: "User allowed contacts access", not `READ_CONTACTS granted in phoneLauncher`.
+- No method names or permission constants. Those go in **Fired from**, which the sheet leaves out.
+- Name the Bundle keys and their values, and say when personal data is **not** logged.
 
 It is rebuilt from event.md by `make:event`, `make:permission`, `check:events`, `event:sheet` and the pre-commit hook
 (`artisan hooks install`). The hook also stages it with event.md. **Never edit the sheet by hand**: edit event.md.

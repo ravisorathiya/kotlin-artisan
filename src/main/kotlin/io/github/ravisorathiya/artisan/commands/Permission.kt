@@ -56,21 +56,41 @@ internal fun parsePermGroups(args: List<String>): List<PermGroup> = args.flatMap
     groups.groupBy { it.key }.filter { it.value.size > 1 }.keys.firstOrNull()?.let { throw CliError("Key '$it' is used twice.") }
 }
 
-/** The events a screen's flow fires: five per group, then the Settings dialog's three. (name, fired from, when) */
+/** Plain words for a permission, for descriptions a non-technical reader understands. */
+private val PERMISSION_WORDS = mapOf(
+    "READ_CONTACTS" to "contacts", "WRITE_CONTACTS" to "contacts", "READ_CALL_LOG" to "call history",
+    "WRITE_CALL_LOG" to "call history", "READ_PHONE_STATE" to "phone", "CALL_PHONE" to "phone calls",
+    "READ_PHONE_NUMBERS" to "phone number", "ANSWER_PHONE_CALLS" to "answering calls", "READ_SMS" to "messages",
+    "SEND_SMS" to "messages", "RECEIVE_SMS" to "messages", "RECEIVE_MMS" to "messages", "POST_NOTIFICATIONS" to "notifications",
+    "CAMERA" to "camera", "RECORD_AUDIO" to "microphone", "ACCESS_FINE_LOCATION" to "location",
+    "ACCESS_COARSE_LOCATION" to "location", "ACCESS_BACKGROUND_LOCATION" to "background location",
+    "READ_MEDIA_IMAGES" to "photos", "READ_MEDIA_VIDEO" to "videos", "READ_MEDIA_AUDIO" to "music and audio",
+    "READ_EXTERNAL_STORAGE" to "files", "WRITE_EXTERNAL_STORAGE" to "files", "BLUETOOTH_CONNECT" to "nearby devices",
+    "BLUETOOTH_SCAN" to "nearby devices", "NEARBY_WIFI_DEVICES" to "nearby devices", "READ_CALENDAR" to "calendar",
+    "WRITE_CALENDAR" to "calendar", "BODY_SENSORS" to "body sensors", "ACTIVITY_RECOGNITION" to "physical activity",
+)
+
+/** `contacts`, `photos and videos`, `phone and phone calls`: what the user sees the app asking for. */
+internal fun permissionWords(perms: List<String>): String {
+    val words = perms.map { p -> p.substringAfterLast('.').let { PERMISSION_WORDS[it] ?: it.lowercase().replace('_', ' ') } }.distinct()
+    return if (words.size == 1) words[0] else words.dropLast(1).joinToString(", ") + " and " + words.last()
+}
+
+/** The events a screen's flow fires: five per group, then the Settings dialog's three. (name, fired from, description) */
 internal fun permissionEvents(prefix: String, groups: List<PermGroup>): List<Triple<String, String, String>> =
     groups.flatMap { g ->
-        val what = g.permissions.joinToString(" + ") { it.substringAfterLast('.') }
+        val what = permissionWords(g.permissions)
         listOf(
-            Triple("${prefix}_${g.key}_ask", "`PermissionFlow.ask()`", "The system prompt for $what is about to show"),
-            Triple("${prefix}_${g.key}_grant", "launcher result", "User allowed $what; never asked again"),
-            Triple("${prefix}_${g.key}_deny_1st", "launcher result", "First denial of $what; asked again later"),
-            Triple("${prefix}_${g.key}_deny_2nd", "launcher result", "Denied again / \"don't ask again\": Android won't show the prompt again, only Settings can grant it"),
-            Triple("${prefix}_${g.key}_back", "launcher result", "Prompt for $what dismissed or cancelled; asked again next time"),
+            Triple("${prefix}_${g.key}_ask", "`PermissionFlow.ask()`", "The app asked the user for $what access (system popup shown)"),
+            Triple("${prefix}_${g.key}_grant", "launcher result", "User allowed $what access"),
+            Triple("${prefix}_${g.key}_deny_1st", "launcher result", "User denied $what access for the first time; the app will ask again later"),
+            Triple("${prefix}_${g.key}_deny_2nd", "launcher result", "User denied $what access again; Android won't show the popup any more, only Settings can allow it"),
+            Triple("${prefix}_${g.key}_back", "launcher result", "User closed the $what popup without choosing; the app will ask again"),
         )
     } + listOf(
-        Triple("${prefix}_setting_show", "`showSettingsDialog()`", "Every prompt is used up but a permission is still missing: the go-to-Settings dialog appeared"),
-        Triple("${prefix}_setting_close", "Settings dialog, Not now", "User closed the Settings dialog without going to Settings"),
-        Triple("${prefix}_setting_dismiss", "Settings dialog, Open settings", "User was sent to the app's Settings page"),
+        Triple("${prefix}_setting_show", "`showSettingsDialog()`", "A permission is still missing and can only be allowed in Settings: the \"go to Settings\" popup appeared"),
+        Triple("${prefix}_setting_close", "Settings dialog, Not now", "User closed the \"go to Settings\" popup without going to Settings"),
+        Triple("${prefix}_setting_dismiss", "Settings dialog, Open settings", "User tapped \"Open settings\" and was sent to the app's Settings page"),
     )
 
 /** Adds `<uses-permission android:name="x" />` for each of [perms] the manifest doesn't have yet. Returns the text and what it added. */
