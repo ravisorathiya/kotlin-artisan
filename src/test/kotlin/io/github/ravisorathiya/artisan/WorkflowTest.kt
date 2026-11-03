@@ -451,13 +451,15 @@ class WorkflowTest {
         assertNull(addJitpack(added, kts = true))
         assertNull(addJitpack("include ':app'\n", kts = false), "no dependencyResolutionManagement: say so instead")
 
-        // DebugConfig.kt: switches, bypass rules (snake_case), firebaseEvent; Analytics.kt: init + the library
-        val config = assertNotNull(javaClass.getResource("/templates/analytics/DebugConfig.kt.stub")).readText()
-        assertTrue("const val ENABLE_EVENT_BOX = false" in config && "const val EVENT_BOX_BYPASS = true" in config)
-        assertTrue(listOf("EVENT_BOX_BYPASS_SUFFIXES", "EVENT_BOX_BYPASS_PREFIXES", "EVENT_BOX_BYPASS_NAMES", "EVENT_BOX_ALWAYS_SHOW", "\"_on_create\"").all { it in config })
-        assertTrue("fun firebaseEvent(name: String" in config && "fun Context.firebaseEvent(" in config && "androidx" !in config, "no androidx: the module has no dependency on it")
-        assertTrue("OGEventBoxLog.log(name, bundle)" in config && "BuildConfig" !in config)
-        val init = assertNotNull(javaClass.getResource("/templates/analytics/Analytics.kt.stub")).readText()
+        // DebugConfig.kt: settings only (switches, bypass rules in snake_case); FirebaseEvents.kt: firebaseEvent; Analytics.kt: init
+        fun stub(name: String) = assertNotNull(javaClass.getResource("/templates/analytics/$name.stub")).readText()
+        val config = stub("DebugConfig.kt")
+        assertTrue("object DebugConfig" in config && "const val ENABLE_EVENT_BOX = false" in config && "const val EVENT_BOX_BYPASS = true" in config)
+        assertTrue(listOf("BYPASS_SUFFIXES", "BYPASS_PREFIXES", "BYPASS_NAMES", "ALWAYS_SHOW", "\"_on_create\"").all { it in config })
+        val events = stub("FirebaseEvents.kt")
+        assertTrue("fun firebaseEvent(name: String" in events && "fun Context.firebaseEvent(" in events && "androidx" !in events, "no androidx: the module has no dependency on it")
+        assertTrue("OGEventBoxLog.log(name, bundle)" in events && "BuildConfig" !in events && "Handler" !in events)
+        val init = stub("Analytics.kt")
         assertTrue("object Analytics" in init && "fun init(app: Application)" in init && ".install(app)" in init)
         assertNull(javaClass.getResource("/templates/analytics/EventLogBox.kt.stub"))
 

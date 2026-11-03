@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.12.0: the analytics module is the app's Firebase hub
+
+- **`:core:analytics` holds all of Firebase:**
+  - **One BOM** with Analytics, Crashlytics, Messaging and Remote Config, all `api`.
+  - **Timber** for logging. `Analytics.init` plants a `DebugTree` in debug builds; `logging(tag, e)` also records a
+    Crashlytics non-fatal in release builds.
+  - **Coroutines** instead of a `Handler`: the event box posts through `Dispatchers.Main`, and Remote Config and
+    Messaging have `suspend` functions.
+  - **Helpers for every module:** `Crash` (`log`, `record`, `setKey`), `RemoteConfig` (`setDefaults`,
+    `fetch`/`fetchInBackground`, `bool`/`string`/`long`/`double`), `Messaging` (`token`, `subscribe`,
+    `unsubscribe`), and `Analytics.setUserId` / `setUserProperty`.
+  - **`DebugConfig` is settings only** (`object DebugConfig`, in commented sections). `firebaseEvent` moved to
+    `FirebaseEvents.kt`. The bypass rules are now `DebugConfig.BYPASS_SUFFIXES`, `BYPASS_PREFIXES`, `BYPASS_NAMES`
+    and `ALWAYS_SHOW`.
+  - **The module has a README.md** covering set-up, events and the bypass, Crashlytics, Remote Config, Messaging
+    (with a `FirebaseMessagingService` sample) and logging.
+- **The latest version of everything,** fetched when the command runs: the Firebase BOM, Timber, coroutines, Event Box,
+  and the google-services and Crashlytics plugins. Only stable versions are used, and catalog entries that are behind
+  are moved up (never down). The project's own versions are used only when offline.
+- **The build is checked.** `make:analytics` compiles the module once. When the latest Firebase was built with a newer
+  Kotlin than the project's (BOM 35 on Kotlin 2.2, for example), the BOM steps down to the newest one that builds,
+  and artisan says so. `--no-verify` skips the check.
+- With `google-services.json` in the app, the google-services and Crashlytics plugins are added to the app (and to the
+  root or the catalog). Without it, artisan explains what to add, because the plugins would break the build.
+
 ## 0.11.0: make:analytics builds a :core:analytics module
 
 - **`make:analytics [--path :core:analytics] [--build]`** now creates an Android library module, like the Zombie app's,

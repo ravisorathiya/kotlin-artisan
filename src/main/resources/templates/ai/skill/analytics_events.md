@@ -9,23 +9,29 @@ managers read the generated `event/event_sheet.xlsx`. Use this skill whenever yo
 `artisan make:analytics` creates the **`:core:analytics` module** and wires it into every Android module, so
 `firebaseEvent(...)` works anywhere. It works out the dependencies itself:
 
-- **Plugins:** the app's own style (catalog alias or `id`). It adds the library plugin to the catalog and the root when it's missing.
+- **Every version is the latest stable one**, fetched when the command runs: the Firebase BOM, Timber, coroutines,
+  Event Box, and the google-services / Crashlytics plugins. The project's own version is used only when offline.
+  A catalog entry that's behind is moved up (never down).
+- **The build is checked.** The latest Firebase may be built with a newer Kotlin than the project uses. If the module
+  doesn't compile, the BOM steps down to the newest that does, and artisan says so. `--no-verify` skips the check.
+- **Plugins:** in the app's own style (catalog alias or `id`). The library plugin is added where it's missing. With
+  `google-services.json`, the google-services and Crashlytics plugins are added to the app.
 - **Copied from the app:** compileSdk, minSdk, compileOptions and the Kotlin JVM target.
-- **Firebase Analytics:** the app's BOM or version, else the latest from Google Maven.
-- **Event Box:** the latest from JitPack. JitPack is added to the repositories.
 
-The module holds two files, in the app's base package, so code there needs no import:
+The module is the app's **central place for Firebase**. One BOM covers Analytics, Crashlytics, Messaging and Remote
+Config. Timber and coroutines are `api`, so every module gets them. The files are in the app's base package, so code
+there needs no import:
 
-- `DebugConfig.kt`:
-  - `firebaseEvent(...)`, top-level and `Context.`; it works from Activities, Fragments, ViewModels and background threads;
-  - `ENABLE_EVENT_BOX` and the bypass rules;
-  - `logging(...)`;
-  - in debug builds, a logcat warning when a name isn't snake_case or is 30+ characters.
-- `Analytics.kt`: `Analytics.init(app)`, the Firebase instance, and the [Event Box](https://github.com/JpOriginDev/event-box)
-  library. The box is a floating bubble listing events with their parameters, and it warns when an event breaks a
-  Firebase limit.
+| File | What's in it |
+|---|---|
+| `DebugConfig.kt` | settings only: the event box switch, bypass rules, log tags, Crashlytics and Remote Config switches |
+| `FirebaseEvents.kt` | `firebaseEvent(...)` (top-level and `Context.`), for any thread. The event box part runs on Main through a coroutine. Debug builds warn about bad names |
+| `Analytics.kt` | `Analytics.init(app)`: Firebase, a Timber `DebugTree` for debug builds, Crashlytics collection, the [Event Box](https://github.com/JpOriginDev/event-box) |
+| `Crash.kt`, `RemoteConfig.kt`, `Messaging.kt` | `Crash.log/record/setKey`, `RemoteConfig.fetch/bool/string/long`, `Messaging.token/subscribe` |
+| `Logging.kt` | `logging(...)` through Timber; caught errors become Crashlytics non-fatals in release |
+| `README.md` | how to use all of it |
 
-A new module that should log events: `implementation(project(":core:analytics"))`.
+A new module that should use it: `implementation(project(":core:analytics"))`.
 `artisan event:box` moves Event Box to its latest version.
 
 - Then:
@@ -33,16 +39,16 @@ A new module that should log events: `implementation(project(":core:analytics"))
   - put `Analytics.init(this)` in `Application.onCreate()`.
 - If the app already has its own `firebaseEvent` (top-level or an extension), keep it. The top of event.md says where it lives.
 - **Every project needs this setup.** `artisan make:ai` offers `make:analytics` when the app has no `firebaseEvent` yet.
-- **Bypass** (the Bypass section of `DebugConfig.kt`, fully customisable, snake_case like the names): events kept out of the box so it shows what you're testing. They
-  still go to Firebase and logcat.
+- **Bypass** (the Bypass section of `DebugConfig`, fully customisable, snake_case like the names): events kept out of
+  the box so it shows what you're testing. They still go to Firebase and logcat.
 
   | Constant | Default | Effect |
   |---|---|---|
-  | `EVENT_BOX_BYPASS` | `true` | `false` shows every event in the box |
-  | `EVENT_BOX_BYPASS_SUFFIXES` | lifecycle: `_on_create`, `_on_resume`, `_on_pause`, `_on_destroy`, `_on_backpress`, ... | Name endings to hide (any case; `_onCreate` matches too) |
-  | `EVENT_BOX_BYPASS_PREFIXES` | none | Name starts to hide, e.g. `appopen_` |
-  | `EVENT_BOX_BYPASS_NAMES` | none | Exact names to hide |
-  | `EVENT_BOX_ALWAYS_SHOW` | none | Exact names always shown, even when a rule hides them |
+  | `DebugConfig.EVENT_BOX_BYPASS` | `true` | `false` shows every event in the box |
+  | `DebugConfig.BYPASS_SUFFIXES` | lifecycle: `_on_create`, `_on_resume`, `_on_pause`, `_on_destroy`, `_on_backpress`, ... | Name endings to hide (any case; `_onCreate` matches too) |
+  | `DebugConfig.BYPASS_PREFIXES` | none | Name starts to hide, e.g. `appopen_` |
+  | `DebugConfig.BYPASS_NAMES` | none | Exact names to hide |
+  | `DebugConfig.ALWAYS_SHOW` | none | Exact names always shown, even when a rule hides them |
 - Already using `OGEventBoxLog` elsewhere (an SDK that shares the box)? Keep one setup: the app's own `firebaseEvent` logs to it.
 - **`ENABLE_EVENT_BOX` must be `false` in any release build.** If you turned it on, note it in the task.
 

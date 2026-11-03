@@ -23,21 +23,96 @@ import java.net.URI
  * The whole change is planned first (text in, text out) and written only when every piece is ready.
  */
 
-internal const val FIREBASE_ANALYTICS_FALLBACK = "23.0.0"
-internal const val GOOGLE_MAVEN_ANALYTICS = "https://dl.google.com/dl/android/maven2/com/google/firebase/firebase-analytics/maven-metadata.xml"
+internal const val MAVEN_FIREBASE_BOM = "https://dl.google.com/dl/android/maven2/com/google/firebase/firebase-bom/maven-metadata.xml"
+internal const val MAVEN_GOOGLE_SERVICES = "https://dl.google.com/dl/android/maven2/com/google/gms/google-services/maven-metadata.xml"
+internal const val MAVEN_CRASHLYTICS_PLUGIN = "https://dl.google.com/dl/android/maven2/com/google/firebase/firebase-crashlytics-gradle/maven-metadata.xml"
+internal const val MAVEN_TIMBER = "https://repo1.maven.org/maven2/com/jakewharton/timber/timber/maven-metadata.xml"
+internal const val MAVEN_COROUTINES = "https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-coroutines-android/maven-metadata.xml"
 internal const val JITPACK_EVENT_BOX = "https://jitpack.io/api/builds/com.github.JpOriginDev/event-box/latest"
 
-/** The latest version at [url]: Google Maven metadata (`<release>`) or a JitPack build (`latestOk`). Null when offline. */
-internal fun fetchLatestVersion(url: String): String? = runCatching {
+/** Used only when the version can't be fetched (offline) and the project has none. */
+internal const val FIREBASE_BOM_FALLBACK = "34.17.0"
+internal const val TIMBER_FALLBACK = "5.0.1"
+internal const val COROUTINES_FALLBACK = "1.10.2"
+internal const val GOOGLE_SERVICES_FALLBACK = "4.4.3"
+internal const val CRASHLYTICS_PLUGIN_FALLBACK = "3.0.6"
+
+/** The newest stable version in a Maven metadata file (no -alpha / -RC), or JitPack's `latestOk`. */
+internal fun latestStable(body: String): String? {
+    Regex(""""latestOk"\s*:\s*"([^"]+)"""").find(body)?.let { return it.groupValues[1] }
+    val stable = Regex("""<version>([^<]+)</version>""").findAll(body).map { it.groupValues[1].trim() }
+        .filter { Regex("""^\d+(\.\d+)*$""").matches(it) }.toList()
+    return stable.maxWithOrNull(::compareVersions)
+        ?: Regex("""<release>([^<]+)</release>""").find(body)?.groupValues?.get(1)
+}
+
+/** The body at [url], or null (offline, timeout). */
+internal fun fetchBody(url: String): String? = runCatching {
     val c = (URI(url).toURL().openConnection() as HttpURLConnection).apply {
         connectTimeout = 3000
         readTimeout = 3000
         setRequestProperty("User-Agent", "kotlin-artisan")
     }
-    val body = c.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
-    Regex("""<release>([^<]+)</release>""").find(body)?.groupValues?.get(1)
-        ?: Regex(""""latestOk"\s*:\s*"([^"]+)"""").find(body)?.groupValues?.get(1)
+    c.inputStream.use { it.readBytes().toString(Charsets.UTF_8) }
 }.getOrNull()
+
+/** The latest stable version at [url]. Null when offline. */
+internal fun fetchLatestVersion(url: String): String? = fetchBody(url)?.let { latestStable(it) }
+
+/** The catalog's version for `group:name`: `version = "x"` on its line, or the `[versions]` entry it refers to. */
+internal fun catalogVersion(toml: String, lib: String): String? {
+    val line = libraryKey(toml, lib)?.let { tomlEntries(toml, "libraries")[it] } ?: return null
+    Regex("""\bversion\s*=\s*"([^"]+)"""").find(line)?.let { return it.groupValues[1] }
+    val ref = Regex("""\bversion\.ref\s*=\s*"([^"]+)"""").find(line)?.groupValues?.get(1) ?: return null
+    return tomlEntries(toml, "versions")[ref]?.trim('"')
+}
+
+/**
+ * Moves the catalog's version of `group:name` up to [version] (never down), on its own line or in the `[versions]`
+ * entry it refers to. Returns the new text and the old version, or (text, null) when nothing changed.
+ */
+internal fun bumpCatalogVersion(toml: String, lib: String, version: String): Pair<String, String?> {
+    val key = libraryKey(toml, lib) ?: return toml to null
+    val line = Regex("""(?m)^(\s*${Regex.escape(key)}\s*=.*)$""").find(toml) ?: return toml to null
+    Regex("""\bversion\s*=\s*"([^"]+)"""").find(line.value)?.let { v ->
+        if (compareVersions(version, v.groupValues[1]) <= 0) return toml to null
+        return toml.replaceRange(line.range, line.value.replaceRange(v.groups[1]!!.range, version)) to v.groupValues[1]
+    }
+    val ref = Regex("""\bversion\.ref\s*=\s*"([^"]+)"""").find(line.value)?.groupValues?.get(1) ?: return toml to null
+    var inside = false
+    var offset = 0
+    for (l in toml.split('\n')) {
+        val t = l.trim()
+        if (t.startsWith("[")) inside = t == "[versions]"
+        else if (inside) Regex("""^(\s*${Regex.escape(ref)}\s*=\s*")([^"]+)(".*)$""").find(l.trimEnd('\r'))?.let { m ->
+            if (compareVersions(version, m.groupValues[2]) <= 0) return toml to null
+            val start = offset + m.groups[2]!!.range.first
+            return toml.replaceRange(start, start + m.groupValues[2].length, version) to m.groupValues[2]
+        }
+        offset += l.length + 1
+    }
+    return toml to null
+}
+
+/** Adds [line] as the last entry of the top-level `plugins { }` block (with the block's indent). */
+internal fun addToPluginsBlock(build: String, line: String): String {
+    val start = Regex("""(?m)^plugins\s*\{""").find(build) ?: return build
+    var depth = 0
+    var close = -1
+    for (i in start.range.first until build.length) {
+        when (build[i]) {
+            '{' -> depth++
+            '}' -> { depth--; if (depth == 0) { close = i; break } }
+        }
+    }
+    if (close < 0) return build
+    val nl = if ("\r\n" in build) "\r\n" else "\n"
+    val inner = build.substring(start.range.last + 1, close)
+    val indent = Regex("""(?m)^([ \t]+)\S""").find(inner)?.groupValues?.get(1) ?: "    "
+    val lineStart = build.lastIndexOf('\n', close - 1) + 1
+    val before = build.substring(0, lineStart)
+    return before + indent + line + nl + build.substring(lineStart)
+}
 
 // ---------- version catalog ----------
 
@@ -138,6 +213,11 @@ internal fun isAndroidModule(build: String, toml: String?): Boolean =
 
 // ---------- the plan ----------
 
+/** The module's code files, in the app's base package. */
+internal val ANALYTICS_SOURCES = listOf(
+    "DebugConfig.kt", "FirebaseEvents.kt", "Analytics.kt", "Logging.kt", "Crash.kt", "RemoteConfig.kt", "Messaging.kt",
+)
+
 internal class AnalyticsModulePlan(
     /** The module, e.g. `:core:analytics`. */
     val module: String,
@@ -152,7 +232,12 @@ internal class AnalyticsModulePlan(
     /** Code modules left out (not Android), with why. */
     val skipped: List<Pair<String, String>>,
     /** Things the person still has to do or know. */
-    val notes: List<String>,
+    val notes: MutableList<String>,
+    /** The Firebase BOM version used, and the file that pins it (the module's build file or the catalog). */
+    val bom: String,
+    val bomFile: String,
+    /** The app's own BOM version before this run, if it had one (a step-down tries it first). */
+    val appBom: String?,
 )
 
 /**
@@ -225,44 +310,67 @@ internal fun planAnalyticsModule(p: Project, modulePath: String = ":core:analyti
     val kotlinBlock = buildStatement(appBuild, "kotlin\\s*\\{|configure<\\w*Kotlin\\w*>\\s*\\{", topLevel = true)
     val imports = if (kotlinBlock != null) Regex("""(?m)^import\s+.+$""").findAll(appBuild).map { it.value }.toList() else emptyList()
 
-    // Firebase Analytics: the app's own lines, else the latest
+    // dependencies: one Firebase BOM for everything Firebase, plus Timber, coroutines and Event Box.
+    // Every version is the latest stable one, fetched now; the project's own version only when offline.
     val depsBlock = buildStatement(appBuild, "dependencies\\s*\\{", topLevel = true) ?: ""
-    val firebaseLines = depsBlock.lines().map { it.trim() }
-        .filter { !it.startsWith("//") && Regex("""firebase[-.](bom|analytics)\b""").containsMatchIn(it) && !Regex("""analytics[-.]ktx""").containsMatchIn(it) }
-        .map { it.replaceFirst(Regex("""^(implementation)\b"""), "api") }
-    val deps = mutableListOf<String>()
-    deps += firebaseLines
-    if (firebaseLines.none { Regex("""firebase[-.]analytics""").containsMatchIn(it) }) {
-        val hasBom = firebaseLines.any { Regex("""firebase[-.]bom""").containsMatchIn(it) }
-        val alias = toml?.let { libraryKey(it, "com.google.firebase:firebase-analytics") }
-        deps += when {
-            alias != null && hasBom -> "api(libs.${catalogAccessor(alias)})"
-            hasBom -> "api(${q("com.google.firebase:firebase-analytics")})"
-            else -> {
-                val v = latest(GOOGLE_MAVEN_ANALYTICS) ?: FIREBASE_ANALYTICS_FALLBACK.also { notes += "Offline: Firebase Analytics pinned to $it; check for a newer one." }
-                "api(${q("com.google.firebase:firebase-analytics:$v")})"
-            }
-        }
+    val catalogDeps = toml != null && Regex("""\blibs\.(?!plugins\.)[\w.]+""").containsMatchIn(depsBlock)
+
+    /** The app's own version of `group:name`: a coordinate in its build file, or its catalog entry. */
+    fun appVersion(lib: String): String? {
+        Regex(Regex.escape(lib) + """:([\w.\-]+)""").find(appBuild)?.groupValues?.get(1)?.let { return it }
+        return toml?.let { catalogVersion(it, lib) }
     }
 
-    // Event Box: the latest on JitPack, else the app's version, else the pinned one
-    val boxVersion = latest(JITPACK_EVENT_BOX)
-        ?: Regex(Regex.escape(EVENT_BOX_GROUP) + """:([\w.\-]+)""").find(appBuild)?.groupValues?.get(1)
-        ?: EVENT_BOX_VERSION.also { notes += "Offline: Event Box pinned to $it (artisan event:box updates it later)." }
-    val catalogDeps = toml != null && Regex("""\blibs\.(?!plugins\.)[\w.]+""").containsMatchIn(depsBlock)
-    deps += if (catalogDeps) {
-        val key = libraryKey(toml!!, EVENT_BOX_GROUP) ?: "event-box".also {
-            toml = addTomlEntry(toml!!, "libraries", "event-box = { module = \"$EVENT_BOX_GROUP\", version = \"$boxVersion\" }")
-        }
-        "implementation(libs.${catalogAccessor(key)})"
-    } else "implementation(${q("$EVENT_BOX_GROUP:$boxVersion")})"
+    /** The latest stable from [url], else the app's version, else [fallback] (with a note). */
+    fun resolve(lib: String, url: String, fallback: String): String =
+        latest(url) ?: appVersion(lib)?.also { notes += "Offline: $lib kept at the app's $it." }
+            ?: fallback.also { notes += "Offline: $lib pinned to $it; run again online for the latest." }
+
+    val bumped = mutableListOf<String>()
+
+    /** One dependency line: from the catalog (adding the entry, or bumping it to [version]) or as a coordinate. version null = from the BOM. */
+    fun dep(config: String, lib: String, key: String, version: String?, platform: Boolean = false): String {
+        val ref = if (catalogDeps) {
+            val existing = libraryKey(toml!!, lib)
+            if (existing != null && version != null) {
+                val (t, old) = bumpCatalogVersion(toml!!, lib, version)
+                if (old != null) { toml = t; bumped += "$lib $old -> $version" }
+            }
+            val k = existing ?: key.also {
+                toml = addTomlEntry(toml!!, "libraries", "$key = { module = \"$lib\"${version?.let { v -> ", version = \"$v\"" } ?: ""} }")
+            }
+            "libs.${catalogAccessor(k)}"
+        } else q(if (version != null) "$lib:$version" else lib)
+        return "$config(${if (platform) "platform($ref)" else ref})"
+    }
+
+    val appBom = appVersion("com.google.firebase:firebase-bom")
+    val bom = resolve("com.google.firebase:firebase-bom", MAVEN_FIREBASE_BOM, FIREBASE_BOM_FALLBACK)
+    val coroutines = resolve("org.jetbrains.kotlinx:kotlinx-coroutines-android", MAVEN_COROUTINES, COROUTINES_FALLBACK)
+    val deps = listOf(
+        "// Firebase: one BOM, so every Firebase library has a matching version",
+        dep("api", "com.google.firebase:firebase-bom", "firebase-bom", bom, platform = true),
+        dep("api", "com.google.firebase:firebase-analytics", "firebase-analytics", null),
+        dep("api", "com.google.firebase:firebase-crashlytics", "firebase-crashlytics", null),
+        dep("api", "com.google.firebase:firebase-messaging", "firebase-messaging", null),
+        dep("api", "com.google.firebase:firebase-config", "firebase-config", null),
+        "",
+        "// logging and background work, for every module that uses this one",
+        dep("api", "com.jakewharton.timber:timber", "timber", resolve("com.jakewharton.timber:timber", MAVEN_TIMBER, TIMBER_FALLBACK)),
+        dep("api", "org.jetbrains.kotlinx:kotlinx-coroutines-android", "kotlinx-coroutines-android", coroutines),
+        dep("implementation", "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", "kotlinx-coroutines-play-services", coroutines),
+        "",
+        "// the floating event box for testers (https://github.com/JpOriginDev/event-box)",
+        dep("implementation", EVENT_BOX_GROUP, "event-box", resolve(EVENT_BOX_GROUP, JITPACK_EVENT_BOX, EVENT_BOX_VERSION)),
+    )
+    if (bumped.isNotEmpty()) notes += "Catalog moved to the latest: ${bumped.joinToString(", ")}"
 
     // the module's build file
     val ns = "$namespace.${module.trimStart(':').replace(':', '.')}"
     fun block(s: String?) = s?.prependIndent("    ")
     val build = buildString {
         if (imports.isNotEmpty()) append(imports.joinToString("\n")).append("\n\n")
-        append("// firebaseEvent() and the event box for every module (artisan make:analytics). Use it: implementation(project(${q(module)}))\n")
+        append("// Firebase for every module: events, Crashlytics, Messaging, Remote Config, Timber (artisan make:analytics). See README.md.\n// Use it: implementation(project(${q(module)}))\n")
         append("plugins {\n    $libLine\n").append(kotlinLine?.let { "    $it\n" } ?: "").append("}\n\n")
         append("android {\n")
         append("    namespace ${if (kts) "= " else ""}${q(ns)}\n")
@@ -272,20 +380,21 @@ internal fun planAnalyticsModule(p: Project, modulePath: String = ":core:analyti
         kotlinOptions?.let { append("\n").append(block(it)).append("\n") }
         append("}\n")
         kotlinBlock?.let { append("\n").append(it).append("\n") }
-        append("\ndependencies {\n").append(deps.joinToString("") { "    $it\n" }).append("}\n")
+        append("\ndependencies {\n").append(deps.joinToString("") { if (it.isEmpty()) "\n" else "    $it\n" }).append("}\n")
     }
 
     // the code: the app's base package, so code there calls firebaseEvent() without an import
     fun stubText(name: String) = (object {}.javaClass.getResource("/templates/analytics/$name.stub")?.readText()?.replace("\r\n", "\n")
         ?: throw CliError("Template $name missing from the artisan install.")).replace("{{PACKAGE}}", namespace).replace("{{NAMESPACE}}", namespace)
+        .replace("{{MODULE}}", module).replace("{{BOM}}", catalogVersion(toml ?: "", "com.google.firebase:firebase-bom") ?: bom)
     val src = "$dir/src/main/java/${namespace.replace('.', '/')}"
     val created = linkedMapOf(
         "$dir/${if (kts) "build.gradle.kts" else "build.gradle"}" to build,
+        "$dir/README.md" to stubText("README.md"),
         "$dir/src/main/AndroidManifest.xml" to "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n\n    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\" />\n\n</manifest>\n",
         "$dir/.gitignore" to "/build\n",
-        "$src/DebugConfig.kt" to stubText("DebugConfig.kt"),
-        "$src/Analytics.kt" to stubText("Analytics.kt"),
     )
+    for (f in ANALYTICS_SOURCES) created["$src/$f"] = stubText(f)
 
     // settings: include + JitPack; root / catalog edits from above
     val changed = linkedMapOf<String, String>()
@@ -297,8 +406,6 @@ internal fun planAnalyticsModule(p: Project, modulePath: String = ":core:analyti
             ?: notes.add("Add maven(\"https://jitpack.io\") to your repositories: Event Box is on JitPack.")
     }
     changed[p.rel(p.settingsFile)] = settings
-    if (rootBuildFile != null && rootBuild != rootBuildFile.readText()) changed[p.rel(rootBuildFile)] = rootBuild!!
-    if (tomlFile != null && toml != tomlFile.readText()) changed[p.rel(tomlFile)] = toml!!
 
     // every Android module can use it
     val wired = mutableListOf<String>()
@@ -312,10 +419,38 @@ internal fun planAnalyticsModule(p: Project, modulePath: String = ":core:analyti
         wired += m.name
     }
 
-    if (!Regex("""google[-.]?services|googleService""", RegexOption.IGNORE_CASE).containsMatchIn(appBuild)) {
-        notes += "The app has no google-services plugin yet: Firebase needs it (com.google.gms.google-services) and google-services.json."
+    // the app's Firebase Gradle plugins (google-services, crashlytics): only with google-services.json, or the build breaks
+    var appText = changed[p.rel(appBuildFile)] ?: appBuildFile.readText()
+    val hasJson = File(app.dir, "google-services.json").isFile || File(app.dir, "src").walkTopDown().maxDepth(3).any { it.name == "google-services.json" }
+    val missing = listOf(
+        Triple("com.google.gms.google-services", MAVEN_GOOGLE_SERVICES, GOOGLE_SERVICES_FALLBACK),
+        Triple("com.google.firebase.crashlytics", MAVEN_CRASHLYTICS_PLUGIN, CRASHLYTICS_PLUGIN_FALLBACK),
+    ).filter { (id, _, _) -> pluginLines(appText).none { pluginIdOf(it, toml) == id } && id !in appText }
+    if (missing.isNotEmpty() && !hasJson) {
+        notes += "No google-services.json in ${app.name} yet. Add it from the Firebase console, then the plugins ${missing.joinToString(" and ") { it.first }} to ${app.name} (Firebase needs them)."
+    } else for ((id, url, fallback) in missing) {
+        val version = latest(url) ?: fallback.also { notes += "Offline: plugin $id pinned to $it." }
+        val useAlias = toml != null && Regex("""libs\.plugins\.""").containsMatchIn(pluginLines(appText).joinToString("\n"))
+        if (useAlias) {
+            val key = pluginKey(toml!!, id) ?: (if (id.endsWith("google-services")) "google-services" else "firebase-crashlytics").also { newKey ->
+                toml = addTomlEntry(toml!!, "plugins", "$newKey = { id = \"$id\", version = \"$version\" }")
+            }
+            val acc = catalogAccessor(key)
+            appText = addToPluginsBlock(appText, "alias(libs.plugins.$acc)")
+            rootBuild = rootBuild?.let { r -> if ("libs.plugins.$acc" in r) r else addToPluginsBlock(r, "alias(libs.plugins.$acc) apply false") }
+        } else {
+            val quote = if (appBuildFile.name.endsWith(".kts")) "\"" else "'"
+            val idCall = if (quote == "\"") "id(\"$id\")" else "id '$id'"
+            appText = addToPluginsBlock(appText, idCall)
+            rootBuild = rootBuild?.let { r -> if (id in r) r else addToPluginsBlock(r, if (quote == "\"") "id(\"$id\") version \"$version\" apply false" else "id '$id' version '$version' apply false") }
+        }
+        notes += "Added the $id plugin to ${app.name}."
     }
-    return AnalyticsModulePlan(module, namespace, created, changed, wired, skipped, notes)
+    if (appText != appBuildFile.readText()) changed[p.rel(appBuildFile)] = appText
+    if (rootBuildFile != null && rootBuild != rootBuildFile.readText()) changed[p.rel(rootBuildFile)] = rootBuild!!
+    if (tomlFile != null && toml != tomlFile.readText()) changed[p.rel(tomlFile)] = toml!!
+    val bomFile = if (catalogDeps) p.rel(tomlFile!!) else "$dir/${if (kts) "build.gradle.kts" else "build.gradle"}"
+    return AnalyticsModulePlan(module, namespace, created, changed, wired, skipped, notes, catalogVersion(toml ?: "", "com.google.firebase:firebase-bom") ?: bom, bomFile, appBom)
 }
 
 /** Writes [plan]. Every file was worked out first, so nothing is half-written when a step can't be planned. */
@@ -333,31 +468,6 @@ internal fun bumpEventBoxCoordinate(text: String, version: String): Pair<String,
     return re.replace(text, "$EVENT_BOX_GROUP:$version") to old
 }
 
-/** The catalog's Event Box version: `version = "x"` on its library line, or the `[versions]` entry it refers to. */
-internal fun bumpEventBoxCatalog(toml: String, version: String): Pair<String, Set<String>> {
-    val key = libraryKey(toml, EVENT_BOX_GROUP) ?: return toml to emptySet()
-    val line = Regex("""(?m)^(\s*${Regex.escape(key)}\s*=.*)$""").find(toml) ?: return toml to emptySet()
-    Regex("""\bversion\s*=\s*"([^"]+)"""").find(line.value)?.let { v ->
-        if (v.groupValues[1] == version) return toml to emptySet()
-        val newLine = line.value.replaceRange(v.groups[1]!!.range, version)
-        return toml.replaceRange(line.range, newLine) to setOf(v.groupValues[1])
-    }
-    val ref = Regex("""\bversion\.ref\s*=\s*"([^"]+)"""").find(line.value)?.groupValues?.get(1) ?: return toml to emptySet()
-    var inside = false
-    var offset = 0
-    for (l in toml.split('\n')) {
-        val t = l.trim()
-        if (t.startsWith("[")) inside = t == "[versions]"
-        else if (inside) Regex("""^(\s*${Regex.escape(ref)}\s*=\s*")([^"]+)(".*)$""").find(l.trimEnd('\r'))?.let { m ->
-            if (m.groupValues[2] == version) return toml to emptySet()
-            val start = offset + m.groups[2]!!.range.first
-            return toml.replaceRange(start, start + m.groupValues[2].length, version) to setOf(m.groupValues[2])
-        }
-        offset += l.length + 1
-    }
-    return toml to emptySet()
-}
-
 internal fun registerEventBox() {
     Registry.add("event:box", "event:box [version]", "Update the Event Box library to the latest version on JitPack (catalog and build files)") { eventBoxCmd(it) }
 }
@@ -369,8 +479,8 @@ private fun eventBoxCmd(ctx: Ctx) {
     val changes = mutableListOf<Row>()
     val toml = File(p.root, "gradle/libs.versions.toml")
     if (toml.isFile) {
-        val (text, old) = bumpEventBoxCatalog(toml.readText(), version)
-        if (old.isNotEmpty()) { toml.writeText(text); changes += Row(p.rel(toml), old.joinToString(", "), version) }
+        val (text, old) = bumpCatalogVersion(toml.readText(), EVENT_BOX_GROUP, version)
+        if (old != null) { toml.writeText(text); changes += Row(p.rel(toml), old, version) }
     }
     for (m in p.codeModules) {
         val f = m.buildFile ?: continue
@@ -385,5 +495,71 @@ private fun eventBoxCmd(ctx: Ctx) {
         }
         uses -> Ui.say("Event Box is already on $version (the latest).", Tone.OK)
         else -> Ui.say("This project doesn't use Event Box yet: artisan make:analytics adds it (latest version).", Tone.WARN)
+    }
+}
+
+// ---------- verify: the latest Firebase may need a newer Kotlin than the project has ----------
+
+/** Stable versions in a Maven metadata file, newest first. */
+internal fun stableVersions(body: String): List<String> =
+    Regex("""<version>([^<]+)</version>""").findAll(body).map { it.groupValues[1].trim() }
+        .filter { Regex("""^\d+(\.\d+)*$""").matches(it) }.distinct().sortedWith { a, b -> compareVersions(b, a) }.toList()
+
+/** BOMs to try after [current] fails: the app's own first, then the newest release of each older major (at most 3). */
+internal fun bomStepDowns(current: String, appBom: String?, versions: List<String>): List<String> {
+    val majors = versions.filter { compareVersions(it, current) < 0 }.groupBy { it.substringBefore('.') }
+        .values.map { it.first() }.filter { it.substringBefore('.') != current.substringBefore('.') }.take(3)
+    return (listOfNotNull(appBom?.takeIf { compareVersions(it, current) < 0 }) + majors).distinct()
+}
+
+/** Puts [to] where the BOM is pinned: the catalog entry (or the `[versions]` value it refers to), or the coordinate. */
+internal fun setBomVersion(text: String, catalog: Boolean, from: String, to: String): String {
+    if (!catalog) return text.replace("firebase-bom:$from", "firebase-bom:$to")
+    val key = libraryKey(text, "com.google.firebase:firebase-bom") ?: return text
+    val line = Regex("""(?m)^(\s*${Regex.escape(key)}\s*=.*)$""").find(text) ?: return text
+    val ref = Regex("""\bversion\.ref\s*=\s*"([^"]+)"""").find(line.value)?.groupValues?.get(1)
+    return if (ref != null) text.replace(Regex("""(?m)^(\s*${Regex.escape(ref)}\s*=\s*")${Regex.escape(from)}(")"""), "$1$to$2")
+    else text.replaceRange(line.range, line.value.replace("\"$from\"", "\"$to\""))
+}
+
+/**
+ * Compiles the new module once. When the latest Firebase was built with a newer Kotlin than the project uses, steps
+ * the BOM down until it compiles, and says so. Returns the BOM that works, or null when the build fails for another
+ * reason (its output is printed).
+ */
+internal fun verifyAnalyticsModule(p: Project, plan: AnalyticsModulePlan, versions: () -> List<String>): String? {
+    val task = "${plan.module}:compileDebugKotlin"
+    fun compile(): io.github.ravisorathiya.artisan.core.ProcResult {
+        val args = listOf(p.gradlew.absolutePath, task, "-q")
+        val cmd = if (io.github.ravisorathiya.artisan.core.Os.isWindows) listOf("cmd", "/c") + args else args
+        return io.github.ravisorathiya.artisan.core.Proc.run(*cmd.toTypedArray(), dir = p.root)
+    }
+    val file = File(p.root, plan.bomFile)
+    val catalog = file.name.endsWith(".toml")
+    var bom = plan.bom
+    var tries = 0
+    var candidates: List<String>? = null
+    while (true) {
+        Ui.say("  gradlew $task (Firebase BOM $bom)...", Tone.DIM)
+        val r = compile()
+        if (r.ok) {
+            if (bom != plan.bom) {
+                Ui.say("  Firebase BOM ${plan.bom} was built with a newer Kotlin than this project uses: using $bom, the newest that builds.", Tone.WARN)
+                Ui.say("  Update the Kotlin plugin, then move the BOM up in ${plan.bomFile}.", Tone.WARN)
+            } else Ui.say("  $task: OK", Tone.OK)
+            return bom
+        }
+        if (!r.out.contains("incompatible version of Kotlin")) {
+            Ui.say(r.out.lines().filter { it.isNotBlank() && !it.startsWith("w:") }.takeLast(15).joinToString("\n"), Tone.BAD)
+            Ui.say("  The module didn't compile (see above). Fix it, or rerun with --no-verify to skip this check.", Tone.BAD)
+            return null
+        }
+        val next = (candidates ?: bomStepDowns(plan.bom, plan.appBom, versions()).also { candidates = it }).getOrNull(tries++)
+        if (next == null) {
+            Ui.say("  No Firebase BOM builds with this project's Kotlin. Update the Kotlin plugin, then sync.", Tone.BAD)
+            return null
+        }
+        file.writeText(setBomVersion(file.readText(), catalog, bom, next))
+        bom = next
     }
 }

@@ -1,0 +1,51 @@
+package {{PACKAGE}}
+
+import com.google.firebase.messaging.FirebaseMessaging
+import kotlinx.coroutines.tasks.await
+
+/**
+ * Firebase Cloud Messaging (push). See README.md in this module.
+ *
+ *     val token = Messaging.token()          // in a coroutine: send it to your server
+ *     Messaging.subscribe("news")            // topic pushes from the Firebase console
+ *
+ * Showing a push while the app is open needs a FirebaseMessagingService of your own in the app (see the README).
+ * Android 13+ also needs the POST_NOTIFICATIONS permission (artisan make:permission <Screen> noti).
+ */
+object Messaging {
+
+    /** This install's push token, or null (no Google Play services, offline). */
+    suspend fun token(): String? = try {
+        FirebaseMessaging.getInstance().token.await()
+    } catch (e: Exception) {
+        logging("Messaging.token", e)
+        null
+    }
+
+    /** Subscribes to a topic. True on success. */
+    suspend fun subscribe(topic: String): Boolean = try {
+        FirebaseMessaging.getInstance().subscribeToTopic(topic).await()
+        true
+    } catch (e: Exception) {
+        logging("Messaging.subscribe", e)
+        false
+    }
+
+    /** Unsubscribes from a topic. True on success. */
+    suspend fun unsubscribe(topic: String): Boolean = try {
+        FirebaseMessaging.getInstance().unsubscribeFromTopic(topic).await()
+        true
+    } catch (e: Exception) {
+        logging("Messaging.unsubscribe", e)
+        false
+    }
+
+    /** Turns automatic token creation on or off (e.g. until the user accepts a privacy prompt). */
+    fun setAutoInit(enabled: Boolean) {
+        try {
+            FirebaseMessaging.getInstance().isAutoInitEnabled = enabled
+        } catch (e: Exception) {
+            logging("Messaging.setAutoInit", e)
+        }
+    }
+}

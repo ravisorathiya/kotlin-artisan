@@ -314,8 +314,8 @@ internal fun addJitpack(settings: String, kts: Boolean, anchor: String = "depend
 
 internal fun registerAnalytics() {
     Registry.add(
-        "make:analytics", "make:analytics [--path :core:analytics] [--build]",
-        "A :core:analytics module with firebaseEvent(), the bypass rules and the Event Box library, wired into every Android module",
+        "make:analytics", "make:analytics [--path :core:analytics] [--build] [--no-verify]",
+        "A :core:analytics module for all of Firebase (events, Crashlytics, Messaging, Remote Config; one BOM, latest versions), Timber and the Event Box, wired into every Android module",
     ) { makeAnalytics(it) }
 }
 
@@ -323,7 +323,7 @@ internal fun makeAnalytics(ctx: Ctx) {
     val p = ctx.project
     firebaseEventDefinition(p)?.let { throw CliError("firebaseEvent is already defined in $it. event.md documents how it's wired (artisan make:ai).") }
     if (findFirebaseEvent(p) != null) throw CliError("The app already has its own firebaseEvent. Keep it; event.md documents how it's wired.")
-    Ui.say("Resolving versions (the app's own, else the latest from Google Maven / JitPack)...", Tone.DIM)
+    Ui.say("Fetching the latest versions (Firebase BOM, Timber, coroutines, Event Box, plugins)...", Tone.DIM)
     val plan = planAnalyticsModule(p, ctx.option("--path") ?: ":core:analytics")
     applyAnalyticsModule(p, plan)
 
@@ -341,8 +341,16 @@ internal fun makeAnalytics(ctx: Ctx) {
     Ui.say("  1. In Application.onCreate():  Analytics.init(this)   (import ${plan.pkg}.Analytics if it's in another package)")
     Ui.say("  2. Sync Gradle in Android Studio.")
     Ui.say("  Event box on: ENABLE_EVENT_BOX = true in DebugConfig.kt while testing; false before release.", Tone.DIM)
-    Ui.say("  What the box shows: the Bypass section of DebugConfig.kt (lifecycle hidden by default; add suffixes, prefixes, names, or always-show names).", Tone.DIM)
+    Ui.say("  What the box shows: the Bypass section of DebugConfig (lifecycle hidden by default; add suffixes, prefixes, names, or always-show names).", Tone.DIM)
+    Ui.say("  How to use it all (events, Crash, RemoteConfig, Messaging, logging): ${plan.module.trimStart(':').replace(':', '/')}/README.md", Tone.DIM)
     Ui.say("  Then each event: artisan make:event <Screen> <name>  ->  firebaseEvent(\"<name>\")", Tone.DIM)
+
+    if (!ctx.has("--no-verify") && p.gradlew.isFile) {
+        Ui.head("Verify")
+        verifyAnalyticsModule(p, plan) { fetchBody(MAVEN_FIREBASE_BOM)?.let { stableVersions(it) } ?: emptyList() }
+    } else if (!p.gradlew.isFile) {
+        Ui.say("  No ${p.gradlew.name}: not verified. Sync Gradle and build once.", Tone.WARN)
+    }
 
     if (ctx.has("--build")) {
         Ui.head("Build")

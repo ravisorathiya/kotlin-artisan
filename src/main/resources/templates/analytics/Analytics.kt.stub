@@ -4,9 +4,14 @@ import android.app.Application
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import com.google.firebase.analytics.FirebaseAnalytics
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.ogmediaapps.eventbox.OGEventBoxLog
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import timber.log.Timber
 
-/** Firebase Analytics and the event box. Switches and firebaseEvent are in DebugConfig.kt. */
+/** Sets up Firebase for the app: call [init] once from Application.onCreate(). See README.md in this module. */
 object Analytics {
     @Volatile
     private var appContext: Context? = null
@@ -14,24 +19,33 @@ object Analytics {
     @Volatile
     private var instance: FirebaseAnalytics? = null
 
+    /** For background work of this module (event box posts, Remote Config, Messaging). Never cancelled. */
+    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
     /** Resolved on the first event, so FirebaseApp may be initialised after [init]. */
     internal val firebaseAnalytics: FirebaseAnalytics?
         get() = instance ?: appContext?.let { FirebaseAnalytics.getInstance(it) }?.also { instance = it }
 
-    /** Debug build (android:debuggable): logcat lines only then. */
-    internal var debuggable = false
+    /** Debug build (android:debuggable): logcat output and debug-only behaviour. */
+    var debuggable = false
         private set
 
-    /** Call once from Application.onCreate(), before any Activity starts. */
+    /** Once, from Application.onCreate(), before any Activity starts. */
     fun init(app: Application) {
         if (appContext != null) return
         appContext = app.applicationContext
         debuggable = (app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (debuggable && Timber.treeCount == 0) Timber.plant(Timber.DebugTree())
         try {
-            OGEventBoxLog.setDebugModeEnabled(ENABLE_EVENT_BOX)
-                .setDebugModeDurationHours(0.5)
+            FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(!debuggable || DebugConfig.CRASHLYTICS_IN_DEBUG)
+        } catch (e: Exception) {
+            Timber.w(e, "Crashlytics unavailable (google-services.json?)")
+        }
+        try {
+            OGEventBoxLog.setDebugModeEnabled(DebugConfig.ENABLE_EVENT_BOX)
+                .setDebugModeDurationHours(DebugConfig.EVENT_BOX_SESSION_HOURS)
                 .install(app)
-            OGEventBoxLog.setEnabled(app, ENABLE_EVENT_BOX)
+            OGEventBoxLog.setEnabled(app, DebugConfig.ENABLE_EVENT_BOX)
         } catch (e: Exception) {
             logging("Analytics.init", e)
         }
@@ -39,9 +53,29 @@ object Analytics {
 
     /** A session ends after its duration, and an SDK sharing the box may switch it off: turn it back on while testing. */
     internal fun ensureEventBox() {
-        if (!ENABLE_EVENT_BOX || OGEventBoxLog.isActive) return
+        if (!DebugConfig.ENABLE_EVENT_BOX || OGEventBoxLog.isActive) return
         val context = appContext ?: return
-        OGEventBoxLog.setDebugModeEnabled(true).setDebugModeDurationHours(0.5)
+        OGEventBoxLog.setDebugModeEnabled(true).setDebugModeDurationHours(DebugConfig.EVENT_BOX_SESSION_HOURS)
         OGEventBoxLog.setEnabled(context, true)
+    }
+
+    /** Ties events and crashes to a user (an id of your own, never an email or phone number). null clears it. */
+    fun setUserId(id: String?) {
+        try {
+            firebaseAnalytics?.setUserId(id)
+            FirebaseCrashlytics.getInstance().setUserId(id ?: "")
+        } catch (e: Exception) {
+            logging("Analytics.setUserId", e)
+        }
+    }
+
+    /** A user property for Analytics audiences, e.g. ("theme", "dark"). */
+    fun setUserProperty(name: String, value: String?) {
+        try {
+            firebaseAnalytics?.setUserProperty(name, value)
+            if (value != null && DebugConfig.ENABLE_EVENT_BOX) OGEventBoxLog.setUserProperty(name, value)
+        } catch (e: Exception) {
+            logging("Analytics.setUserProperty", e)
+        }
     }
 }

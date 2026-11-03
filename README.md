@@ -244,12 +244,17 @@ Run `make:ai` again in a project that already has the workspace: it adds only th
 
 **Events out of the box.**
 
-- `make:analytics` creates a `:core:analytics` module that every Android module can use:
-  - it holds `firebaseEvent()`, `DebugConfig.kt` (the bypass rules) and `Analytics.init(this)`;
-  - it uses the [Event Box](https://github.com/JpOriginDev/event-box) library;
-  - it's included in settings and wired into the app and each Android library.
-  It resolves everything itself: plugins in your style (catalog or `id`), the app's compileSdk/minSdk/JVM target, the
-  app's Firebase version (or the latest), the latest Event Box, and JitPack. `event:box` updates Event Box later.
+- `make:analytics` creates a `:core:analytics` module, the app's **central place for Firebase**. Every Android module can use it.
+  - **Contents:** one Firebase BOM for Analytics, Crashlytics, Messaging and Remote Config, plus Timber, coroutines and
+    the [Event Box](https://github.com/JpOriginDev/event-box) library.
+  - **Helpers:** `firebaseEvent()`, `Crash`, `RemoteConfig`, `Messaging` and `logging()`, with a settings-only
+    `DebugConfig` and a `README.md`.
+  - **Wiring:** it's included in settings and added to the app and each Android library.
+  - **Versions:** every one is the latest stable, fetched when you run it. If the latest Firebase needs a newer Kotlin
+    than the project has, the BOM steps down to the newest one that builds.
+  - **Resolved for you:** the plugins (in your style), the google-services and Crashlytics plugins when
+    `google-services.json` is there, the app's compileSdk, minSdk and JVM target, and JitPack.
+  - `event:box` updates Event Box later.
 - `make:event` adds a row, checking the name: snake_case, under 30 characters.
 - `check:events` compares the code and event.md both ways.
 - `artisan hooks install` stops a commit when they disagree. The hook also rebuilds `event_sheet.xlsx` and stages it,

@@ -1,0 +1,19 @@
+package {{PACKAGE}}
+
+import timber.log.Timber
+
+/*
+ * logging: debug logs that are not analytics events (use firebaseEvent for those). Goes through Timber, which
+ * Analytics.init plants for debug builds only, so release builds print nothing.
+ */
+
+/** A debug log line. */
+fun logging(message: String) {
+    Timber.tag(DebugConfig.TAG_DEBUG).d(message)
+}
+
+/** A caught error: logged, and in release builds sent to Crashlytics as a non-fatal (DebugConfig.RECORD_CAUGHT_ERRORS). */
+fun logging(tag: String, throwable: Throwable) {
+    Timber.tag(DebugConfig.TAG_DEBUG).e(throwable, "[%s]", tag)
+    if (DebugConfig.RECORD_CAUGHT_ERRORS && !Analytics.debuggable) Crash.record(throwable, tag)
+}

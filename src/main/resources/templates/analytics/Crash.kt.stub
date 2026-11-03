@@ -1,0 +1,32 @@
+package {{PACKAGE}}
+
+import com.google.firebase.crashlytics.FirebaseCrashlytics
+import timber.log.Timber
+
+/** Crashlytics in one place. Every call is safe: it never throws into the app. See README.md in this module. */
+object Crash {
+
+    /** A breadcrumb shown with the next crash report, e.g. "opened settings". */
+    fun log(message: String) = safe { it.log(message) }
+
+    /** A caught exception, reported as a non-fatal. [where] says which step failed, e.g. "PlayerActivity.load". */
+    fun record(throwable: Throwable, where: String? = null) = safe {
+        if (where != null) it.log("non-fatal at $where")
+        it.recordException(throwable)
+    }
+
+    /** A value attached to every report from now on, e.g. ("screen", "home"). */
+    fun setKey(key: String, value: String) = safe { it.setCustomKey(key, value) }
+
+    fun setKey(key: String, value: Boolean) = safe { it.setCustomKey(key, value) }
+
+    fun setKey(key: String, value: Long) = safe { it.setCustomKey(key, value) }
+
+    private inline fun safe(block: (FirebaseCrashlytics) -> Unit) {
+        try {
+            block(FirebaseCrashlytics.getInstance())
+        } catch (e: Exception) {
+            Timber.w(e, "Crashlytics unavailable")
+        }
+    }
+}

@@ -1,114 +1,66 @@
 package {{PACKAGE}}
 
-import android.content.Context
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.util.Log
-import com.ogmediaapps.eventbox.OGEventBoxLog
-
-/*
- * Debug switches and firebaseEvent for the whole app (added by `artisan make:analytics`).
- * Every event goes through firebaseEvent and is listed in ai/.../event/event.md (`artisan make:event` adds the row,
- * `artisan check:events` compares). Names: snake_case, under 30 characters, `<screen>_<thing>_<action>`.
- *
- * The event box is the Event Box library (https://github.com/JpOriginDev/event-box): a floating bubble that lists
- * events as they fire, with their parameters, for testers. Analytics.init(this) in Application.onCreate() sets it up.
+/**
+ * Debug switches for the whole app. Settings only: the code that uses them is in FirebaseEvents.kt and Analytics.kt.
+ * See README.md in this module.
  */
+object DebugConfig {
 
-/** true shows the event box on every screen, for testing. **Keep false in release builds.** */
-const val ENABLE_EVENT_BOX = false
+    // ---------- Event box (https://github.com/JpOriginDev/event-box) ----------
 
-private const val TAG_EVENT = "GlobalFirebaseEventNameTag"
-private const val TAG_DEBUG = "GlobalAppDebugLogger"
+    /** Shows the floating event box on every screen, for testers. **Keep false in release builds.** */
+    const val ENABLE_EVENT_BOX = false
 
-// ---------- Bypass: the control for what the box shows ----------
-// Events kept out of the box still go to Firebase and logcat. Names are snake_case (`<screen>_<thing>_<action>`), so
-// the rules are too: "_on_resume", "appopen_", "home_banner_load".
+    /** How long one event box session lasts before it switches itself off. */
+    const val EVENT_BOX_SESSION_HOURS = 0.5
 
-/** false shows every event in the box. */
-const val EVENT_BOX_BYPASS = true
+    // ---------- Bypass: what the box leaves out ----------
+    // Left-out events still go to Firebase and logcat. Names are snake_case (<screen>_<thing>_<action>), and so are
+    // these rules.
 
-/** Name endings kept out of the box: lifecycle by default. Any case; `_on_create` also matches `_OnCreate`. */
-private val EVENT_BOX_BYPASS_SUFFIXES = listOf(
-    "_on_create",
-    "_on_create_view",
-    "_on_start",
-    "_on_resume",
-    "_on_pause",
-    "_on_stop",
-    "_on_destroy",
-    "_on_back",
-    "_on_backpress",
-    "_on_back_press",
-    "_on_back_pressed",
-)
+    /** false shows every event in the box. */
+    const val EVENT_BOX_BYPASS = true
 
-/** Name starts kept out of the box, e.g. "appopen_" for app-open ad events. */
-private val EVENT_BOX_BYPASS_PREFIXES = listOf<String>()
+    /** Name endings left out: lifecycle events. Any case, so `_on_create` also matches `_OnCreate`. */
+    val BYPASS_SUFFIXES = listOf(
+        "_on_create",
+        "_on_create_view",
+        "_on_start",
+        "_on_resume",
+        "_on_pause",
+        "_on_stop",
+        "_on_destroy",
+        "_on_back",
+        "_on_backpress",
+        "_on_back_press",
+        "_on_back_pressed",
+    )
 
-/** Exact names kept out of the box. */
-private val EVENT_BOX_BYPASS_NAMES = setOf<String>()
+    /** Name starts left out, e.g. "appopen_" for app-open ad events. */
+    val BYPASS_PREFIXES = listOf<String>()
 
-/** Exact names that still appear in the box, even when a rule above hides them, e.g. "permi_on_create". */
-private val EVENT_BOX_ALWAYS_SHOW = setOf<String>()
+    /** Exact names left out. */
+    val BYPASS_NAMES = setOf<String>()
 
-/** True when [name] stays out of the box. */
-private fun isBypassed(name: String): Boolean {
-    if (!EVENT_BOX_BYPASS || name in EVENT_BOX_ALWAYS_SHOW) return false
-    if (name in EVENT_BOX_BYPASS_NAMES) return true
-    // splash_on_create (and older SplashAct_OnCreate / splash_onCreate names) all end in "_on_create"
-    val plain = name.replace(Regex("([a-z0-9])([A-Z])"), "$1_$2").lowercase()
-    return EVENT_BOX_BYPASS_PREFIXES.any { plain.startsWith(it.lowercase()) } ||
-        EVENT_BOX_BYPASS_SUFFIXES.any { plain.endsWith(it.lowercase()) }
-}
+    /** Exact names always shown, even when a rule above leaves them out, e.g. "permi_on_create". */
+    val ALWAYS_SHOW = setOf<String>()
 
-// ---------- firebaseEvent ----------
+    // ---------- Logging and Crashlytics ----------
 
-private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
+    /** Logcat tag of every event (`artisan app:logcat GlobalFirebaseEventNameTag`). */
+    const val TAG_EVENT = "GlobalFirebaseEventNameTag"
 
-/** The naming rule: snake_case, starting with a letter, under 30 characters. */
-private val EVENT_NAME = Regex("^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
+    /** Logcat tag of logging(...). */
+    const val TAG_DEBUG = "GlobalAppDebugLogger"
 
-/** Logs [name] to Firebase Analytics, logcat (`GlobalFirebaseEventNameTag`, debug builds) and, when on, the event box.
- * Works from anywhere: an Activity, a Fragment, a ViewModel, an ad SDK callback on a background thread. */
-fun firebaseEvent(name: String, bundle: Bundle = Bundle()) = logEvent(name, bundle)
+    /** Sends caught errors from logging(tag, throwable) to Crashlytics as non-fatals (release builds only). */
+    const val RECORD_CAUGHT_ERRORS = true
 
-/** Same as [firebaseEvent], from any Activity, Service or View context. */
-fun Context.firebaseEvent(name: String, bundle: Bundle = Bundle()) = logEvent(name, bundle)
+    /** Collects Crashlytics reports from debug builds too. Off, so test crashes don't fill the dashboard. */
+    const val CRASHLYTICS_IN_DEBUG = false
 
-private fun logEvent(name: String, bundle: Bundle) {
-    try {
-        Analytics.firebaseAnalytics?.logEvent(name, bundle)
-        if (Analytics.debuggable) {
-            Log.i(TAG_EVENT, name)
-            if (!EVENT_NAME.matches(name) || name.length >= 30) {
-                Log.w(TAG_EVENT, "'$name' breaks the naming rule: snake_case, under 30 characters (artisan check:events)")
-            }
-        }
-        if (ENABLE_EVENT_BOX && !isBypassed(name)) {
-            // ad SDK callbacks arrive on a background thread; the box is a view
-            mainHandler.post {
-                try {
-                    Analytics.ensureEventBox()
-                    OGEventBoxLog.log(name, bundle)
-                } catch (e: Exception) {
-                    logging("firebaseEvent_box", e)
-                }
-            }
-        }
-    } catch (e: Exception) {
-        logging("firebaseEvent", e)
-    }
-}
+    // ---------- Remote Config ----------
 
-// ---------- logging (not analytics) ----------
-
-/** Debug-only log line. Not an event: use [firebaseEvent] for those. */
-fun logging(message: String) {
-    if (Analytics.debuggable) Log.d(TAG_DEBUG, message)
-}
-
-fun logging(tag: String, throwable: Throwable) {
-    if (Analytics.debuggable) Log.e(TAG_DEBUG, "[$tag] ${throwable.message}", throwable)
+    /** Minimum time between Remote Config fetches in release builds. Debug builds always fetch. */
+    const val REMOTE_CONFIG_FETCH_INTERVAL_SECONDS = 3600L
 }

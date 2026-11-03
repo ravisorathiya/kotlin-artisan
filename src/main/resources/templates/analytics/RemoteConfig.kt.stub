@@ -1,0 +1,59 @@
+package {{PACKAGE}}
+
+import com.google.firebase.remoteconfig.FirebaseRemoteConfig
+import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+
+/**
+ * Firebase Remote Config: flags and values you can change without a release. See README.md in this module.
+ *
+ *     RemoteConfig.setDefaults(mapOf("show_rate_dialog" to true, "ad_interval_sec" to 60L))
+ *     RemoteConfig.fetchInBackground()                 // in Application.onCreate(), after Analytics.init
+ *     if (RemoteConfig.bool("show_rate_dialog")) ...   // anywhere: the last fetched value, else the default
+ */
+object RemoteConfig {
+
+    private val config: FirebaseRemoteConfig? get() = try {
+        FirebaseRemoteConfig.getInstance()
+    } catch (e: Exception) {
+        logging("RemoteConfig", e)
+        null
+    }
+
+    /** Values used until the first fetch (and when a key isn't in the console). */
+    fun setDefaults(defaults: Map<String, Any>) {
+        config?.setDefaultsAsync(defaults)
+    }
+
+    /** Fetches and activates the latest values. True when new values are now active. Debug builds skip the interval. */
+    suspend fun fetch(): Boolean = withContext(Dispatchers.IO) {
+        val c = config ?: return@withContext false
+        try {
+            val interval = if (Analytics.debuggable) 0L else DebugConfig.REMOTE_CONFIG_FETCH_INTERVAL_SECONDS
+            c.setConfigSettingsAsync(FirebaseRemoteConfigSettings.Builder().setMinimumFetchIntervalInSeconds(interval).build()).await()
+            c.fetchAndActivate().await()
+        } catch (e: Exception) {
+            logging("RemoteConfig.fetch", e)
+            false
+        }
+    }
+
+    /** [fetch] without waiting, e.g. from Application.onCreate(). [onDone] runs on the main thread. */
+    fun fetchInBackground(onDone: ((updated: Boolean) -> Unit)? = null) {
+        Analytics.scope.launch {
+            val updated = fetch()
+            if (onDone != null) withContext(Dispatchers.Main) { onDone(updated) }
+        }
+    }
+
+    fun string(key: String, default: String = ""): String = config?.getString(key)?.takeIf { it.isNotEmpty() } ?: default
+
+    fun bool(key: String, default: Boolean = false): Boolean = config?.let { if (it.getValue(key).source == FirebaseRemoteConfig.VALUE_SOURCE_STATIC) default else it.getBoolean(key) } ?: default
+
+    fun long(key: String, default: Long = 0L): Long = config?.let { if (it.getValue(key).source == FirebaseRemoteConfig.VALUE_SOURCE_STATIC) default else it.getLong(key) } ?: default
+
+    fun double(key: String, default: Double = 0.0): Double = config?.let { if (it.getValue(key).source == FirebaseRemoteConfig.VALUE_SOURCE_STATIC) default else it.getDouble(key) } ?: default
+}
