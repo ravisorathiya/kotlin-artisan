@@ -111,7 +111,7 @@ internal fun addUsesPermissions(manifest: String, perms: List<String>): Pair<Str
 /** How the app logs an event: the package to import from and whether it's an extension (`context.firebaseEvent`). */
 internal class EventFn(val import: String?, val extension: Boolean)
 
-/** The app's own firebaseEvent: `fun Context.firebaseEvent(` (make:analytics) or a top-level `fun firebaseEvent(`. */
+/** The app's own firebaseEvent: `fun Context.firebaseEvent(` (make:firebase) or a top-level `fun firebaseEvent(`. */
 internal fun findFirebaseEvent(p: Project): EventFn? {
     for (m in p.codeModules.filter { it.name != ":ai" }) for (f in sourceFiles(m, listOf(Regex(""".*\.kt$""")))) {
         val text = f.readText()
@@ -136,7 +136,7 @@ internal fun permissionFlowSource(pkg: String, fn: EventFn): String {
 
 private fun makePermission(ctx: Ctx) {
     val p = ctx.project
-    val fn = findFirebaseEvent(p) ?: throw CliError("No firebaseEvent in the app yet: run artisan make:analytics first (the flow logs every result).")
+    val fn = findFirebaseEvent(p) ?: throw CliError("No firebaseEvent in the app yet: run artisan make:firebase first (the flow logs every result).")
     val doc = eventFile(p) ?: throw CliError("No notes workspace with event/event.md here. artisan make:ai creates one.")
     if (!doc.isFile) { doc.parentFile.mkdirs(); doc.writeText(eventDoc(p, emptyMap())) }
 

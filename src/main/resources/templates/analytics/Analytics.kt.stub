@@ -30,8 +30,11 @@ object Analytics {
     var debuggable = false
         private set
 
-    /** Once, from Application.onCreate(), before any Activity starts. */
-    fun init(app: Application) {
+    /**
+     * Once, from Application.onCreate(), before any Activity starts. [remoteHolders] are the objects with
+     * `by remote...` properties (AdsConstant by default, add your own): Remote Config fetches and applies them all.
+     */
+    fun init(app: Application, vararg remoteHolders: Any = arrayOf(AdsConstant)) {
         if (appContext != null) return
         appContext = app.applicationContext
         debuggable = (app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
@@ -49,6 +52,7 @@ object Analytics {
         } catch (e: Exception) {
             logging("Analytics.init", e)
         }
+        RemoteConfig.start(*remoteHolders)
     }
 
     /** A session ends after its duration, and an SDK sharing the box may switch it off: turn it back on while testing. */

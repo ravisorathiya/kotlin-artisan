@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.13.0: make:firebase, and Remote Config from one-line keys
+
+- **The command is `make:firebase`**, and the module is **`:core:firebase`** (it holds all of Firebase now).
+  `make:analytics` still works as an alias, and `--path` picks another location.
+- **Remote Config is driven by properties**, as in PDFReaderOrigin. `AdsConstant.kt` in the module holds one line per key:
+  `var homeNativeAd by remoteAdUnit("...")`, `var showHomeNativeAd by remoteString("yes")`,
+  `remoteInt` / `remoteLong` / `remoteDouble` / `remoteBoolean`, with `legacyKeys` for renamed keys.
+  - The property name is the Firebase key and the code value is the default.
+  - Empty Firebase values keep the current value, and bad numbers become `invalidFallback`.
+  - **`Analytics.init(this)`** starts it: fetch, apply every registered key, then live updates
+    (`DebugConfig.REMOTE_CONFIG_LIVE_UPDATES`). Holders of your own: `Analytics.init(this, AdsConstant, FeatureFlags)`.
+  - **Debug builds log an audit table** (logcat `RemoteConfigAudit`) of every key: LOCAL MISSING, OVERRIDE, MISSING
+    and MATCH, with the local, Firebase and applied values.
+  - `RemoteConfig.awaitFetch()` for the splash (with `DebugConfig.REMOTE_CONFIG_TIMEOUT_MILLIS`),
+    `RemoteConfig.onApplied { }` after each apply, and `string` / `bool` / `long` / `double` for one-off keys.
+    `setDefaults` and `fetchInBackground` are gone.
+  - Events `remote_cfg_load_start` / `_load_success` / `_load_failed` / `_timeout` / `_live_applied` /
+    `_live_failed` are fired by the module, and `make:firebase` adds them to event.md and the sheet.
+
 ## 0.12.0: the analytics module is the app's Firebase hub
 
 - **`:core:analytics` holds all of Firebase:**

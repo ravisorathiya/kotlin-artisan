@@ -13,7 +13,7 @@ import java.net.HttpURLConnection
 import java.net.URI
 
 /*
- * make:analytics builds an Android library module (default :core:analytics, like the Zombie app) that holds
+ * make:firebase (alias make:analytics) builds an Android library module (default :core:firebase, like the Zombie app) that holds
  * firebaseEvent() and the Event Box setup, and wires it into every Android module. Everything about it is worked out
  * from the project itself:
  *   - plugins in the app's own style (version-catalog alias or id), adding the library plugin where it's missing;
@@ -215,11 +215,12 @@ internal fun isAndroidModule(build: String, toml: String?): Boolean =
 
 /** The module's code files, in the app's base package. */
 internal val ANALYTICS_SOURCES = listOf(
-    "DebugConfig.kt", "FirebaseEvents.kt", "Analytics.kt", "Logging.kt", "Crash.kt", "RemoteConfig.kt", "Messaging.kt",
+    "DebugConfig.kt", "FirebaseEvents.kt", "Analytics.kt", "Logging.kt", "Crash.kt",
+    "AdsConstant.kt", "RemoteValue.kt", "RemoteConfig.kt", "Messaging.kt",
 )
 
 internal class AnalyticsModulePlan(
-    /** The module, e.g. `:core:analytics`. */
+    /** The module, e.g. `:core:firebase`. */
     val module: String,
     /** The Kotlin package of firebaseEvent / Analytics. */
     val pkg: String,
@@ -244,7 +245,7 @@ internal class AnalyticsModulePlan(
  * Works out the analytics module for [p] without writing anything. [latest] gives the newest version from a URL
  * (null when offline); tests pass a fake.
  */
-internal fun planAnalyticsModule(p: Project, modulePath: String = ":core:analytics", latest: (String) -> String? = ::fetchLatestVersion): AnalyticsModulePlan {
+internal fun planAnalyticsModule(p: Project, modulePath: String = ":core:firebase", latest: (String) -> String? = ::fetchLatestVersion): AnalyticsModulePlan {
     val app = p.appModule ?: throw CliError("No app module (com.android.application) found.")
     val appBuildFile = app.buildFile ?: throw CliError("${app.name} has no build file.")
     val appBuild = appBuildFile.readText().replace("\r\n", "\n")
@@ -370,7 +371,7 @@ internal fun planAnalyticsModule(p: Project, modulePath: String = ":core:analyti
     fun block(s: String?) = s?.prependIndent("    ")
     val build = buildString {
         if (imports.isNotEmpty()) append(imports.joinToString("\n")).append("\n\n")
-        append("// Firebase for every module: events, Crashlytics, Messaging, Remote Config, Timber (artisan make:analytics). See README.md.\n// Use it: implementation(project(${q(module)}))\n")
+        append("// Firebase for every module: events, Crashlytics, Messaging, Remote Config, Timber (artisan make:firebase). See README.md.\n// Use it: implementation(project(${q(module)}))\n")
         append("plugins {\n    $libLine\n").append(kotlinLine?.let { "    $it\n" } ?: "").append("}\n\n")
         append("android {\n")
         append("    namespace ${if (kts) "= " else ""}${q(ns)}\n")
@@ -494,7 +495,7 @@ private fun eventBoxCmd(ctx: Ctx) {
             Ui.say("  Sync Gradle. What's new: https://github.com/JpOriginDev/event-box/releases", Tone.DIM)
         }
         uses -> Ui.say("Event Box is already on $version (the latest).", Tone.OK)
-        else -> Ui.say("This project doesn't use Event Box yet: artisan make:analytics adds it (latest version).", Tone.WARN)
+        else -> Ui.say("This project doesn't use Event Box yet: artisan make:firebase adds it (latest version).", Tone.WARN)
     }
 }
 
@@ -562,4 +563,30 @@ internal fun verifyAnalyticsModule(p: Project, plan: AnalyticsModulePlan, versio
         file.writeText(setBomVersion(file.readText(), catalog, bom, next))
         bom = next
     }
+}
+
+// ---------- the module's own events, in event.md ----------
+
+/** Events the module fires itself (RemoteConfig.kt): (name, fired from, when). */
+internal val MODULE_EVENTS = listOf(
+    Triple("remote_cfg_load_start", "`RemoteConfig.start()`", "The app started loading its remote settings"),
+    Triple("remote_cfg_load_success", "first fetch", "Remote settings loaded and applied"),
+    Triple("remote_cfg_load_failed", "first fetch", "Remote settings could not load (offline, or Firebase is not set up); the built-in defaults are used"),
+    Triple("remote_cfg_timeout", "`RemoteConfig.awaitFetch()`", "A screen (usually the splash) stopped waiting for remote settings and went on with the defaults; `millis` = how long it waited"),
+    Triple("remote_cfg_live_applied", "live update", "Settings changed in the Firebase console were applied while the app was open"),
+    Triple("remote_cfg_live_failed", "live update", "A live settings change could not be applied"),
+)
+
+/** Adds the module's own events to event.md (under ## RemoteConfig) and rebuilds the sheet. The number added, or null. */
+internal fun documentModuleEvents(p: Project, plan: AnalyticsModulePlan): Int? {
+    val doc = eventFile(p)?.takeIf { it.isFile } ?: return null
+    var text = doc.readText()
+    val have = parseEventDoc(text).values.flatten().map { it.first }.toSet()
+    val source = plan.created.keys.firstOrNull { it.endsWith("/RemoteConfig.kt") }
+    val new = MODULE_EVENTS.filter { it.first !in have }
+    for ((name, from, whenText) in new) text = addEventRow(text, "RemoteConfig", name, from, whenText, source)
+    if (new.isEmpty()) return null
+    doc.writeText(text)
+    syncEventSheet(p)
+    return new.size
 }

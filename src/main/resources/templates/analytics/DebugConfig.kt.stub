@@ -63,4 +63,13 @@ object DebugConfig {
 
     /** Minimum time between Remote Config fetches in release builds. Debug builds always fetch. */
     const val REMOTE_CONFIG_FETCH_INTERVAL_SECONDS = 3600L
+
+    /** How long RemoteConfig.awaitFetch() (e.g. the splash) waits for the first fetch before going on with the defaults. */
+    const val REMOTE_CONFIG_TIMEOUT_MILLIS = 3000L
+
+    /** Applies changes published in the console while the app runs (real-time Remote Config). */
+    const val REMOTE_CONFIG_LIVE_UPDATES = true
+
+    /** Logs the audit table (every key: MATCH / OVERRIDE / MISSING / LOCAL MISSING) in release builds too. */
+    const val REMOTE_CONFIG_AUDIT_IN_RELEASE = false
 }

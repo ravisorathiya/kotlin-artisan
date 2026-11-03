@@ -1,0 +1,92 @@
+package {{PACKAGE}}
+
+import kotlin.properties.ReadWriteProperty
+import kotlin.reflect.KProperty
+
+/*
+ * Remote Config values as properties. In any object (AdsConstant, or one of your own passed to Analytics.init):
+ *
+ *     var homeNativeAd by remoteAdUnit("ca-app-pub-xxx/yyy")   // Firebase key = the property name: "homeNativeAd"
+ *     var showHomeNativeAd by remoteString("yes")
+ *     var interGapSeconds by remoteInt(30, invalidFallback = 30)
+ *
+ * The default is used until Remote Config answers. After each fetch (and each live update) every registered property
+ * takes the Firebase value; the debug audit lists them all. Properties stay writable for tests and local overrides.
+ */
+
+/** One Remote Config value: its local default, the current value, and how a Firebase string turns into it. */
+class RemoteValue<T>(
+    val localValue: T,
+    val legacyKeys: List<String> = emptyList(),
+    private val resolve: (raw: String, current: T) -> T,
+) {
+    @Volatile
+    var value: T = localValue
+
+    fun apply(raw: String) {
+        value = resolve(raw, value)
+    }
+}
+
+/** Every registered value by Firebase key, in declaration order. */
+object RemoteRegistry {
+    private val values = linkedMapOf<String, RemoteValue<*>>()
+
+    val all: Map<String, RemoteValue<*>> get() = synchronized(values) { LinkedHashMap(values) }
+
+    internal fun put(key: String, value: RemoteValue<*>) = synchronized(values) {
+        check(values.put(key, value) == null) { "Duplicate Remote Config key: $key (two properties with the same name)" }
+    }
+
+    /** Applies Firebase's string for each key (or the first non-empty legacy key). */
+    fun apply(valueForKey: (String) -> String) {
+        all.forEach { (key, value) ->
+            val raw = valueForKey(key).ifEmpty { value.legacyKeys.firstNotNullOfOrNull { valueForKey(it).takeIf(String::isNotEmpty) }.orEmpty() }
+            @Suppress("UNCHECKED_CAST")
+            (value as RemoteValue<Any?>).apply(raw)
+        }
+    }
+
+    /** Current value of every key. */
+    fun snapshot(): Map<String, Any?> = all.mapValues { it.value.value }
+}
+
+class RemoteDelegate<T>(private val remote: RemoteValue<T>) : ReadWriteProperty<Any?, T> {
+    operator fun provideDelegate(thisRef: Any?, property: KProperty<*>): RemoteDelegate<T> {
+        RemoteRegistry.put(property.name, remote)
+        return this
+    }
+
+    override fun getValue(thisRef: Any?, property: KProperty<*>): T = remote.value
+
+    override fun setValue(thisRef: Any?, property: KProperty<*>, value: T) {
+        remote.value = value
+    }
+}
+
+/** Text. An empty Firebase value keeps the current one unless [keepCurrentWhenEmpty] is false. */
+fun remoteString(defaultValue: String, keepCurrentWhenEmpty: Boolean = true, legacyKeys: List<String> = emptyList()) =
+    RemoteDelegate(RemoteValue(defaultValue, legacyKeys) { raw, current -> if (keepCurrentWhenEmpty && raw.isEmpty()) current else raw })
+
+/** An ad unit id. Empty keeps the current id, so a missing key never leaves an ad without a unit. */
+fun remoteAdUnit(defaultValue: String) = remoteString(defaultValue)
+
+/** A whole number. Empty keeps the current value; text that isn't a number becomes [invalidFallback]. */
+fun remoteInt(defaultValue: Int, invalidFallback: Int = defaultValue) =
+    RemoteDelegate(RemoteValue(defaultValue) { raw, current -> if (raw.isEmpty()) current else raw.toIntOrNull() ?: invalidFallback })
+
+fun remoteLong(defaultValue: Long, invalidFallback: Long = defaultValue) =
+    RemoteDelegate(RemoteValue(defaultValue) { raw, current -> if (raw.isEmpty()) current else raw.toLongOrNull() ?: invalidFallback })
+
+fun remoteDouble(defaultValue: Double, invalidFallback: Double = defaultValue) =
+    RemoteDelegate(RemoteValue(defaultValue) { raw, current -> if (raw.isEmpty()) current else raw.toDoubleOrNull() ?: invalidFallback })
+
+/** true / false. Also takes "yes" / "no" and "1" / "0". Empty keeps the current value. */
+fun remoteBoolean(defaultValue: Boolean) = RemoteDelegate(RemoteValue(defaultValue) { raw, current ->
+    when (raw.lowercase()) {
+        "" -> current
+        "true", "yes", "1", "on" -> true
+        "false", "no", "0", "off" -> false
+        else -> current
+    }
+})

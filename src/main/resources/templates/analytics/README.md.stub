@@ -7,7 +7,7 @@ The app's single place for Firebase:
 - logging, through Timber.
 
 Every Android module depends on it, so this all works from anywhere.
-Created by `artisan make:analytics`. The code lives in package `{{PACKAGE}}`.
+Created by `artisan make:firebase`. The code lives in package `{{PACKAGE}}`.
 
 | File | What's in it |
 |---|---|
@@ -15,7 +15,9 @@ Created by `artisan make:analytics`. The code lives in package `{{PACKAGE}}`.
 | `FirebaseEvents.kt` | `firebaseEvent(name, bundle)` |
 | `Analytics.kt` | `Analytics.init(app)`, `setUserId`, `setUserProperty` |
 | `Crash.kt` | `Crash.log`, `Crash.record`, `Crash.setKey` |
-| `RemoteConfig.kt` | `RemoteConfig.setDefaults`, `fetch` / `fetchInBackground`, `string` / `bool` / `long` / `double` |
+| `AdsConstant.kt` | **Ad units and remote switches**: one line per key (`var homeNativeAd by remoteAdUnit("...")`) |
+| `RemoteValue.kt` | `remoteString` / `remoteAdUnit` / `remoteInt` / `remoteLong` / `remoteDouble` / `remoteBoolean` |
+| `RemoteConfig.kt` | fetch + live updates for every `by remote...` property, `awaitFetch`, `onApplied`, the audit table |
 | `Messaging.kt` | `Messaging.token`, `subscribe`, `unsubscribe`, `setAutoInit` |
 | `Logging.kt` | `logging(message)`, `logging(tag, throwable)` |
 
@@ -46,9 +48,8 @@ depends on this one gets the same versions:
 class App : Application() {
     override fun onCreate() {
         super.onCreate()
-        Analytics.init(this)                 // Firebase, Timber (debug builds), Crashlytics, the event box
-        RemoteConfig.setDefaults(mapOf("show_rate_dialog" to true))
-        RemoteConfig.fetchInBackground()
+        Analytics.init(this)                 // Firebase, Timber (debug builds), Crashlytics, the event box,
+                                             // and Remote Config for every property in AdsConstant
     }
 }
 ```
@@ -99,14 +100,68 @@ Analytics.setUserId(user.id)                 // your own id, never an email or p
 
 ## Remote Config
 
+**Add a key in one line, in `AdsConstant`** (or in your own object). That's all the code there is:
+
 ```kotlin
-if (RemoteConfig.bool("show_rate_dialog")) showRateDialog()
-val interval = RemoteConfig.long("ad_interval_sec", 60)
-lifecycleScope.launch { if (RemoteConfig.fetch()) applyNewConfig() }
+object AdsConstant {
+    // HOME: HomeActivity
+    var homeNativeAd by remoteAdUnit("ca-app-pub-xxx/yyy")       // Firebase key: "homeNativeAd"
+    var showHomeNativeAd by remoteString("yes")
+    var interGapSeconds by remoteLong(30L)
+}
 ```
 
-- Values come from the last fetch, else the default you set.
-- Release builds fetch at most once per `DebugConfig.REMOTE_CONFIG_FETCH_INTERVAL_SECONDS`. Debug builds always fetch.
+Then add the same key in the Firebase console (Remote Config) when you want to change it remotely. Read it anywhere,
+like a normal property:
+
+```kotlin
+if (AdsConstant.showHomeNativeAd == "yes") loadNative(AdsConstant.homeNativeAd)
+```
+
+What happens:
+
+1. Until Remote Config answers, every property has its default (the value in the code).
+2. `Analytics.init` fetches. Each registered key then takes its Firebase value, and an empty value keeps the
+   default. Text that isn't a number becomes `invalidFallback`.
+3. With **live updates** on (`DebugConfig.REMOTE_CONFIG_LIVE_UPDATES`), a change published in the console applies
+   while the app is open.
+4. Debug builds log the **audit table** (logcat tag `RemoteConfigAudit`), most important first:
+
+```text
+REMOTE CONFIG: 9 keys, 1 local missing, 1 override, 2 missing, 5 match
+STATUS        | KEY              | LOCAL         | FIREBASE      | APPLIED
+--------------+------------------+---------------+---------------+--------
+LOCAL MISSING | oldBannerAd      | <no property> | "ca-app-..."  | <not used>
+OVERRIDE      | interGapSeconds  | "30"          | "45"          | "45"
+MISSING       | showHomeNativeAd | "yes"         | -             | "yes"
+MATCH         | homeNativeAd     | "ca-app-..."  | "ca-app-..."  | "ca-app-..."
+```
+
+| Status | Means | Do |
+|---|---|---|
+| `LOCAL MISSING` | a key in Firebase with no property | add the property, or delete the key in the console |
+| `OVERRIDE` | Firebase differs from the default | expected: the Firebase value is in use |
+| `MISSING` | a property not set in Firebase | fine, the default is in use; add it in the console to control it remotely |
+| `MATCH` | Firebase equals the default | nothing |
+
+| Delegate | Type | Empty Firebase value | Bad value |
+|---|---|---|---|
+| `remoteString(default, keepCurrentWhenEmpty = true, legacyKeys = [])` | `String` | keeps the current value (`false`: becomes `""`) | n/a |
+| `remoteAdUnit(default)` | `String` | keeps the current id | n/a |
+| `remoteInt(default, invalidFallback)` / `remoteLong` / `remoteDouble` | number | keeps the current value | `invalidFallback` |
+| `remoteBoolean(default)` | `Boolean` (`true/false`, `yes/no`, `1/0`) | keeps the current value | keeps the current value |
+
+- **Renamed a key in the console?** Use `legacyKeys = listOf("oldName")`: the old key is read while the new one is empty.
+- **Splash screen:** wait for the first fetch, at most `DebugConfig.REMOTE_CONFIG_TIMEOUT_MILLIS`:
+  ```kotlin
+  lifecycleScope.launch { RemoteConfig.awaitFetch(); if (AdsConstant.showSplashAppOpenAd == "yes") showAppOpen() }
+  ```
+- **React to changes:** `RemoteConfig.onApplied { refreshAds() }` runs on the main thread after each fetch and live update.
+- **Your own holder object:** `Analytics.init(this, AdsConstant, FeatureFlags)`. Every key must be unique across holders.
+- **A one-off key without a property:** `RemoteConfig.string("welcome_text", "Hi")`, plus `bool`, `long`, `double`.
+- **Events** (already in event.md): `remote_cfg_load_start`, `_load_success`, `_load_failed`, `_timeout`,
+  `_live_applied`, `_live_failed`.
+- The ids in `AdsConstant` are Google's **test ids**. Replace them, or set them in the console, before a release.
 
 ## Cloud Messaging
 

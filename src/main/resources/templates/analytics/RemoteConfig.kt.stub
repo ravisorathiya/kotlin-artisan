@@ -1,20 +1,33 @@
 package {{PACKAGE}}
 
+import android.os.Bundle
+import com.google.firebase.remoteconfig.ConfigUpdate
+import com.google.firebase.remoteconfig.ConfigUpdateListener
+import com.google.firebase.remoteconfig.ConfigUpdateListenerRegistration
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
+import com.google.firebase.remoteconfig.FirebaseRemoteConfigException
 import com.google.firebase.remoteconfig.FirebaseRemoteConfigSettings
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import timber.log.Timber
 
 /**
- * Firebase Remote Config: flags and values you can change without a release. See README.md in this module.
+ * Firebase Remote Config, driven by the `by remote...` properties of AdsConstant (and any holder object passed to
+ * Analytics.init). Started by Analytics.init: fetch, apply every registered property, then live updates.
  *
- *     RemoteConfig.setDefaults(mapOf("show_rate_dialog" to true, "ad_interval_sec" to 60L))
- *     RemoteConfig.fetchInBackground()                 // in Application.onCreate(), after Analytics.init
- *     if (RemoteConfig.bool("show_rate_dialog")) ...   // anywhere: the last fetched value, else the default
+ *     lifecycleScope.launch { RemoteConfig.awaitFetch(); showSplashAd() }    // splash: wait at most the timeout
+ *     RemoteConfig.onApplied { applyNewLayout() }                            // after each fetch / live update
+ *     RemoteConfig.string("welcome_text", "Hi")                              // an ad-hoc key, no property
+ *
+ * Events: remote_cfg_load_start / _load_success / _load_failed / _timeout / _live_applied / _live_failed.
+ * Debug builds log an audit of every key (logcat RemoteConfigAudit). See README.md in this module.
  */
 object RemoteConfig {
+    private const val TAG = "RemoteConfigAudit"
 
     private val config: FirebaseRemoteConfig? get() = try {
         FirebaseRemoteConfig.getInstance()
@@ -23,37 +36,167 @@ object RemoteConfig {
         null
     }
 
-    /** Values used until the first fetch (and when a key isn't in the console). */
-    fun setDefaults(defaults: Map<String, Any>) {
-        config?.setDefaultsAsync(defaults)
+    private var started = false
+    private val firstFetch = CompletableDeferred<Boolean>()
+    private var live: ConfigUpdateListenerRegistration? = null
+    private val listeners = mutableListOf<() -> Unit>()
+
+    /** True once the first fetch has finished (successfully or not). */
+    val isFetched: Boolean get() = firstFetch.isCompleted
+
+    /**
+     * Fetches, applies every registered property and starts live updates. [holders] are the objects with `by remote...`
+     * properties: naming them here loads them, so every key is registered before the first apply.
+     */
+    fun start(vararg holders: Any) {
+        if (started) return
+        started = true
+        Timber.tag(TAG).d("holders: %s, %d keys", holders.joinToString { it::class.simpleName.orEmpty() }, RemoteRegistry.all.size)
+        val c = config ?: run { firstFetch.complete(false); return }
+        firebaseEvent("remote_cfg_load_start")
+        Analytics.scope.launch {
+            val ok = try {
+                val interval = if (Analytics.debuggable) 0L else DebugConfig.REMOTE_CONFIG_FETCH_INTERVAL_SECONDS
+                c.setConfigSettingsAsync(FirebaseRemoteConfigSettings.Builder().setMinimumFetchIntervalInSeconds(interval).build()).await()
+                c.fetchAndActivate().await()
+                applyAll(c)
+                firebaseEvent("remote_cfg_load_success")
+                true
+            } catch (e: Exception) {
+                firebaseEvent("remote_cfg_load_failed")
+                logging("RemoteConfig.fetch", e)
+                false
+            }
+            firstFetch.complete(ok)
+        }
+        if (DebugConfig.REMOTE_CONFIG_LIVE_UPDATES) startLiveUpdates(c)
     }
 
-    /** Fetches and activates the latest values. True when new values are now active. Debug builds skip the interval. */
+    /**
+     * Waits for the first fetch, at most [timeoutMillis]. True when it finished in time and worked. On a timeout the
+     * defaults (or the last fetched values) stay; the fetch carries on and applies when it lands.
+     */
+    suspend fun awaitFetch(timeoutMillis: Long = DebugConfig.REMOTE_CONFIG_TIMEOUT_MILLIS): Boolean {
+        val result = withTimeoutOrNull(timeoutMillis) { firstFetch.await() }
+        if (result == null) firebaseEvent("remote_cfg_timeout", Bundle().apply { putLong("millis", timeoutMillis) })
+        return result == true
+    }
+
+    /** Runs [listener] on the main thread after every apply (first fetch and each live update). */
+    fun onApplied(listener: () -> Unit) {
+        synchronized(listeners) { listeners += listener }
+    }
+
+    /** Fetches again now (e.g. a pull to refresh). True when new values are active. */
     suspend fun fetch(): Boolean = withContext(Dispatchers.IO) {
         val c = config ?: return@withContext false
         try {
-            val interval = if (Analytics.debuggable) 0L else DebugConfig.REMOTE_CONFIG_FETCH_INTERVAL_SECONDS
-            c.setConfigSettingsAsync(FirebaseRemoteConfigSettings.Builder().setMinimumFetchIntervalInSeconds(interval).build()).await()
-            c.fetchAndActivate().await()
+            val updated = c.fetchAndActivate().await()
+            applyAll(c)
+            updated
         } catch (e: Exception) {
             logging("RemoteConfig.fetch", e)
             false
         }
     }
 
-    /** [fetch] without waiting, e.g. from Application.onCreate(). [onDone] runs on the main thread. */
-    fun fetchInBackground(onDone: ((updated: Boolean) -> Unit)? = null) {
-        Analytics.scope.launch {
-            val updated = fetch()
-            if (onDone != null) withContext(Dispatchers.Main) { onDone(updated) }
+    fun stopLiveUpdates() {
+        live?.remove()
+        live = null
+    }
+
+    /** Ad-hoc keys without a property: the Firebase value, else [default]. */
+    fun string(key: String, default: String = ""): String = config?.getString(key)?.trim()?.takeIf { it.isNotEmpty() } ?: default
+
+    fun bool(key: String, default: Boolean = false): Boolean = when (string(key).lowercase()) {
+        "true", "yes", "1", "on" -> true
+        "false", "no", "0", "off" -> false
+        else -> default
+    }
+
+    fun long(key: String, default: Long = 0L): Long = string(key).toLongOrNull() ?: default
+
+    fun double(key: String, default: Double = 0.0): Double = string(key).toDoubleOrNull() ?: default
+
+    // ---------- internals ----------
+
+    private fun startLiveUpdates(c: FirebaseRemoteConfig) {
+        live = c.addOnConfigUpdateListener(object : ConfigUpdateListener {
+            override fun onUpdate(configUpdate: ConfigUpdate) {
+                Timber.tag(TAG).d("live update: %s", configUpdate.updatedKeys)
+                Analytics.scope.launch {
+                    try {
+                        c.activate().await()
+                        applyAll(c)
+                        firebaseEvent("remote_cfg_live_applied")
+                    } catch (e: Exception) {
+                        firebaseEvent("remote_cfg_live_failed")
+                        logging("RemoteConfig.live", e)
+                    }
+                }
+            }
+
+            override fun onError(error: FirebaseRemoteConfigException) {
+                firebaseEvent("remote_cfg_live_failed")
+                logging("RemoteConfig.live", error)
+            }
+        })
+    }
+
+    private suspend fun applyAll(c: FirebaseRemoteConfig) {
+        RemoteRegistry.apply { key -> c.getString(key).trim() }
+        if (Analytics.debuggable || DebugConfig.REMOTE_CONFIG_AUDIT_IN_RELEASE) audit(c)
+        val all = synchronized(listeners) { listeners.toList() }
+        withContext(Dispatchers.Main) {
+            all.forEach { runCatching(it).onFailure { e -> logging("RemoteConfig.onApplied", e) } }
         }
     }
 
-    fun string(key: String, default: String = ""): String = config?.getString(key)?.takeIf { it.isNotEmpty() } ?: default
+    /**
+     * The audit table in logcat (tag RemoteConfigAudit), most important first:
+     *   LOCAL MISSING  in Firebase but no property here (add one, or delete the key)
+     *   OVERRIDE       Firebase differs from the local default (that's the value in use)
+     *   MISSING        a property with no Firebase value (the default is in use)
+     *   MATCH          Firebase equals the default
+     */
+    private fun audit(c: FirebaseRemoteConfig) {
+        val applied = RemoteRegistry.snapshot()
+        val known = RemoteRegistry.all.flatMap { (key, v) -> listOf(key) + v.legacyKeys }.toSet()
+        val rows = RemoteRegistry.all.map { (key, v) ->
+            val used = (listOf(key) + v.legacyKeys).firstOrNull { c.getString(it).trim().isNotEmpty() } ?: key
+            val fv = c.getValue(used)
+            val remote = fv.source == FirebaseRemoteConfig.VALUE_SOURCE_REMOTE
+            val firebase = fv.asString().trim()
+            val local = v.localValue.toString()
+            val (rank, status) = when {
+                !remote -> 1 to "MISSING"
+                firebase != local -> 2 to "OVERRIDE"
+                else -> 0 to "MATCH"
+            }
+            Row(rank, status, if (used == key) key else "$key <- $used", local.quoted(), if (remote) firebase.quoted() else "-", applied[key].toString().quoted())
+        } + c.all.filter { (key, v) -> key !in known && v.source == FirebaseRemoteConfig.VALUE_SOURCE_REMOTE }.map { (key, v) ->
+            Row(3, "LOCAL MISSING", key, "<no property>", v.asString().trim().quoted(), "<not used>")
+        }
+        val sorted = rows.sortedByDescending { it.rank }
+        val header = Row(-1, "STATUS", "KEY", "LOCAL", "FIREBASE", "APPLIED")
+        val w = listOf(Row::status, Row::key, Row::local, Row::firebase).map { f -> (sorted + header).maxOf { f(it).length } }
+        fun line(r: Row) = "${r.status.padEnd(w[0])} | ${r.key.padEnd(w[1])} | ${r.local.padEnd(w[2])} | ${r.firebase.padEnd(w[3])} | ${r.applied}"
+        Timber.tag(TAG).i(
+            "REMOTE CONFIG: %d keys, %d local missing, %d override, %d missing, %d match",
+            sorted.size, sorted.count { it.rank == 3 }, sorted.count { it.rank == 2 }, sorted.count { it.rank == 1 }, sorted.count { it.rank == 0 },
+        )
+        Timber.tag(TAG).i(line(header))
+        Timber.tag(TAG).i(w.joinToString("-+-") { "-".repeat(it) } + "-+--------")
+        sorted.forEach { r ->
+            when (r.rank) {
+                2, 3 -> Timber.tag(TAG).w(line(r))
+                1 -> Timber.tag(TAG).d(line(r))
+                else -> Timber.tag(TAG).i(line(r))
+            }
+        }
+    }
 
-    fun bool(key: String, default: Boolean = false): Boolean = config?.let { if (it.getValue(key).source == FirebaseRemoteConfig.VALUE_SOURCE_STATIC) default else it.getBoolean(key) } ?: default
+    private class Row(val rank: Int, val status: String, val key: String, val local: String, val firebase: String, val applied: String)
 
-    fun long(key: String, default: Long = 0L): Long = config?.let { if (it.getValue(key).source == FirebaseRemoteConfig.VALUE_SOURCE_STATIC) default else it.getLong(key) } ?: default
-
-    fun double(key: String, default: Double = 0.0): Double = config?.let { if (it.getValue(key).source == FirebaseRemoteConfig.VALUE_SOURCE_STATIC) default else it.getDouble(key) } ?: default
+    private fun String.quoted() = "\"" + replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r") + "\""
 }

@@ -6,7 +6,7 @@ managers read the generated `event/event_sheet.xlsx`. Use this skill whenever yo
 
 ## 1. Wiring (once per app)
 
-`artisan make:analytics` creates the **`:core:analytics` module** and wires it into every Android module, so
+`artisan make:firebase` creates the **`:core:firebase` module** and wires it into every Android module, so
 `firebaseEvent(...)` works anywhere. It works out the dependencies itself:
 
 - **Every version is the latest stable one**, fetched when the command runs: the Firebase BOM, Timber, coroutines,
@@ -31,14 +31,14 @@ there needs no import:
 | `Logging.kt` | `logging(...)` through Timber; caught errors become Crashlytics non-fatals in release |
 | `README.md` | how to use all of it |
 
-A new module that should use it: `implementation(project(":core:analytics"))`.
+A new module that should use it: `implementation(project(":core:firebase"))`.
 `artisan event:box` moves Event Box to its latest version.
 
 - Then:
   - google-services in the app (plugin + `google-services.json`), if it isn't there;
   - put `Analytics.init(this)` in `Application.onCreate()`.
 - If the app already has its own `firebaseEvent` (top-level or an extension), keep it. The top of event.md says where it lives.
-- **Every project needs this setup.** `artisan make:ai` offers `make:analytics` when the app has no `firebaseEvent` yet.
+- **Every project needs this setup.** `artisan make:ai` offers `make:firebase` when the app has no `firebaseEvent` yet.
 - **Bypass** (the Bypass section of `DebugConfig`, fully customisable, snake_case like the names): events kept out of
   the box so it shows what you're testing. They still go to Firebase and logcat.
 

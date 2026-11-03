@@ -170,7 +170,7 @@ class WorkflowTest {
         val p = project()
         val doc = eventDoc(p, mapOf("MainActivity" to listOf("main_on_create")))
         assertTrue("## How to name an event" in doc && "## Example: PermissionActivity (a permission flow)" in doc && "`permi_phone_deny_2nd`" in doc)
-        assertTrue("ENABLE_EVENT_BOX" in doc && "artisan make:analytics" in doc, "no firebaseEvent in the demo app yet")
+        assertTrue("ENABLE_EVENT_BOX" in doc && "artisan make:firebase" in doc, "no firebaseEvent in the demo app yet")
         assertEquals(mapOf("MainActivity" to listOf("main_on_create")), parseEventDoc(doc).mapValues { (_, rows) -> rows.map { it.first } })
         assertTrue("## MainActivity\n\n`app/src/main/java/com/demo/presentation/main/MainActivity.kt`\n\n" in doc, doc.substringAfter("## MainActivity"))
     }
@@ -460,7 +460,7 @@ class WorkflowTest {
         assertTrue("fun firebaseEvent(name: String" in events && "fun Context.firebaseEvent(" in events && "androidx" !in events, "no androidx: the module has no dependency on it")
         assertTrue("OGEventBoxLog.log(name, bundle)" in events && "BuildConfig" !in events && "Handler" !in events)
         val init = stub("Analytics.kt")
-        assertTrue("object Analytics" in init && "fun init(app: Application)" in init && ".install(app)" in init)
+        assertTrue("object Analytics" in init && "fun init(app: Application" in init && ".install(app)" in init)
         assertNull(javaClass.getResource("/templates/analytics/EventLogBox.kt.stub"))
 
         val p = project()

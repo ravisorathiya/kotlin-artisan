@@ -8,7 +8,7 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /*
- * firebaseEvent: every analytics event of the app goes through here (added by `artisan make:analytics`).
+ * firebaseEvent: every analytics event of the app goes through here (added by `artisan make:firebase`).
  * Every event is listed in ai/.../event/event.md (`artisan make:event` adds the row, `artisan check:events` compares).
  * Names: snake_case, under 30 characters, `<screen>_<thing>_<action>`. Switches and bypass rules: DebugConfig.
  */

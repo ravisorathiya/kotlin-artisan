@@ -251,7 +251,7 @@ internal fun eventProblems(p: Project, doc: File): List<EventProblem> {
     return out
 }
 
-// ---------- make:analytics: firebaseEvent + the event box ----------
+// ---------- make:firebase (alias make:analytics): firebaseEvent, Firebase and the event box ----------
 
 /** Where the app defines `fun Context.firebaseEvent(...)` (or Fragment.), project-relative, or null. */
 internal fun firebaseEventDefinition(p: Project): String? =
@@ -281,7 +281,7 @@ internal fun addDependency(build: String, coordinate: String): String? {
     return addDependencyLine(build, "implementation(\"$coordinate\")")
 }
 
-/** Adds [line] (e.g. `implementation(project(":core:analytics"))`) as the first line of the top-level dependencies block. */
+/** Adds [line] (e.g. `implementation(project(":core:firebase"))`) as the first line of the top-level dependencies block. */
 internal fun addDependencyLine(build: String, line: String): String {
     val nl = if ("\r\n" in build) "\r\n" else "\n"
     val block = Regex("""(?m)^dependencies\s*\{[ \t]*\r?\n""").findAll(build).lastOrNull() ?: return build.trimEnd() + nl + nl + "dependencies {" + nl + "    " + line + nl + "}" + nl
@@ -314,9 +314,10 @@ internal fun addJitpack(settings: String, kts: Boolean, anchor: String = "depend
 
 internal fun registerAnalytics() {
     Registry.add(
-        "make:analytics", "make:analytics [--path :core:analytics] [--build] [--no-verify]",
-        "A :core:analytics module for all of Firebase (events, Crashlytics, Messaging, Remote Config; one BOM, latest versions), Timber and the Event Box, wired into every Android module",
+        "make:firebase", "make:firebase [--path :core:firebase] [--build] [--no-verify]",
+        "A :core:firebase module for all of Firebase (events, Crashlytics, Messaging, Remote Config; one BOM, latest versions), Timber and the Event Box, wired into every Android module",
     ) { makeAnalytics(it) }
+    Registry.alias("make:analytics", "make:firebase")
 }
 
 internal fun makeAnalytics(ctx: Ctx) {
@@ -324,11 +325,12 @@ internal fun makeAnalytics(ctx: Ctx) {
     firebaseEventDefinition(p)?.let { throw CliError("firebaseEvent is already defined in $it. event.md documents how it's wired (artisan make:ai).") }
     if (findFirebaseEvent(p) != null) throw CliError("The app already has its own firebaseEvent. Keep it; event.md documents how it's wired.")
     Ui.say("Fetching the latest versions (Firebase BOM, Timber, coroutines, Event Box, plugins)...", Tone.DIM)
-    val plan = planAnalyticsModule(p, ctx.option("--path") ?: ":core:analytics")
+    val plan = planAnalyticsModule(p, ctx.option("--path") ?: ":core:firebase")
     applyAnalyticsModule(p, plan)
+    documentModuleEvents(p, plan)?.let { Ui.say("  event.md: the module's own Remote Config events (${it} added, the sheet too)", Tone.DIM) }
 
     Ui.table(
-        "make:analytics: ${plan.module}", listOf("File", "What"),
+        "make:firebase: ${plan.module}", listOf("File", "What"),
         plan.created.keys.map { Row(listOf(it, "created"), colors = listOf(null, Tone.OK)) } +
             plan.changed.keys.map { Row(listOf(it, "changed"), colors = listOf(null, Tone.WARN)) },
     )

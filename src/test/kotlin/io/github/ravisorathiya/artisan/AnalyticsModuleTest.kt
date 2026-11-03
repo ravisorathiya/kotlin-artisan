@@ -1,6 +1,10 @@
 package io.github.ravisorathiya.artisan
 
 import io.github.ravisorathiya.artisan.commands.ANALYTICS_SOURCES
+import io.github.ravisorathiya.artisan.commands.MODULE_EVENTS
+import io.github.ravisorathiya.artisan.commands.checkEventName
+import io.github.ravisorathiya.artisan.commands.documentModuleEvents
+import io.github.ravisorathiya.artisan.commands.parseEventDoc
 import io.github.ravisorathiya.artisan.commands.addToPluginsBlock
 import io.github.ravisorathiya.artisan.commands.applyAnalyticsModule
 import io.github.ravisorathiya.artisan.commands.bomStepDowns
@@ -106,10 +110,10 @@ class AnalyticsModuleTest {
         assertTrue(!File(tmp, "core").exists(), "planning writes nothing")
         applyAnalyticsModule(p, plan)
 
-        val build = read("core/analytics/build.gradle.kts")
+        val build = read("core/firebase/build.gradle.kts")
         assertTrue("    alias(libs.plugins.android.library)\n    alias(libs.plugins.kotlin.android)\n}" in build, build)
         assertTrue("ksp" !in build, "app-only plugins stay in the app")
-        assertTrue("namespace = \"com.demo.fx.core.analytics\"" in build)
+        assertTrue("namespace = \"com.demo.fx.core.firebase\"" in build)
         assertTrue("    compileSdk {\n        version = release(36)\n    }" in build && "    defaultConfig {\n        minSdk = 26\n    }" in build, build)
         assertTrue("sourceCompatibility = JavaVersion.VERSION_21" in build && "configure<KotlinAndroidProjectExtension> {" in build && "import org.jetbrains.kotlin.gradle.dsl.JvmTarget" in build)
         for (line in listOf(
@@ -132,10 +136,10 @@ class AnalyticsModuleTest {
         assertTrue(plan.notes.any { "34.17.0 -> 35.1.0" in it })
 
         val settings = read("settings.gradle.kts")
-        assertTrue("include(\":domain\")\ninclude(\":core:analytics\")" in settings && "        maven(\"https://jitpack.io\")\n    }" in settings, settings)
-        assertTrue("    implementation(project(\":core:analytics\"))\n    implementation(libs.androidx.core.ktx)" in read("app/build.gradle.kts"))
-        assertTrue("implementation(project(\":core:analytics\"))" in read("feature/build.gradle.kts"))
-        assertTrue("core:analytics" !in read("domain/build.gradle.kts"))
+        assertTrue("include(\":domain\")\ninclude(\":core:firebase\")" in settings && "        maven(\"https://jitpack.io\")\n    }" in settings, settings)
+        assertTrue("    implementation(project(\":core:firebase\"))\n    implementation(libs.androidx.core.ktx)" in read("app/build.gradle.kts"))
+        assertTrue("implementation(project(\":core:firebase\"))" in read("feature/build.gradle.kts"))
+        assertTrue("core:firebase" !in read("domain/build.gradle.kts"))
         assertEquals(listOf(":app", ":feature"), plan.wired)
         assertEquals(listOf(":domain"), plan.skipped.map { it.first })
 
@@ -144,14 +148,14 @@ class AnalyticsModuleTest {
         assertTrue(plan.notes.any { "google-services.json" in it && "com.google.firebase.crashlytics" in it })
 
         // the code: every file in the app's base package; DebugConfig is settings only; Timber and coroutines, no Handler
-        for (f in ANALYTICS_SOURCES) assertTrue(read("core/analytics/src/main/java/com/demo/fx/$f").startsWith("package com.demo.fx\n"), f)
-        val config = read("core/analytics/src/main/java/com/demo/fx/DebugConfig.kt")
+        for (f in ANALYTICS_SOURCES) assertTrue(read("core/firebase/src/main/java/com/demo/fx/$f").startsWith("package com.demo.fx\n"), f)
+        val config = read("core/firebase/src/main/java/com/demo/fx/DebugConfig.kt")
         assertTrue("object DebugConfig" in config && "fun " !in config && "import" !in config, "settings only")
-        val events = read("core/analytics/src/main/java/com/demo/fx/FirebaseEvents.kt")
+        val events = read("core/firebase/src/main/java/com/demo/fx/FirebaseEvents.kt")
         assertTrue("Dispatchers.Main" in events && "Handler" !in events && "Timber" in events)
-        assertTrue("Timber.plant(Timber.DebugTree())" in read("core/analytics/src/main/java/com/demo/fx/Analytics.kt"))
-        val readme = read("core/analytics/README.md")
-        assertTrue("# `:core:analytics`" in readme && "35.1.0" in readme && "RemoteConfig.bool" in readme && "{{" !in readme, readme.take(300))
+        assertTrue("Timber.plant(Timber.DebugTree())" in read("core/firebase/src/main/java/com/demo/fx/Analytics.kt"))
+        val readme = read("core/firebase/README.md")
+        assertTrue("# `:core:firebase`" in readme && "35.1.0" in readme && "AdsConstant" in readme && "{{" !in readme, readme.take(300))
 
         // again: refused, nothing touched
         val before = read("app/build.gradle.kts")
@@ -186,21 +190,21 @@ class AnalyticsModuleTest {
         val plan = planAnalyticsModule(p, latest = { null }) // offline
         applyAnalyticsModule(p, plan)
 
-        val build = read("core/analytics/build.gradle")
+        val build = read("core/firebase/build.gradle")
         assertTrue("plugins {\n    id 'com.android.library'\n    id 'org.jetbrains.kotlin.android'\n}" in build, build)
-        assertTrue("    namespace 'com.demo.gv.core.analytics'\n    compileSdk 36\n" in build && "        minSdk 26\n" in build)
+        assertTrue("    namespace 'com.demo.gv.core.firebase'\n    compileSdk 36\n" in build && "        minSdk 26\n" in build)
         assertTrue("    kotlinOptions {\n        jvmTarget = \"11\"\n    }" in build, build)
         assertTrue("    api(platform('com.google.firebase:firebase-bom:34.17.0'))\n" in build, "offline, no BOM in the app: the pinned one")
         assertTrue("    api('com.google.firebase:firebase-messaging')\n" in build && "    api('com.jakewharton.timber:timber:5.0.1')\n" in build)
         assertTrue("    implementation('com.github.JpOriginDev:event-box:1.2.0')\n" in build, "offline: the app's own Event Box version")
         assertTrue(plan.notes.any { "Offline" in it })
         assertTrue("    id 'com.android.application' version '9.4.1' apply false\n    id 'com.android.library' version '9.4.1' apply false\n" in read("build.gradle"))
-        assertTrue("include ':app'\ninclude ':core:analytics'" in read("settings.gradle") && "        maven { url 'https://jitpack.io' }\n" in read("settings.gradle"))
+        assertTrue("include ':app'\ninclude ':core:firebase'" in read("settings.gradle") && "        maven { url 'https://jitpack.io' }\n" in read("settings.gradle"))
         // google-services is there; crashlytics is added (json present), with a root entry at the pinned version
         val app = read("app/build.gradle")
-        assertTrue("    id 'com.google.gms.google-services'\n    id 'com.google.firebase.crashlytics'\n}" in app && "    implementation(project(':core:analytics'))\n" in app, app)
+        assertTrue("    id 'com.google.gms.google-services'\n    id 'com.google.firebase.crashlytics'\n}" in app && "    implementation(project(':core:firebase'))\n" in app, app)
         assertTrue("    id 'com.google.firebase.crashlytics' version '3.0.6' apply false\n" in read("build.gradle"))
-        assertEquals("core/analytics/build.gradle", plan.bomFile)
+        assertEquals("core/firebase/build.gradle", plan.bomFile)
     }
 
     @Test
@@ -209,7 +213,7 @@ class AnalyticsModuleTest {
         write("app/build.gradle.kts", "plugins {\n    id(\"com.android.application\")\n}\nandroid {\n    namespace = \"com.x\"\n    compileSdk = 35\n    defaultConfig {\n        minSdk = 24\n    }\n}\n")
         val p = assertNotNull(Project.find(tmp))
         val plan = planAnalyticsModule(p, latest = latest)
-        val build = plan.created.getValue("core/analytics/build.gradle.kts")
+        val build = plan.created.getValue("core/firebase/build.gradle.kts")
         assertTrue("api(platform(\"com.google.firebase:firebase-bom:35.1.0\"))" in build && "implementation(\"com.github.JpOriginDev:event-box:1.4.0\")" in build, build)
         assertTrue("api(\"org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0\")" in build && "implementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.11.0\")" in build)
         assertTrue(plan.appBom == null && plan.notes.any { "JitPack" in it }, "no repositories block to put JitPack in: say so")
@@ -249,4 +253,37 @@ class AnalyticsModuleTest {
         assertEquals("plugins {\n    id 'x'\n}", buildStatement(b, "plugins\\s*\\{", topLevel = true))
         assertTrue("plugins {\n    id 'x'\n    id 'y'\n}" in addToPluginsBlock(b, "id 'y'"))
     }
+
+    @Test
+    fun `remote config is a property per key in AdsConstant, started by Analytics init, and its events go in event md`() {
+        val p = catalogProject()
+        write("ai/src/main/java/ai/README.md", "x")
+        write("ai/src/main/java/ai/event/event.md", "# Events\n\n## MainActivity\n\n| Event name | Fired from | When |\n|---|---|---|\n| `main_on_create` | `onCreate()` | Home opened |\n")
+        val q = assertNotNull(Project.find(tmp))
+        val plan = planAnalyticsModule(q, latest = latest)
+        applyAnalyticsModule(q, plan)
+        val src = "core/firebase/src/main/java/com/demo/fx"
+        val consts = read("$src/AdsConstant.kt")
+        assertTrue("object AdsConstant" in consts && "by remoteAdUnit(" in consts && "by remoteString(" in consts && "by remoteInt(" in consts)
+        val values = read("$src/RemoteValue.kt")
+        assertTrue(listOf("fun remoteString(", "fun remoteAdUnit(", "fun remoteInt(", "fun remoteLong(", "fun remoteDouble(", "fun remoteBoolean(", "object RemoteRegistry").all { it in values })
+        val rc = read("$src/RemoteConfig.kt")
+        assertTrue("addOnConfigUpdateListener" in rc && "fun awaitFetch(" in rc && "fun onApplied(" in rc && "LOCAL MISSING" in rc && "RemoteRegistry.apply" in rc)
+        assertTrue("fun init(app: Application, vararg remoteHolders: Any = arrayOf(AdsConstant))" in read("$src/Analytics.kt") && "RemoteConfig.start(*remoteHolders)" in read("$src/Analytics.kt"))
+        assertTrue("REMOTE_CONFIG_TIMEOUT_MILLIS" in read("$src/DebugConfig.kt") && "REMOTE_CONFIG_LIVE_UPDATES" in read("$src/DebugConfig.kt"))
+        assertTrue("LOCAL MISSING" in read("core/firebase/README.md") && "legacyKeys" in read("core/firebase/README.md"))
+
+        MODULE_EVENTS.forEach { checkEventName(it.first) }
+        // every event the module fires is one of MODULE_EVENTS
+        val fired = Regex("""firebaseEvent\("(remote_cfg_\w+)"""").findAll(rc).map { it.groupValues[1] }.toSet()
+        assertEquals(MODULE_EVENTS.map { it.first }.toSet(), fired)
+
+        assertEquals(MODULE_EVENTS.size, documentModuleEvents(q, plan))
+        val doc = parseEventDoc(read("ai/src/main/java/ai/event/event.md"))
+        assertEquals(MODULE_EVENTS.map { it.first }, doc.getValue("RemoteConfig").map { it.first })
+        assertTrue("`$src/RemoteConfig.kt`" in read("ai/src/main/java/ai/event/event.md"), "the section names its source file")
+        assertTrue(File(tmp, "ai/src/main/java/ai/event/event_sheet.xlsx").isFile)
+        assertEquals(null, documentModuleEvents(q, plan), "second time: nothing to add")
+    }
+
 }

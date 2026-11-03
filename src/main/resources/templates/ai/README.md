@@ -16,7 +16,7 @@ Written by agents for agents: it doesn't need polish, but it must be accurate, s
 | [`workflow/<version>/`](#workflow) | Bug lists, feature requests, crash fixes, QA/manager feedback — one folder per release | `make:version`, `make:phase`, `make:bug`, `list:verify`, `status` |
 | [`plan/`](#plan) | One file per plan; re-apply bundles for porting a shipped feature | `make:plan`, `list:plans`, `make:bundle` |
 | [`event/`](#event) | `event.md`: every active `firebaseEvent`, one table per screen · `event_sheet.xlsx`: the same as a sheet (generated) | `make:event`, `make:permission`, `check:events`, `event:sheet` |
-| [`skill/`](#skill) | Reusable how-tos: permission flow, analytics events, crash hardening | `make:permission`, `make:analytics` |
+| [`skill/`](#skill) | Reusable how-tos: permission flow, analytics events, crash hardening | `make:permission`, `make:firebase` |
 | [`scripts/`](#scripts) | Helper scripts agents run (resource variants, bulk edits, checks) | |
 | [`assets/`](#assets) | Screenshots, mockups, screen recordings | `app:shot`, `app:record`, `make:bug --shot` |
 | `README.md` | These rules | `check:links` |
@@ -211,7 +211,7 @@ Full table and samples are in `event.md` ("How to name an event").
 
 ### Wiring and testing
 
-Every event goes through the app's `firebaseEvent(...)` (`event.md` says where; `artisan make:analytics` adds it).
+Every event goes through the app's `firebaseEvent(...)` (`event.md` says where; `artisan make:firebase` adds it).
 To watch events: the event box, the [Event Box](https://github.com/JpOriginDev/event-box) library (`ENABLE_EVENT_BOX = true` in `DebugConfig.kt`, set up by `Analytics.init(this)` in `Application.onCreate()`) or
 `artisan app:logcat GlobalFirebaseEventNameTag`. **The event box must be `false` in any release build** — note it if
 you turned it on.

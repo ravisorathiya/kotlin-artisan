@@ -90,19 +90,19 @@ private fun makeAi(ctx: Ctx) {
     }
 }
 
-/** Every project needs the firebaseEvent setup: when the app has none, offer make:analytics (Enter = yes, -y = yes). */
+/** Every project needs the firebaseEvent setup: when the app has none, offer make:firebase (Enter = yes, -y = yes). */
 private fun offerAnalytics(ctx: Ctx) {
     val p = ctx.project
     if (findFirebaseEvent(p) != null) return
     Ui.head("Analytics")
-    if (!Ui.offer("No firebaseEvent in the app yet. Add it with the Event Box library now (artisan make:analytics)?")) {
-        Ui.say("  Later: artisan make:analytics (firebaseEvent, bypass rules, the Event Box library and JitPack)", Tone.DIM)
+    if (!Ui.offer("No firebaseEvent in the app yet. Add it with the Event Box library now (artisan make:firebase)?")) {
+        Ui.say("  Later: artisan make:firebase (firebaseEvent, bypass rules, the Event Box library and JitPack)", Tone.DIM)
         return
     }
     try {
         makeAnalytics(ctx)
     } catch (e: CliError) {
-        Ui.say("  make:analytics: ${e.message}", Tone.WARN)
+        Ui.say("  make:firebase: ${e.message}", Tone.WARN)
     }
 }
 
@@ -202,10 +202,10 @@ internal fun eventDoc(p: Project, events: Map<String, List<String>>): String {
         |
         |## How firebaseEvent is wired
         |
-        |- ${definedIn?.let { "Defined in `$it`" } ?: "Not in the app yet: `artisan make:analytics` adds it"} as `firebaseEvent(name, bundle)`, callable from
+        |- ${definedIn?.let { "Defined in `$it`" } ?: "Not in the app yet: `artisan make:firebase` adds it"} as `firebaseEvent(name, bundle)`, callable from
         |  any module that depends on the analytics module (Activity, Fragment, ViewModel, background thread). Each call logs to Firebase Analytics, prints `I/GlobalFirebaseEventNameTag <name>`
         |  in debug builds, and shows the name in the event box when that's on.
-        |- **Event box** (${box?.let { "`$it`" } ?: "the [Event Box](https://github.com/JpOriginDev/event-box) library, from `artisan make:analytics`"}): a floating
+        |- **Event box** (${box?.let { "`$it`" } ?: "the [Event Box](https://github.com/JpOriginDev/event-box) library, from `artisan make:firebase`"}): a floating
         |  bubble that lists events as they fire (with their parameters, and a warning when one breaks a Firebase limit), on every
         |  screen. For testing, set `ENABLE_EVENT_BOX = true` in `DebugConfig.kt`; `Analytics.init(this)` in
         |  `Application.onCreate()` sets it up. **Set it back to `false` before a release.**
