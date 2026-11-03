@@ -265,6 +265,16 @@ class AnalyticsModuleTest {
         val src = "core/firebase/src/main/java/com/demo/fx"
         val consts = read("$src/AdsConstant.kt")
         assertTrue("object AdsConstant" in consts && "by remoteAdUnit(" in consts && "by remoteString(" in consts && "by remoteInt(" in consts)
+        // the keys every app has, with the More Apps fallback pair and a banner sample
+        for (key in listOf(
+            "splashAppOpenAd", "showSplashAppOpenAd", "onlineSplashAppOpen", "googleAppOpen", "interstitialAds",
+            "langBigNativeBanner", "languageSmallNativeAd", "showBigNativeLanguage", "showLanguageNativeAd", "showMoreAppLanguage", "onlyShowMoreAppLanguage",
+            "nativeExitDialogAds", "showAdsExitDialog", "showMoreAppNative", "onlyShowMoreAppNative",
+            "mainBannerAd", "showMainBannerAd", "showMoreAppNBanner", "onlyShowMoreAppNBanner",
+            "moreAppUrl", "moreAccountName", "updateNow", "playStoreLink",
+            "googleInterMaxInterAdsShow", "googleInterGapBetweenTwoInter", "googleInterCountDownTimer", "firstTime",
+        )) assertTrue(Regex("""var $key by remote\w+\(""").containsMatchIn(consts), key)
+        assertTrue("legacyKeys = listOf(\"moreAppAccountName\")" in consts)
         val values = read("$src/RemoteValue.kt")
         assertTrue(listOf("fun remoteString(", "fun remoteAdUnit(", "fun remoteInt(", "fun remoteLong(", "fun remoteDouble(", "fun remoteBoolean(", "object RemoteRegistry").all { it in values })
         val rc = read("$src/RemoteConfig.kt")

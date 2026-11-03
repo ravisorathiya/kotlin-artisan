@@ -151,6 +151,39 @@ MATCH         | homeNativeAd     | "ca-app-..."  | "ca-app-..."  | "ca-app-..."
 | `remoteInt(default, invalidFallback)` / `remoteLong` / `remoteDouble` | number | keeps the current value | `invalidFallback` |
 | `remoteBoolean(default)` | `Boolean` (`true/false`, `yes/no`, `1/0`) | keeps the current value | keeps the current value |
 
+### Keys every app has
+
+`AdsConstant` starts with the keys every app uses. Keep their names, because the Firebase console uses the same ones:
+
+| Section | Keys |
+|---|---|
+| Splash | `splashAppOpenAd`, `showSplashAppOpenAd`, `onlineSplashAppOpen` |
+| App open (on resume) | `googleAppOpen` |
+| Interstitial | `interstitialAds`, `googleInterMaxInterAdsShow`, `googleInterGapBetweenTwoInter`, `googleInterCountDownTimer` |
+| Language screen | `langBigNativeBanner`, `languageSmallNativeAd`, `showBigNativeLanguage`, `showLanguageNativeAd`, `showMoreAppLanguage`, `onlyShowMoreAppLanguage` |
+| Exit dialog | `nativeExitDialogAds`, `showAdsExitDialog`, `showMoreAppNative`, `onlyShowMoreAppNative` |
+| Banner (sample) | `mainBannerAd`, `showMainBannerAd`: copy per screen |
+| More Apps for banners | `showMoreAppNBanner`, `onlyShowMoreAppNBanner` |
+| More Apps feed, update, store | `moreAppUrl`, `moreAccountName` (legacy `moreAppAccountName`), `updateNow`, `playStoreLink` |
+| Flags | `firstTime` |
+
+**More Apps** (your own cross-promotion ad), per placement:
+
+- `showMoreApp...` = `"yes"`: when the Google ad **fails**, a More Apps ad shows there instead (fallback).
+- `onlyShowMoreApp...` = `"yes"`: the More Apps ad **always** shows there, never the Google one (forced).
+
+```kotlin
+when {
+    AdsConstant.onlyShowMoreAppNBanner == "yes" -> showMoreAppsBanner()
+    AdsConstant.showMainBannerAd == "yes" -> loadBanner(AdsConstant.mainBannerAd, onFailed = {
+        if (AdsConstant.showMoreAppNBanner == "yes") showMoreAppsBanner()
+    })
+}
+```
+
+`moreAppUrl` is `http://` by default. Android blocks plain HTTP unless the app's network security config allows that
+host, so use `https://`, or allow the host in the config.
+
 - **Renamed a key in the console?** Use `legacyKeys = listOf("oldName")`: the old key is read while the new one is empty.
 - **Splash screen:** wait for the first fetch, at most `DebugConfig.REMOTE_CONFIG_TIMEOUT_MILLIS`:
   ```kotlin

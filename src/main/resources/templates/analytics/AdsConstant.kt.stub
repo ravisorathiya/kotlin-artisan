@@ -7,8 +7,14 @@ package {{PACKAGE}}
  *     var homeNativeAd by remoteAdUnit("ca-app-pub-xxx/yyy")
  *     var showHomeNativeAd by remoteString("yes")
  *
- * Group by screen, with a header naming the class that reads it. The ids below are Google's test ids: replace them
- * before a release (or set them in the Firebase console). See README.md in this module.
+ * Group by screen, with a header naming the class that reads it. Switches are "yes" / "no".
+ *
+ * More Apps (your own cross-promotion ad) per placement:
+ *   showMoreApp...      "yes" = when the Google ad fails to load, show a More Apps ad there instead (fallback)
+ *   onlyShowMoreApp...  "yes" = always show the More Apps ad there, never the Google one (forced)
+ *
+ * The ad unit ids below are Google's test ids: replace them before a release (or set them in the Firebase console).
+ * See README.md in this module.
  */
 object AdsConstant {
 
@@ -18,27 +24,63 @@ object AdsConstant {
     const val PRIVACY_POLICY = "https://www.google.com/"
 
     /*============================================================*/
-    // SPLASH: SplashActivity
+    // SPLASH: SplashActivity / SplashOpenAd
     var splashAppOpenAd by remoteAdUnit("ca-app-pub-3940256099942544/9257395921")
     var showSplashAppOpenAd by remoteString("yes")
+    var onlineSplashAppOpen by remoteString("no")
 
     /*============================================================*/
-    // APP OPEN on resume
-    var appOpenAd by remoteAdUnit("ca-app-pub-3940256099942544/9257395921")
+    // APP OPEN (on resume): AppOpenManager
+    var googleAppOpen by remoteAdUnit("ca-app-pub-3940256099942544/9257395921")
 
     /*============================================================*/
-    // INTERSTITIAL
-    var interstitialAd by remoteAdUnit("ca-app-pub-3940256099942544/1033173712")
-    var interMaxShowPerSession by remoteInt(defaultValue = 3)
-    var interGapSeconds by remoteLong(defaultValue = 30L)
+    // INTERSTITIAL: GoogleInterAd
+    var interstitialAds by remoteAdUnit("/21775744923/example/interstitial")
+    var googleInterMaxInterAdsShow by remoteInt(defaultValue = 1, invalidFallback = 3)
+    var googleInterGapBetweenTwoInter by remoteInt(defaultValue = 2, invalidFallback = 2)
+    var googleInterCountDownTimer by remoteLong(defaultValue = 3000L, invalidFallback = 10_000L)
 
     /*============================================================*/
-    // NATIVE: home screen
-    var homeNativeAd by remoteAdUnit("ca-app-pub-3940256099942544/2247696110")
-    var showHomeNativeAd by remoteString("yes")
+    // LANGUAGE SCREEN: LanguageNativeAd / LangAdLoader / PreviewLangAdsLoad
+    var langBigNativeBanner by remoteAdUnit("/21775744923/example/native")
+    var languageSmallNativeAd by remoteAdUnit("/21775744923/example/native")
+    var showBigNativeLanguage by remoteString("yes")
+    var showLanguageNativeAd by remoteString("yes")
+    var showMoreAppLanguage by remoteString("yes")
+    var onlyShowMoreAppLanguage by remoteString("no")
 
     /*============================================================*/
-    // APP: update prompt, store link
+    // EXIT DIALOG: ExitAppDialog / MainActivity
+    var nativeExitDialogAds by remoteAdUnit("/21775744923/example/native")
+    var showAdsExitDialog by remoteString("yes")
+    var showMoreAppNative by remoteString("yes")
+    var onlyShowMoreAppNative by remoteString("no")
+
+    /*============================================================*/
+    // BANNER: MainActivity bottom banner (sample; copy per screen: <screen>BannerAd + show<Screen>BannerAd)
+    var mainBannerAd by remoteAdUnit("/21775744923/example/adaptive-banner")
+    var showMainBannerAd by remoteString("yes")
+
+    /*============================================================*/
+    // MORE APPS fallback for every banner / native banner above
+    var showMoreAppNBanner by remoteString("yes")
+    var onlyShowMoreAppNBanner by remoteString("no")
+
+    /*============================================================*/
+    // MORE APPS feed, UPDATE prompt, STORE link
+    var moreAppUrl by remoteString(
+        defaultValue = "http://68.183.94.44/moreapps/api/",
+        keepCurrentWhenEmpty = false,
+    )
+    var moreAccountName by remoteString(
+        defaultValue = "xyz",
+        keepCurrentWhenEmpty = false,
+        legacyKeys = listOf("moreAppAccountName"),
+    )
     var updateNow by remoteString("no", keepCurrentWhenEmpty = false)
     var playStoreLink by remoteString("https://play.google.com/store/apps/details?id=")
+
+    /*============================================================*/
+    // FLAGS
+    var firstTime by remoteBoolean(false)
 }

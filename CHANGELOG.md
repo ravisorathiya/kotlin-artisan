@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.13.1: the keys every app has, in AdsConstant
+
+- `AdsConstant` starts with the keys every app uses:
+  - Splash: `splashAppOpenAd`, `showSplashAppOpenAd`, `onlineSplashAppOpen`.
+  - App open: `googleAppOpen`.
+  - Interstitial: `interstitialAds`, `googleInterMaxInterAdsShow`, `googleInterGapBetweenTwoInter`,
+    `googleInterCountDownTimer`.
+  - Language screen: `langBigNativeBanner`, `languageSmallNativeAd`, `showBigNativeLanguage`, `showLanguageNativeAd`,
+    `showMoreAppLanguage`, `onlyShowMoreAppLanguage`.
+  - Exit dialog: `nativeExitDialogAds`, `showAdsExitDialog`, `showMoreAppNative`, `onlyShowMoreAppNative`.
+  - More Apps feed, update, store link: `moreAppUrl`, `moreAccountName` (legacy `moreAppAccountName`), `updateNow`,
+    `playStoreLink`.
+  - Flags: `firstTime`.
+- A banner sample (`mainBannerAd`, `showMainBannerAd`), and the More Apps pair for banners: `showMoreAppNBanner` (show
+  More Apps when the Google ad fails) and `onlyShowMoreAppNBanner` (always show More Apps).
+- The module README lists these keys and shows the More Apps fallback logic.
+
 ## 0.13.0: make:firebase, and Remote Config from one-line keys
 
 - **The command is `make:firebase`**, and the module is **`:core:firebase`** (it holds all of Firebase now).
