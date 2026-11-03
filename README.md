@@ -236,11 +236,12 @@ Studio and never shipped. It's plain markdown, grouped by folder:
 | `plan/` | Plans (`make:plan <name>`: one `.md` file) and re-apply bundles (`make:bundle <feature> --since <tag>`), indexed in `plan/MASTER_OVERVIEW.md` |
 | `event/event.md` | Every `firebaseEvent(...)` call, pre-filled from the app, one table per screen |
 | `event/event_sheet.xlsx` | The same events as a simple sheet for product and QA (Event Name, Description). Generated, never edited by hand |
-| `skill/` | Reusable how-tos every project gets: `permission.md`, `analytics_events.md`, `crash_hardening.md` |
+| `skill/` | Reusable how-tos every project gets: `firebase_module.md`, `permission.md`, `analytics_events.md`, `crash_hardening.md` |
 | `scripts/` | Helper scripts agents run (rules in its README; `recolor.py` makes theme image variants) |
 | `assets/` | Screenshots and recordings |
 
-Run `make:ai` again in a project that already has the workspace: it adds only the missing skills, scripts and sheet.
+Run `make:ai` again in a project that already has the workspace: it adds only the missing skills, scripts and sheet. `make:ai --refresh-skills` also brings existing skills up to date. A skill you edited is never overwritten: the
+new version goes next to it as `.new`.
 
 **Events out of the box.**
 

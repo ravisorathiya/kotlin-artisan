@@ -6,6 +6,7 @@ shape, the event names, the checklist and the traps. It isn't tied to one bug or
 
 | Skill | Use it when |
 |---|---|
+| [firebase_module.md](firebase_module.md) | Anything Firebase: a remote key / ad unit / ad switch (`AdsConstant`), events, Crashlytics, push, a new Firebase product, versions |
 | [permission.md](permission.md) | A screen asks for runtime permissions (ask → 1st deny → 2nd deny → back → Settings, with events) |
 | [analytics_events.md](analytics_events.md) | You add, rename or remove a `firebaseEvent`, or wire analytics into a new app |
 | [crash_hardening.md](crash_hardening.md) | A Crashlytics / Play Console stack trace comes in, or a screen must be made crash-safe |

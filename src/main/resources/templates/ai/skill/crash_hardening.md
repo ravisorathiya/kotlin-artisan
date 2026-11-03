@@ -11,7 +11,10 @@ Console stack trace, a "make this safe" request, or a crash-fix list in `workflo
 
 ## Step 0: the project's own conventions
 
-- Find the error logger (`logging(tag, e)`, `Timber.e`, `recordException`) and use it. If there is none:
+- **With the `:core:firebase` module** (`core/firebase/`), the logger is `logging("Class.method", e)`
+  (`import <app>.firebase.log.logging`). It logs through Timber and, in release builds, records a Crashlytics
+  non-fatal. For a breadcrumb before a risky call, use `Crash.log("...")`. See firebase_module.md.
+- Otherwise, find the error logger (`logging(tag, e)`, `Timber.e`, `recordException`) and use it. If there is none:
   `Log.e(TAG, "Class.method", e)`, plus `FirebaseCrashlytics.getInstance().recordException(e)` when Crashlytics is a
   dependency.
 - If the logger is debug-only and never reports to Crashlytics, caught exceptions are invisible in production. Say so

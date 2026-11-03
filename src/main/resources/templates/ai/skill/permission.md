@@ -21,6 +21,9 @@ private val permissions = PermissionFlow(this, "home", listOf(
 // button: permissions.ask()      onResume: permissions.ask()      own dialog: onSettings = { ... }
 ```
 
+With the `:core:firebase` module, `PermissionFlow.kt` imports `firebaseEvent` from `<app>.firebase.events`, and
+make:permission writes that import.
+
 The rest of this file is the rulebook: what `PermissionFlow` does, and what to follow when a screen already has
 hand-written launchers. Keep a screen's existing style; don't mix both on one screen.
 

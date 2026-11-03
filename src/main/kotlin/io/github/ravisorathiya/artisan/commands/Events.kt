@@ -327,6 +327,11 @@ internal fun makeAnalytics(ctx: Ctx) {
     Ui.say("Fetching the latest versions (Firebase BOM, Timber, coroutines, Event Box, plugins)...", Tone.DIM)
     val plan = planAnalyticsModule(p, ctx.option("--path") ?: ":core:firebase")
     applyAnalyticsModule(p, plan)
+    p.notes?.dir?.takeIf { File(it, "skill").isDirectory || File(it, "event").isDirectory }?.let { ws ->
+        val r = refreshAiTemplates(ws, listOf("skill/firebase_module.md", "skill/README.md"))
+        (r.added + r.updated).forEach { Ui.say("  ${p.rel(it)}: ${if (it in r.added) "added" else "updated"} (the Firebase skill for agents)", Tone.DIM) }
+        r.newCopies.forEach { Ui.say("  ${p.rel(it)}: the skill list has a new row for firebase_module.md; merge it into your skill/README.md", Tone.WARN) }
+    }
     documentModuleEvents(p, plan)?.let { Ui.say("  event.md: the module's own Remote Config events (${it} added, the sheet too)", Tone.DIM) }
 
     Ui.table(

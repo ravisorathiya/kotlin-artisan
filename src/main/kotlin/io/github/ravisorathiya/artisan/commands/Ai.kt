@@ -10,18 +10,84 @@ import io.github.ravisorathiya.artisan.project.Project
 import java.io.File
 
 fun registerAi() {
-    Registry.add("make:ai", "make:ai [x.y] [stage]", "Add the :ai agent-workspace module (README, workflow, events + sheet, skills, scripts, plans, assets); on an existing one, add what's missing") { makeAi(it) }
+    Registry.add("make:ai", "make:ai [x.y] [stage] [--refresh-skills]", "Add the :ai agent-workspace module (README, workflow, events + sheet, skills, scripts, plans, assets); on an existing one, add what's missing") { makeAi(it) }
 }
 
 /** Files every workspace gets from templates/ai/ (also added to an existing workspace when missing). */
 internal val AI_TEMPLATE_FILES = listOf(
-    "skill/README.md", "skill/permission.md", "skill/analytics_events.md", "skill/crash_hardening.md",
+    "skill/README.md", "skill/firebase_module.md", "skill/permission.md", "skill/analytics_events.md", "skill/crash_hardening.md",
     "scripts/README.md", "scripts/recolor.py",
 )
 
 private fun aiTemplate(path: String): String =
     object {}.javaClass.getResource("/templates/ai/$path")?.readText()?.replace("\r\n", "\n")
         ?: throw CliError("Template ai/$path missing from the artisan install.")
+
+/*
+ * Managed files: a Markdown file artisan writes starts with `<!-- artisan:managed <hash> -->`, the hash of what it
+ * wrote. While the rest of the file still has that hash nobody edited it, so `make:ai --refresh-skills` may replace
+ * it with a newer template. An edited file is never overwritten: the new template goes next to it as `<name>.new`.
+ */
+private val MANAGED = Regex("""^<!-- artisan:managed ([0-9a-f]{12}) -->\r?\n""")
+
+private fun shortHash(text: String): String =
+    java.security.MessageDigest.getInstance("SHA-256").digest(text.replace("\r\n", "\n").toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }.take(12)
+
+/** [text] with the managed marker (Markdown files only; other files are returned as they are). */
+internal fun managed(path: String, text: String): String =
+    if (path.endsWith(".md")) "<!-- artisan:managed ${shortHash(text)} -->\n$text" else text
+
+/** The template file for [path] as artisan writes it. */
+internal fun aiTemplateFile(path: String): String = managed(path, aiTemplate(path))
+
+/** The file's content without the marker, and whether it's unchanged since artisan wrote it. */
+internal fun managedState(text: String): Pair<String, Boolean> {
+    val m = MANAGED.find(text) ?: return text to false
+    val body = text.substring(m.range.last + 1)
+    return body to (shortHash(body) == m.groupValues[1])
+}
+
+internal class RefreshResult(val updated: List<File>, val added: List<File>, val newCopies: List<File>, val same: List<File>)
+
+/**
+ * Brings the workspace's skills and scripts up to this artisan's templates. A missing file is added; one artisan
+ * wrote and nobody changed is replaced; an edited one is kept, with the new template written next to it as `.new`.
+ */
+internal fun refreshAiTemplates(ws: File, paths: List<String> = AI_TEMPLATE_FILES): RefreshResult {
+    val updated = mutableListOf<File>()
+    val added = mutableListOf<File>()
+    val newCopies = mutableListOf<File>()
+    val same = mutableListOf<File>()
+    for (path in paths) {
+        val f = File(ws, path)
+        val template = aiTemplate(path)
+        if (!f.exists()) {
+            f.parentFile.mkdirs()
+            f.writeText(managed(path, template), Charsets.UTF_8)
+            added += f
+            continue
+        }
+        val (body, unedited) = managedState(f.readText())
+        when {
+            body.replace("\r\n", "\n") == template -> {
+                // the same text: (re)mark it so later refreshes can update it
+                if (!unedited) f.writeText(managed(path, template), Charsets.UTF_8)
+                same += f
+            }
+            unedited || !path.endsWith(".md") && body.replace("\r\n", "\n") == template -> {
+                f.writeText(managed(path, template), Charsets.UTF_8)
+                updated += f
+            }
+            else -> {
+                val copy = File(f.parentFile, f.name + ".new")
+                copy.writeText(template, Charsets.UTF_8)
+                newCopies += copy
+            }
+        }
+    }
+    return RefreshResult(updated, added, newCopies, same)
+}
 
 /** Adds the template files (skills, scripts) and the event sheet an existing workspace doesn't have. Never overwrites. */
 internal fun upgradeAi(p: Project, ws: File): Pair<List<File>, List<File>> {
@@ -31,7 +97,7 @@ internal fun upgradeAi(p: Project, ws: File): Pair<List<File>, List<File>> {
         val f = File(ws, path)
         if (f.exists()) { kept += f; continue }
         f.parentFile.mkdirs()
-        f.writeText(aiTemplate(path), Charsets.UTF_8)
+        f.writeText(aiTemplateFile(path), Charsets.UTF_8)
         added += f
     }
     val doc = File(ws, "event/event.md")
@@ -51,6 +117,16 @@ private fun makeAi(ctx: Ctx) {
         val ws = p.notes?.dir?.takeIf { File(it, "README.md").isFile && it.canonicalPath.startsWith(module.canonicalPath) }
             ?: File(p.root, Project.AI_WORKSPACE).takeIf { it.isDirectory }
             ?: throw CliError("${p.rel(module)}/ exists but has no ${Project.AI_WORKSPACE}/ workspace.")
+        if (ctx.has("--refresh-skills")) {
+            val r = refreshAiTemplates(ws)
+            Ui.table("Refresh ${p.rel(ws)}", listOf("File", "State"),
+                r.updated.map { Row(listOf(p.rel(it), "updated (you hadn't changed it)"), colors = listOf(null, Tone.OK)) } +
+                    r.added.map { Row(listOf(p.rel(it), "added"), colors = listOf(null, Tone.OK)) } +
+                    r.newCopies.map { Row(listOf(p.rel(it), "new version next to your edited file: merge, then delete the .new"), colors = listOf(null, Tone.WARN)) } +
+                    r.same.map { Row(listOf(p.rel(it), "already current"), colors = listOf(Tone.DIM, Tone.DIM)) },
+                empty = "Nothing to refresh")
+            return
+        }
         val (added, kept) = upgradeAi(p, ws)
         Ui.table("Workspace ${p.rel(ws)}", listOf("File", "State"),
             added.map { Row(listOf(p.rel(it), "added"), colors = listOf(null, Tone.OK)) } +
@@ -122,7 +198,7 @@ internal fun scaffoldAi(p: Project, version: String, events: Map<String, List<St
     write("$ws/plan/MASTER_OVERVIEW.md", planIndexDoc(p))
     write("$ws/workflow/$version/overview.md", aiOverview(p, version))
     write("$ws/workflow/$version/phase_1.md", phaseSkeleton(version, 1))
-    for (path in AI_TEMPLATE_FILES) write("$ws/$path", aiTemplate(path))
+    for (path in AI_TEMPLATE_FILES) write("$ws/$path", aiTemplateFile(path))
     val doc = File(p.root, "$ws/event/event.md")
     writeEventSheet(doc, doc.readText(), sheetAppName(p))
     created += eventSheetFile(doc)

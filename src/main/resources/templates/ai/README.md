@@ -16,6 +16,7 @@ Written by agents for agents: it doesn't need polish, but it must be accurate, s
 | [`workflow/<version>/`](#workflow) | Bug lists, feature requests, crash fixes, QA/manager feedback — one folder per release | `make:version`, `make:phase`, `make:bug`, `list:verify`, `status` |
 | [`plan/`](#plan) | One file per plan; re-apply bundles for porting a shipped feature | `make:plan`, `list:plans`, `make:bundle` |
 | [`event/`](#event) | `event.md`: every active `firebaseEvent`, one table per screen · `event_sheet.xlsx`: the same as a sheet (generated) | `make:event`, `make:permission`, `check:events`, `event:sheet` |
+| `core/firebase/` (a Gradle module) | All of Firebase: `firebaseEvent`, remote keys in `AdsConstant`, Crashlytics, push, Timber. Not part of `:ai` | `make:firebase`, `event:box`, `app:logcat RemoteConfigAudit` |
 | [`skill/`](#skill) | Reusable how-tos: permission flow, analytics events, crash hardening | `make:permission`, `make:firebase` |
 | [`scripts/`](#scripts) | Helper scripts agents run (resource variants, bulk edits, checks) | |
 | [`assets/`](#assets) | Screenshots, mockups, screen recordings | `app:shot`, `app:record`, `make:bug --shot` |
@@ -31,7 +32,11 @@ Before changing production code:
 2. Look at the current `:ai` tree (it may differ from the example below).
 3. Open the newest `workflow/v_*` folder: its `overview.md`, then the relevant `phase_N.md`. Read the whole task entry.
 4. Open any screenshots it references, then the actual production code, earlier notes and pending verification.
-   If the task is a kind `skill/` covers (permissions, analytics events, a crash), read that skill too.
+   If the task is a kind `skill/` covers, read that skill too:
+   - Firebase, an ad unit or switch, a remote key, push: `skill/firebase_module.md`;
+   - analytics events: `skill/analytics_events.md`;
+   - permissions: `skill/permission.md`;
+   - a crash: `skill/crash_hardening.md`.
 5. Only then change code. Search for an existing implementation, utility or earlier fix first — extend, don't duplicate.
 
 **Source of truth, in order:** (1) the developer's current instruction, (2) repo `AGENTS.md`/`CLAUDE.md`,
@@ -99,6 +104,8 @@ create folders ahead of time. The developer may rename, move, add or remove fold
 - `permission.md`: runtime permissions (ask → 1st deny → 2nd deny → back → Settings) with events. `artisan make:permission` generates it.
 - `analytics_events.md`: `firebaseEvent` wiring, naming, and keeping event.md and the sheet in sync.
 - `crash_hardening.md`: fixing a stack trace without changing behaviour (guard, narrow catch, log, fallback).
+- `firebase_module.md`: the `:core:firebase` module. Covers adding a remote key in one `AdsConstant` line, the audit
+  table, a new Firebase product or feature folder, and versions.
 - Add a skill when the same kind of task comes up a second time. Update it when the code it describes changes.
 
 ### scripts

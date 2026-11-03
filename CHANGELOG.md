@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.15.0: the :ai workspace knows the Firebase module
+
+- **New skill `skill/firebase_module.md`**, the playbook for `:core:firebase`. It covers:
+  - the folder map, and the file that owns each kind of change;
+  - adding a remote key in one `AdsConstant` line (switches, the More Apps pair, `legacyKeys` for renames, removing a key);
+  - reading the `RemoteConfigAudit` table;
+  - holder objects, feature folders and new Firebase products under the BOM;
+  - versions and the Kotlin step-down;
+  - a checklist and gotchas.
+- **The workspace README** has a quick-map row for `core/firebase/`. "Start here" points each kind of task to its skill.
+- **`crash_hardening.md`** uses the module's `logging(tag, e)` / `Crash` when the module is there. **`permission.md`**
+  names the `firebaseEvent` import.
+- **Skills artisan writes are marked** (`<!-- artisan:managed <hash> -->`). **`make:ai --refresh-skills`** updates
+  every skill and script nobody edited, adds missing ones, and leaves edited ones alone. For an edited file, the new
+  template goes next to it as `<name>.new`, ready to merge.
+- **`make:firebase` gives an existing `:ai` workspace the Firebase skill** (and its row in `skill/README.md`).
+
 ## 0.14.0: the Firebase module, one folder per feature
 
 - `make:firebase` writes the code under package `<app>.firebase`, one folder (subpackage) per feature:
