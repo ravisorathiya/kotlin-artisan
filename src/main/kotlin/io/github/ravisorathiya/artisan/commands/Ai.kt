@@ -10,13 +10,56 @@ import io.github.ravisorathiya.artisan.project.Project
 import java.io.File
 
 fun registerAi() {
-    Registry.add("make:ai", "make:ai [x.y] [stage]", "Add the :ai agent-workspace module (README, workflow, events, plans, assets)") { makeAi(it) }
+    Registry.add("make:ai", "make:ai [x.y] [stage]", "Add the :ai agent-workspace module (README, workflow, events + sheet, skills, scripts, plans, assets); on an existing one, add what's missing") { makeAi(it) }
+}
+
+/** Files every workspace gets from templates/ai/ (also added to an existing workspace when missing). */
+internal val AI_TEMPLATE_FILES = listOf(
+    "skill/README.md", "skill/permission.md", "skill/analytics_events.md", "skill/crash_hardening.md",
+    "scripts/README.md", "scripts/recolor.py",
+)
+
+private fun aiTemplate(path: String): String =
+    object {}.javaClass.getResource("/templates/ai/$path")?.readText()?.replace("\r\n", "\n")
+        ?: throw CliError("Template ai/$path missing from the artisan install.")
+
+/** Adds the template files (skills, scripts) and the event sheet an existing workspace doesn't have. Never overwrites. */
+internal fun upgradeAi(p: Project, ws: File): Pair<List<File>, List<File>> {
+    val added = mutableListOf<File>()
+    val kept = mutableListOf<File>()
+    for (path in AI_TEMPLATE_FILES) {
+        val f = File(ws, path)
+        if (f.exists()) { kept += f; continue }
+        f.parentFile.mkdirs()
+        f.writeText(aiTemplate(path), Charsets.UTF_8)
+        added += f
+    }
+    val doc = File(ws, "event/event.md")
+    if (doc.isFile) {
+        val sheet = eventSheetFile(doc)
+        if (sheet.exists()) kept += sheet
+        if (writeEventSheet(doc, doc.readText(), sheetAppName(p)) && sheet !in kept) added += sheet
+    }
+    return added to kept
 }
 
 private fun makeAi(ctx: Ctx) {
     val p = ctx.project
     val module = File(p.root, "ai")
-    if (module.exists()) throw CliError("${p.rel(module)}/ already exists.")
+    if (module.exists()) {
+        // an existing workspace: add only what it's missing
+        val ws = p.notes?.dir?.takeIf { File(it, "README.md").isFile && it.canonicalPath.startsWith(module.canonicalPath) }
+            ?: File(p.root, Project.AI_WORKSPACE).takeIf { it.isDirectory }
+            ?: throw CliError("${p.rel(module)}/ exists but has no ${Project.AI_WORKSPACE}/ workspace.")
+        val (added, kept) = upgradeAi(p, ws)
+        Ui.table("Workspace ${p.rel(ws)}", listOf("File", "State"),
+            added.map { Row(listOf(p.rel(it), "added"), colors = listOf(null, Tone.OK)) } +
+                kept.map { Row(listOf(p.rel(it), "already there, left as is"), colors = listOf(Tone.DIM, Tone.DIM)) },
+            empty = "Nothing to add")
+        if (added.any { it.parentFile.name == "skill" }) Ui.say("  Mention skill/ and scripts/ in the workspace README (see artisan's template) so agents find them.", Tone.DIM)
+        if (p.modules.none { it.name == ":ai" }) Ui.say("  :ai isn't in ${p.settingsFile.name}; add include(\":ai\") to see it in Android Studio.", Tone.WARN)
+        return
+    }
     if (p.modules.any { it.name == ":ai" }) throw CliError(":ai is already included in ${p.settingsFile.name}.")
 
     val suggest = (p.versionName?.let { Regex("""^(\d+)\.(\d+)""").find(it)?.value } ?: "1.0") + " alpha"
@@ -30,6 +73,8 @@ private fun makeAi(ctx: Ctx) {
     Ui.say("  ${p.settingsFile.name}: added the :ai include", Tone.OK)
     if (events != null) Ui.say("  event.md: ${events.values.sumOf { it.size }} firebaseEvent name(s) from ${events.size} file(s), descriptions to fill in", Tone.DIM)
     else Ui.say("  event.md: no firebaseEvent calls found, an empty table is ready for the first one", Tone.DIM)
+    Ui.say("  skill/: permission flow (artisan make:permission), analytics events, crash hardening. scripts/: helper scripts", Tone.DIM)
+    Ui.say("  event_sheet.xlsx: generated from event.md (make:event, check:events, event:sheet and the git hook rebuild it)", Tone.DIM)
     Ui.say("  plan/: artisan make:plan <name> for a plan file, artisan make:bundle <feature> --since <tag> for a re-apply bundle", Tone.DIM)
     val notes = Project.find(p.root)?.notes
     if (notes != null && p.rel(notes.dir) != Project.AI_WORKSPACE) {
@@ -59,6 +104,10 @@ internal fun scaffoldAi(p: Project, version: String, events: Map<String, List<St
     write("$ws/plan/MASTER_OVERVIEW.md", planIndexDoc(p))
     write("$ws/workflow/$version/overview.md", aiOverview(p, version))
     write("$ws/workflow/$version/phase_1.md", phaseSkeleton(version, 1))
+    for (path in AI_TEMPLATE_FILES) write("$ws/$path", aiTemplate(path))
+    val doc = File(p.root, "$ws/event/event.md")
+    writeEventSheet(doc, doc.readText(), sheetAppName(p))
+    created += eventSheetFile(doc)
 
     p.settingsFile.writeText(addInclude(p.settingsFile.readText(), kts))
     return created
@@ -260,10 +309,13 @@ internal fun aiReadme(p: Project, version: String): String {
         add("├── README.md                 (this file)")
         add("├── assets/                   (img.png, img_1.png, ... reference screenshots)")
         add("├── event/")
-        add("│   └── event.md              (every active firebaseEvent, one table per screen)")
+        add("│   ├── event.md              (every active firebaseEvent, one table per screen)")
+        add("│   └── event_sheet.xlsx      (generated from event.md: never edit)")
         add("├── plan/")
         add("│   ├── MASTER_OVERVIEW.md    (feature index + apply order: start here)")
         add("│   └── <feature>/            (overview.md, reference/*.txt, apply_bundle.ps1)")
+        add("├── scripts/                  (README.md rules, recolor.py, ... helper scripts)")
+        add("├── skill/                    (permission.md, analytics_events.md, crash_hardening.md)")
         add("└── workflow/")
         add("    └── ${"$version/".padEnd(22)}(overview.md, phase_1.md)")
     }.joinToString("\n")

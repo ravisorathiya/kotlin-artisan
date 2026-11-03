@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.10.0: event sheet, skills, scripts and make:permission
+
+- **The docs website is gone** (`website/`, `netlify.toml`). The README is the reference now: it gains the setup
+  guide, every `artisan.json` key and the environment variables. Links in the installers and messages point there.
+- **Event sheet:** `event/event_sheet.xlsx`, generated from `event.md`. The Events tab has No, Screen (merged per
+  screen), Event name, Fired from and When, with a frozen header and a filter. The Screens tab has Screen, Source file
+  and Events. It is built with no new dependency and gives the same bytes for the same event.md.
+  `make:event`, `make:permission`, `check:events` and the new `event:sheet` rebuild it. The pre-commit hook rebuilds
+  it from the staged event.md and stages it in the same commit. A hand-made sheet with another name is left alone.
+- **`make:ai` adds `skill/` and `scripts/`:**
+  - `skill/permission.md` covers the ask → deny_1st → deny_2nd → back → Settings flow.
+  - `skill/analytics_events.md` covers wiring, naming, and keeping event.md and the sheet in sync.
+  - `skill/crash_hardening.md` covers guards, narrow catches, logging and fallbacks.
+  - `scripts/README.md` gives the script rules; `scripts/recolor.py` makes theme image variants.
+  - The workspace README has a section for each.
+- **`make:ai` on an existing workspace** now adds only what it's missing (skills, scripts, the sheet) instead of
+  failing, and never overwrites a file.
+- **`make:permission [Screen] [key=PERM[,PERM]]...`** generates the permission flow:
+  - It writes `PermissionFlow.kt` once per app, holding `PermissionFlow`, `PermissionGroup` and `PermissionPrefs`.
+    The flow keeps Deny/Done prefs, debounces `ask()`, rotates the order, classifies each result with the
+    rationale/deny table, handles the API-33 notification gate, and shows a Settings dialog with a callback to
+    replace it.
+  - It calls the app's own `firebaseEvent`, whether it's an extension or top-level.
+  - It adds the five events per key plus the three Settings events to event.md and the sheet, after checking each name.
+  - It adds the missing `<uses-permission>` lines and prints the property to paste.
+
 ## 0.9.0: the :ai site is gone
 
 - Removed `ai:site` and the workspace site. `make:ai` writes only the notes (README, `workflow/`, `plan/`,

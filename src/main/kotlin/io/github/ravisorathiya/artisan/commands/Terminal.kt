@@ -176,6 +176,9 @@ internal fun stagedIssues(p: Project): List<StagedIssue> {
         for (n in added.filter { it.length > EVENT_MAX }) issues += StagedIssue(true, "\"$n\" is ${n.length} characters; event names must be under 30.")
     }
 
+    // the event sheet is generated from event.md: rebuild it from the staged copy and stage it with it
+    if (doc != null && p.rel(doc) in staged) syncStagedEventSheet(p, doc)
+
     // strings: a key added to values/ has to be in every values-xx/
     for (path in staged.filter { Regex("""(^|/)res/values/strings\.xml$""").containsMatchIn(it) }) {
         val diff = git("diff", "--cached", "-U0", "--relative", "--", path).lines
@@ -194,6 +197,18 @@ internal fun stagedIssues(p: Project): List<StagedIssue> {
     val markers = git("diff", "--cached", "-U0", "--relative", "--", "*strings.xml").lines.count { it.startsWith("+") && TRANSLATE_MARKER in it }
     if (markers > 0) issues += StagedIssue(false, "$markers string(s) still in English in other locales (artisan check:strings lists them).")
     return issues
+}
+
+/** Rebuilds event_sheet.xlsx from the staged event.md and stages it, so the sheet always goes into the same commit. */
+internal fun syncStagedEventSheet(p: Project, doc: File) {
+    // read as UTF-8 bytes (Proc.run uses the platform charset), so the sheet matches one built from the file
+    val staged = runCatching {
+        val proc = ProcessBuilder("git", "show", ":${p.rel(doc)}").directory(p.root).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+        val bytes = proc.inputStream.readBytes()
+        if (proc.waitFor() == 0) bytes.toString(Charsets.UTF_8) else null
+    }.getOrNull() ?: return
+    writeEventSheet(doc, staged, sheetAppName(p))
+    Proc.run("git", "add", "--", p.rel(eventSheetFile(doc)), dir = p.root)
 }
 
 private fun checkStaged(ctx: Ctx) {

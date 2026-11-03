@@ -7,7 +7,7 @@
 $ErrorActionPreference = 'Stop'
 $repo = 'ravisorathiya/kotlin-artisan'
 $dest = Join-Path $env:LOCALAPPDATA 'kotlin-artisan'
-$guide = "https://kotlin-artisan.netlify.app/getting-started/setup"
+$guide = "https://github.com/ravisorathiya/kotlin-artisan#setup-java-and-adb"
 
 function Confirm-Step($question) {
     if ($env:ARTISAN_YES -eq '1') { return $true }

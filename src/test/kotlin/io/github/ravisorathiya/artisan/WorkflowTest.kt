@@ -5,7 +5,18 @@ import io.github.ravisorathiya.artisan.commands.HOOKS
 import io.github.ravisorathiya.artisan.commands.ScreenKind
 import io.github.ravisorathiya.artisan.commands.StatusCache
 import io.github.ravisorathiya.artisan.commands.TRANSLATE_MARKER
+import io.github.ravisorathiya.artisan.commands.AI_TEMPLATE_FILES
+import io.github.ravisorathiya.artisan.commands.EventFn
 import io.github.ravisorathiya.artisan.commands.addEventRow
+import io.github.ravisorathiya.artisan.commands.addUsesPermissions
+import io.github.ravisorathiya.artisan.commands.eventSheetBytes
+import io.github.ravisorathiya.artisan.commands.findFirebaseEvent
+import io.github.ravisorathiya.artisan.commands.parsePermGroups
+import io.github.ravisorathiya.artisan.commands.permissionEvents
+import io.github.ravisorathiya.artisan.commands.permissionFlowSource
+import io.github.ravisorathiya.artisan.commands.scaffoldAi
+import io.github.ravisorathiya.artisan.commands.sheetScreens
+import io.github.ravisorathiya.artisan.commands.upgradeAi
 import io.github.ravisorathiya.artisan.commands.addString
 import io.github.ravisorathiya.artisan.commands.androidEscape
 import io.github.ravisorathiya.artisan.commands.applyScript
@@ -301,6 +312,120 @@ class WorkflowTest {
         git("add", "-A")
         val after = stagedIssues(p)
         assertTrue(after.none { it.error }, after.map { it.text }.toString())
+        // the sheet was rebuilt from the staged event.md and staged with it
+        assertTrue(File(tmp, "ai/src/main/java/ai/event/event_sheet.xlsx").isFile)
+        assertTrue("ai/src/main/java/ai/event/event_sheet.xlsx" in git("diff", "--cached", "--name-only").out)
         assertTrue(after.any { !it.error && "English" in it.text })
     }
+
+    private fun unzip(bytes: ByteArray): Map<String, String> {
+        val out = linkedMapOf<String, String>()
+        java.util.zip.ZipInputStream(bytes.inputStream()).use { z ->
+            while (true) {
+                val e = z.nextEntry ?: break
+                out[e.name] = z.readBytes().toString(Charsets.UTF_8)
+            }
+        }
+        return out
+    }
+
+    @Test
+    fun `event sheet is built from event md, the same bytes every time`() {
+        val doc = """
+            |## Example: SplashActivity (lifecycle)
+            |
+            || `splash_sample` | `onCreate()` | sample |
+            |
+            |## MainActivity
+            |
+            |`app/src/main/java/com/demo/MainActivity.kt`
+            |
+            || Event name | Fired from | When |
+            ||---|---|---|
+            || `main_on_create` | `onCreate()` | Home **opened** & ready |
+            || `main_btn_click` | `btn` click | Tapped [the button](x.md) |
+            |
+            |## OldActivity
+            |
+            || Event name | Description |
+            ||---|---|
+            || `OldAct_Open` | Old screen opened |
+            |""".trimMargin()
+        val screens = sheetScreens(doc)
+        assertEquals(listOf("MainActivity", "OldActivity"), screens.map { it.name })
+        assertEquals("app/src/main/java/com/demo/MainActivity.kt", screens[0].source)
+        assertEquals("Tapped the button", screens[0].rows[1].whenText)
+        assertEquals("" to "Old screen opened", screens[1].rows[0].let { it.firedFrom to it.whenText })
+
+        val a = eventSheetBytes(doc, "demo")
+        assertTrue(a.contentEquals(eventSheetBytes(doc, "demo")))
+        val files = unzip(a)
+        assertTrue(listOf("[Content_Types].xml", "xl/workbook.xml", "xl/styles.xml", "xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml").all { it in files }, files.keys.toString())
+        val sheet = files.getValue("xl/worksheets/sheet1.xml")
+        assertTrue("main_on_create" in sheet && "OldAct_Open" in sheet && "splash_sample" !in sheet)
+        assertTrue("Home opened &amp; ready" in sheet)
+        assertTrue("""<mergeCell ref="B2:B3"/>""" in sheet, sheet)
+        assertTrue("""<autoFilter ref="A1:E4"/>""" in sheet)
+        assertTrue("<v>3</v>" in files.getValue("xl/worksheets/sheet2.xml"))
+    }
+
+    @Test
+    fun `make ai writes skills, scripts and the sheet, and an upgrade only adds what is missing`() {
+        val p = project()
+        scaffoldAi(p, "v_1_7_alpha", mapOf("MainActivity" to listOf("main_on_create")))
+        val ws = File(tmp, Project.AI_WORKSPACE)
+        AI_TEMPLATE_FILES.forEach { assertTrue(File(ws, it).isFile, it) }
+        assertTrue("make:permission" in File(ws, "skill/permission.md").readText())
+        assertTrue(File(ws, "event/event_sheet.xlsx").isFile)
+        assertTrue("event_sheet.xlsx" in File(ws, "README.md").readText() && "### skill" in File(ws, "README.md").readText())
+
+        // an older workspace: one skill edited by hand, the rest missing
+        File(ws, "skill/permission.md").writeText("mine")
+        File(ws, "scripts").deleteRecursively()
+        File(ws, "event/event_sheet.xlsx").delete()
+        val (added, kept) = upgradeAi(p, ws)
+        assertEquals("mine", File(ws, "skill/permission.md").readText())
+        assertTrue(File(ws, "skill/permission.md") in kept)
+        assertEquals(setOf("README.md", "recolor.py", "event_sheet.xlsx"), added.map { it.name }.toSet())
+        assertTrue(upgradeAi(p, ws).first.isEmpty(), "second run adds nothing")
+    }
+
+    @Test
+    fun `make permission parses groups, names its events and fills the manifest once`() {
+        val groups = parsePermGroups(listOf("phone=READ_PHONE_STATE,CALL_PHONE", "noti", "cam=android.permission.CAMERA"))
+        assertEquals(listOf("phone", "noti", "cam"), groups.map { it.key })
+        assertEquals(listOf("android.permission.READ_PHONE_STATE", "android.permission.CALL_PHONE"), groups[0].permissions)
+        assertEquals(33, groups[1].minSdk)
+        assertEquals(0, groups[0].minSdk)
+        assertFailsWith<CliError> { parsePermGroups(listOf("unknownkey")) }
+        assertFailsWith<CliError> { parsePermGroups(listOf("noti", "noti")) }
+
+        val events = permissionEvents("home", groups).map { it.first }
+        assertEquals(5 * 3 + 3, events.size)
+        assertTrue("home_phone_deny_2nd" in events && "home_setting_dismiss" in events)
+        events.forEach { checkEventName(it) }
+
+        val manifest = "<manifest>\n    <uses-permission android:name=\"android.permission.CAMERA\" />\n    <application />\n</manifest>\n"
+        val (m, added) = addUsesPermissions(manifest, groups.flatMap { it.permissions })
+        assertEquals(listOf("android.permission.READ_PHONE_STATE", "android.permission.CALL_PHONE", "android.permission.POST_NOTIFICATIONS"), added)
+        assertTrue("    <uses-permission android:name=\"android.permission.CAMERA\" />\n    <uses-permission android:name=\"android.permission.READ_PHONE_STATE\" />" in m, m)
+        assertEquals(m, addUsesPermissions(m, groups.flatMap { it.permissions }).first)
+        assertTrue(addUsesPermissions("<manifest>\n  <application />\n</manifest>", listOf("android.permission.CAMERA")).first.startsWith("<manifest>\n  <uses-permission"))
+    }
+
+    @Test
+    fun `permission flow calls the app's own firebaseEvent`() {
+        val p = project()
+        write("app/src/main/java/com/demo/AnalyticUtil.kt", "package com.demo\n\nfun firebaseEvent(name: String, bundle: Bundle = Bundle()) {}\n")
+        val fn = assertNotNull(findFirebaseEvent(assertNotNull(Project.find(tmp))))
+        assertEquals("com.demo.firebaseEvent", fn.import)
+        assertTrue(!fn.extension)
+        val src = permissionFlowSource("com.demo.permission", fn)
+        assertTrue(src.startsWith("package com.demo.permission\n") && "import com.demo.firebaseEvent\n" in src && "            firebaseEvent(name)" in src)
+        assertTrue("{{" !in src)
+        val ext = permissionFlowSource("com.demo.analytics", EventFn("com.demo.analytics.firebaseEvent", true))
+        assertTrue("import com.demo.analytics.firebaseEvent" !in ext && "context.firebaseEvent(name)" in ext)
+        assertTrue(p.root.isDirectory)
+    }
+
 }

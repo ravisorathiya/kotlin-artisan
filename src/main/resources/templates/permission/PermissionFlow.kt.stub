@@ -1,0 +1,207 @@
+package {{PACKAGE}}
+
+import android.app.Activity
+import android.app.AlertDialog
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import android.util.Log
+import androidx.activity.ComponentActivity
+import androidx.activity.result.ActivityResultCaller
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.Fragment
+{{EVENT_IMPORT}}
+/*
+ * Runtime permissions with a full event trail (added by `artisan make:permission`; the rules are in
+ * ai/.../skill/permission.md). One flow per screen:
+ *
+ *     private val permissions = PermissionFlow(this, "home", listOf(
+ *         PermissionGroup("contact", Manifest.permission.READ_CONTACTS),
+ *         PermissionGroup("noti", Manifest.permission.POST_NOTIFICATIONS, minSdk = 33),
+ *     ))                                      // a property: it registers its launcher, so before onStart
+ *     button.setOnClickListener { permissions.ask() }
+ *     override fun onResume() { super.onResume(); permissions.ask() }   // optional: pick up a grant from Settings
+ *
+ * Per group key, one result event fires per prompt:
+ *   <screen>_<key>_ask       the system prompt is about to show
+ *   <screen>_<key>_grant     every permission in the group granted              -> Done (never asked again)
+ *   <screen>_<key>_deny_1st  first denial (rationale now true)                  -> Deny
+ *   <screen>_<key>_deny_2nd  denied again / "don't ask again" (rationale false) -> Done: Android won't show it again
+ *   <screen>_<key>_back      dismissed, cancelled (empty result) or unclassifiable; asked again next time
+ * and when every group is Done but something is still missing, the Settings dialog:
+ *   <screen>_setting_show / _setting_close (Not now) / _setting_dismiss (Open settings)
+ *
+ * Deny/Done are stored per key and shared by every screen, so a first denial on one screen counts on the others.
+ */
+
+/** Permissions Android shows together (e.g. READ_PHONE_STATE + CALL_PHONE). Below [minSdk] the group counts as granted. */
+class PermissionGroup(val key: String, val permissions: List<String>, val minSdk: Int = 0) {
+    constructor(key: String, vararg permissions: String, minSdk: Int = 0) : this(key, permissions.toList(), minSdk)
+
+    /** Permissions this device can be asked for (e.g. POST_NOTIFICATIONS only on API 33+). */
+    fun applicable(): List<String> =
+        if (Build.VERSION.SDK_INT < minSdk) emptyList() else permissions.filter { Build.VERSION.SDK_INT >= (MIN_SDK[it] ?: 0) }
+
+    fun granted(context: Context): Boolean =
+        applicable().all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
+
+    private companion object {
+        val MIN_SDK = mapOf(
+            "android.permission.POST_NOTIFICATIONS" to 33,
+            "android.permission.READ_MEDIA_IMAGES" to 33,
+            "android.permission.READ_MEDIA_VIDEO" to 33,
+            "android.permission.READ_MEDIA_AUDIO" to 33,
+            "android.permission.NEARBY_WIFI_DEVICES" to 33,
+            "android.permission.READ_MEDIA_VISUAL_USER_SELECTED" to 34,
+            "android.permission.BLUETOOTH_CONNECT" to 31,
+            "android.permission.BLUETOOTH_SCAN" to 31,
+            "android.permission.BLUETOOTH_ADVERTISE" to 31,
+        )
+    }
+}
+
+/** `<key>Deny` / `<key>Done` flags. Never reset: Done means "stop showing the system prompt". */
+class PermissionPrefs(context: Context) {
+    private val prefs = context.applicationContext.getSharedPreferences("permission_flow", Context.MODE_PRIVATE)
+
+    fun deny(key: String) = prefs.getBoolean("${key}Deny", false)
+    fun done(key: String) = prefs.getBoolean("${key}Done", false)
+    fun setDeny(key: String) = prefs.edit().putBoolean("${key}Deny", true).apply()
+    fun setDone(key: String) = prefs.edit().putBoolean("${key}Done", true).apply()
+}
+
+class PermissionFlow private constructor(
+    caller: ActivityResultCaller,
+    private val host: () -> Activity?,
+    private val screen: String,
+    private val groups: List<PermissionGroup>,
+    /** Called when every group is Done but something is missing. Default: [showSettingsDialog]. */
+    private val onSettings: ((PermissionFlow) -> Unit)?,
+    /** Called from [ask] when everything is granted (e.g. go to the next screen). */
+    private val onAllGranted: (() -> Unit)?,
+) {
+    constructor(
+        activity: ComponentActivity, screen: String, groups: List<PermissionGroup>,
+        onSettings: ((PermissionFlow) -> Unit)? = null, onAllGranted: (() -> Unit)? = null,
+    ) : this(activity, { activity }, screen, groups, onSettings, onAllGranted)
+
+    constructor(
+        fragment: Fragment, screen: String, groups: List<PermissionGroup>,
+        onSettings: ((PermissionFlow) -> Unit)? = null, onAllGranted: (() -> Unit)? = null,
+    ) : this(fragment, { fragment.activity }, screen, groups, onSettings, onAllGranted)
+
+    private var current: PermissionGroup? = null
+    private var lastAsk = 0L
+    private var dialog: AlertDialog? = null
+    private val launcher = caller.registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { onResult(it) }
+
+    /** Keys of the groups still missing on this device. */
+    fun missing(): List<String> = host()?.let { a -> groups.filter { !it.granted(a) }.map { it.key } } ?: emptyList()
+
+    fun allGranted(): Boolean = missing().isEmpty()
+
+    /**
+     * The single entry point (buttons, onResume, every launcher result): asks the first group, starting after
+     * [after], that is neither Done nor granted. Nothing left to ask but something missing: the Settings dialog.
+     */
+    fun ask(after: String? = null) {
+        val activity = host() ?: return
+        // launcher results, clicks and onResume can re-enter within the same frame
+        val now = System.currentTimeMillis()
+        if (now - lastAsk < 250L || current != null) return
+        lastAsk = now
+        try {
+            groups.filter { it.applicable().isEmpty() }.forEach { prefs(activity).setDone(it.key) }
+            if (groups.all { it.granted(activity) }) {
+                onAllGranted?.invoke()
+                return
+            }
+            val start = after?.let { k -> groups.indexOfFirst { it.key == k } + 1 } ?: 0
+            val next = groups.indices.map { groups[(start + it) % groups.size] }
+                .firstOrNull { !prefs(activity).done(it.key) && !it.granted(activity) }
+            if (next == null) {
+                if (onSettings != null) onSettings.invoke(this) else showSettingsDialog()
+                return
+            }
+            current = next
+            event(activity, "${screen}_${next.key}_ask")
+            launcher.launch(next.applicable().toTypedArray())
+        } catch (e: Exception) {
+            // launch() throws IllegalStateException while the screen is finishing
+            current = null
+            Log.e("PermissionFlow", "ask failed", e)
+        }
+    }
+
+    private fun onResult(result: Map<String, Boolean>) {
+        val group = current ?: return
+        current = null
+        val activity = host() ?: return
+        val prefs = prefs(activity)
+        val perms = group.applicable()
+        val outcome = when {
+            result.isEmpty() -> "back" // cancelled, e.g. by a configuration change
+            group.granted(activity) -> "grant".also { prefs.setDone(group.key) }
+            else -> {
+                // R is AND across the group; D is the stored first denial
+                val rationale = perms.all { ActivityCompat.shouldShowRequestPermissionRationale(activity, it) }
+                val denied = prefs.deny(group.key)
+                when {
+                    rationale && !denied -> "deny_1st".also { prefs.setDeny(group.key) }
+                    !rationale && denied -> "deny_2nd".also { prefs.setDone(group.key) }
+                    else -> "back"
+                }
+            }
+        }
+        event(activity, "${screen}_${group.key}_$outcome")
+        lastAsk = 0L
+        ask(after = group.key)
+    }
+
+    /** "Permission needed" dialog that opens the app's Settings page. Pass your own onSettings for a custom one. */
+    fun showSettingsDialog(
+        title: String = "Permission needed",
+        message: String = "Allow the missing permissions in Settings to use every feature.",
+        open: String = "Open settings",
+        notNow: String = "Not now",
+    ) {
+        val activity = host() ?: return
+        if (activity.isFinishing || activity.isDestroyed || dialog?.isShowing == true) return
+        event(activity, "${screen}_setting_show")
+        dialog = AlertDialog.Builder(activity)
+            .setTitle(title)
+            .setMessage(message)
+            .setCancelable(false)
+            .setPositiveButton(open) { _, _ ->
+                event(activity, "${screen}_setting_dismiss")
+                openAppSettings(activity)
+            }
+            .setNegativeButton(notNow) { _, _ -> event(activity, "${screen}_setting_close") }
+            .show()
+    }
+
+    private fun prefs(context: Context) = PermissionPrefs(context)
+
+    private fun event(context: Context, name: String) {
+        try {
+            {{EVENT_CALL}}
+        } catch (e: Exception) {
+            Log.e("PermissionFlow", "event $name failed", e)
+        }
+    }
+
+    companion object {
+        fun openAppSettings(activity: Activity) {
+            try {
+                activity.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", activity.packageName, null)))
+            } catch (e: Exception) {
+                Log.e("PermissionFlow", "no settings screen", e)
+            }
+        }
+    }
+}

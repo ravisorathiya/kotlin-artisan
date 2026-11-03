@@ -29,6 +29,8 @@ private val PASCAL_ABBREVIATIONS = listOf(
 
 fun registerEvents() {
     registerAnalytics()
+    registerEventSheet()
+    registerPermission()
     Registry.add(
         "make:event", "make:event [Screen] [event_name] [when] [--from x]", "Add an analytics event to event.md (snake_case, under 30 chars) and print its firebaseEvent line",
         choicesFrom = ::projectEventScreens,
@@ -81,6 +83,13 @@ internal fun screenEventPrefix(screen: String): String {
     val base = screen.replace(Regex("(Activity|Fragment|Dialog|BottomSheet|Sheet|Screen)$"), "").ifEmpty { screen }
     val snake = snakeEvent(base)
     return snake.split('_').joinToString("_") { w -> ABBREVIATIONS.firstOrNull { it.first == w }?.second ?: w }
+}
+
+/** The prefix [screen]'s events already use in event.md, else one made from the class name. */
+internal fun screenEventPrefixIn(parsed: Map<String, List<Pair<String, String>>>, screen: String, snake: Boolean): String {
+    val existing = parsed[screen].orEmpty().map { it.first }
+    return existing.map { it.substringBefore('_') }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
+        ?.takeIf { existing.isNotEmpty() } ?: if (snake) screenEventPrefix(screen) else screen.replace("Activity", "Act")
 }
 
 /** The file's own style: snake_case unless most of its names are something else (older PascalCase apps). */
@@ -187,10 +196,8 @@ private fun makeEvent(ctx: Ctx) {
     } else Ui.ask("Screen (class name, e.g. SettingsActivity)")
     if (screen.isBlank()) throw CliError("A screen is required.")
 
-    // the prefix this screen's events already use, else one made from the class name
     val existing = parsed[screen].orEmpty().map { it.first }
-    val prefix = existing.map { it.substringBefore('_') }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key
-        ?.takeIf { existing.isNotEmpty() } ?: if (snake) screenEventPrefix(screen) else screen.replace("Activity", "Act")
+    val prefix = screenEventPrefixIn(parsed, screen, snake)
     val name = ctx.arg(1) ?: Ui.ask("Event name (${if (snake) "snake_case" else "house style"}, under 30, <screen>_<thing>_<action>)", "${prefix}_")
     if (name.isBlank() || name == "${prefix}_") throw CliError("An event name is required (e.g. ${prefix}_${if (snake) "save_btn_click" else "Clk_Save"}).")
     checkEventName(name, snake)
@@ -201,6 +208,7 @@ private fun makeEvent(ctx: Ctx) {
 
     f.writeText(addEventRow(doc, screen, name, firedFrom, whenText, screenSource(p, screen)))
     Ui.say("Added `$name` under ## $screen in ${p.rel(f)}", Tone.OK)
+    syncEventSheet(p)?.let { Ui.say("  ${p.rel(it)} updated", Tone.DIM) }
     if (name.length >= EVENT_MAX - 3) Ui.say("  ${name.length}/29 characters: close to the limit.", Tone.WARN)
     Ui.say("In the code:  firebaseEvent(\"$name\")", Tone.STRONG)
 }
@@ -214,6 +222,7 @@ private fun checkEvents(ctx: Ctx) {
         problems.map { Row(listOf(it.kind, it.name, it.where), colors = listOf(if (it.kind.startsWith("not in")) Tone.WARN else Tone.BAD, null, Tone.DIM)) },
         empty = "event.md and the code agree",
     )
+    syncEventSheet(p)?.let { Ui.say("  ${p.rel(it)} updated from event.md", Tone.DIM) }
     if (problems.isNotEmpty()) Ui.say("  Fix: artisan make:event <Screen> <name> adds a row; delete rows for removed events. Renaming a shipped event splits its history in Firebase.", Tone.DIM)
 }
 

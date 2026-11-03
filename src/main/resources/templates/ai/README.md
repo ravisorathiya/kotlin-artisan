@@ -15,7 +15,9 @@ Written by agents for agents: it doesn't need polish, but it must be accurate, s
 |---|---|---|
 | [`workflow/<version>/`](#workflow) | Bug lists, feature requests, crash fixes, QA/manager feedback — one folder per release | `make:version`, `make:phase`, `make:bug`, `list:verify`, `status` |
 | [`plan/`](#plan) | One file per plan; re-apply bundles for porting a shipped feature | `make:plan`, `list:plans`, `make:bundle` |
-| [`event/event.md`](#event) | Every active `firebaseEvent`, one table per screen | `make:event`, `check:events` |
+| [`event/`](#event) | `event.md`: every active `firebaseEvent`, one table per screen · `event_sheet.xlsx`: the same as a sheet (generated) | `make:event`, `make:permission`, `check:events`, `event:sheet` |
+| [`skill/`](#skill) | Reusable how-tos: permission flow, analytics events, crash hardening | `make:permission`, `make:analytics` |
+| [`scripts/`](#scripts) | Helper scripts agents run (resource variants, bulk edits, checks) | |
 | [`assets/`](#assets) | Screenshots, mockups, screen recordings | `app:shot`, `app:record`, `make:bug --shot` |
 | `README.md` | These rules | `check:links` |
 
@@ -29,6 +31,7 @@ Before changing production code:
 2. Look at the current `:ai` tree (it may differ from the example below).
 3. Open the newest `workflow/v_*` folder: its `overview.md`, then the relevant `phase_N.md`. Read the whole task entry.
 4. Open any screenshots it references, then the actual production code, earlier notes and pending verification.
+   If the task is a kind `skill/` covers (permissions, analytics events, a crash), read that skill too.
 5. Only then change code. Search for an existing implementation, utility or earlier fix first — extend, don't duplicate.
 
 **Source of truth, in order:** (1) the developer's current instruction, (2) repo `AGENTS.md`/`CLAUDE.md`,
@@ -80,9 +83,31 @@ create folders ahead of time. The developer may rename, move, add or remove fold
 
 ### event
 
-**What goes here:** `event.md` — every active `firebaseEvent` call, one table per screen (event name, fired from,
-when). Its top part explains the wiring, the event box, the naming rules and `## Example: ...` sections to copy.
-It must match the code exactly — see [Analytics event sync](#analytics-event-sync--critical).
+**What goes here:**
+
+- **`event.md`**: every active `firebaseEvent` call, one table per screen (event name, fired from, when).
+  - Its top part explains the wiring, the event box and the naming rules, plus `## Example: ...` sections to copy.
+  - It must match the code exactly. See [Analytics event sync](#analytics-event-sync--critical).
+- **`event_sheet.xlsx`**: the same events as a spreadsheet for product, QA and managers.
+  - The Events tab has No, Screen, Event name, Fired from and When. The Screens tab has Screen, Source file and Events.
+  - **Generated from event.md, never edit it.** `make:event`, `make:permission`, `check:events`, `event:sheet` and the pre-commit hook rebuild it, and the hook stages it with event.md.
+
+### skill
+
+**What goes here:** reusable how-tos, one file per kind of task. A skill gives the rules, the code shape, the event names, the checklist and the gotchas. [skill/README.md](skill/README.md) lists them.
+
+- `permission.md`: runtime permissions (ask → 1st deny → 2nd deny → back → Settings) with events. `artisan make:permission` generates it.
+- `analytics_events.md`: `firebaseEvent` wiring, naming, and keeping event.md and the sheet in sync.
+- `crash_hardening.md`: fixing a stack trace without changing behaviour (guard, narrow catch, log, fallback).
+- Add a skill when the same kind of task comes up a second time. Update it when the code it describes changes.
+
+### scripts
+
+**What goes here:** helper scripts agents run against the project, such as theme image variants, bulk renames or checks.
+
+- Run them from the project root with paths as arguments. Each one starts with a docstring giving its usage and what it needs.
+- [scripts/README.md](scripts/README.md) has the rules and one row per script.
+- They are never part of the build or the app.
 
 ### assets
 
@@ -193,6 +218,9 @@ you turned it on.
 
 ### Before finishing
 
+`event_sheet.xlsx` is generated from event.md: never edit it, never hand-merge it. Edit event.md, and `check:events`
+(or the hook) rebuilds it.
+
 Run `artisan check:events`, and grep the changed files for `firebaseEvent(`: diff the names against that screen's
 section both ways. Calls can span lines or pick the name with `if/else`, so search for the names too. Report any
 older mismatches you notice on a screen you touched.
@@ -229,6 +257,8 @@ from {{PROD_LIST}} or any other production module:
 - **A screenshot shows appearance, not logic.** Reuse existing resources, match the design without rewriting
   unrelated UI, and note what the image can't tell you.
 - **Every `firebaseEvent` change ships with its `event.md` update** — see [Analytics event sync](#analytics-event-sync--critical).
+- **Follow the skill** when one covers the task (`skill/`). If you change how the project does that kind of task, update
+  the skill in the same change.
 - **Before stopping on an unfinished task**, write down: status, what you found, what changed, what's left, key
   files/symbols, why it's unfinished, and what needs a human or device.
 

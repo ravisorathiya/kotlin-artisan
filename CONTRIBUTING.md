@@ -12,20 +12,10 @@ build/install/kotlin-artisan/bin/artisan list      # Windows: build\install\kotl
 
 Run it inside any Android project to try a change.
 
-## Docs site
+## Docs
 
-The docs at https://kotlin-artisan.netlify.app live in `website/` (Nuxt + [Docus](https://docus.dev), styled with
-Tailwind CSS). Pages are markdown in `website/content/`; the landing page is `website/app/pages/index.vue`.
-
-```sh
-cd website
-npm install
-npm run dev          # http://localhost:3000
-npm run generate     # the static build Netlify runs (website/.output/public)
-```
-
-Netlify builds from `netlify.toml` and posts a deploy preview on every PR that touches `website/`. The version shown
-on the site is read from `build.gradle.kts`, so a release needs no site change.
+The docs are `README.md` (and `CHANGELOG.md`). A user-facing change (command, flag, `artisan.json` key) updates
+them in the same change as the code. The `:ai` workspace rules live in `src/main/resources/templates/ai/`.
 
 ## Releasing (maintainers)
 
@@ -65,4 +55,4 @@ Guidelines:
 - Results go in `Ui.table`, expected failures in `throw CliError("...")`, backing out in `throw Cancelled`.
 - Anything destructive goes through `Ui.confirm` (it respects `-y`).
 - Keep it working on Windows, macOS and Linux (`Os`, `Proc`, `File` paths, no shell-specific syntax).
-- Add a test for parsing/detection logic, and document the command in `website/content/2.commands/<group>.md` (the docs site) and `CHANGELOG.md`.
+- Add a test for parsing/detection logic, and document the command in `README.md` and `CHANGELOG.md`.
