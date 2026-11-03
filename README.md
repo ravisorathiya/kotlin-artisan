@@ -138,7 +138,7 @@ artisan list                   # everything
 | — | `find [words]` `list` `version` `doctor` `setup` `completion [shell]` `hotkeys` `hooks` `bump` `init [notes]` `status` `stats` |
 | `self:` | `update` |
 | `make:` | `string` `event` `permission` `screen` `bundle` `analytics` `plan` `version` `phase` `bug [--shot]` `ai` |
-| `event:` | `sheet` |
+| `event:` | `sheet` `box [version]` |
 | `del:` | `asset` |
 | `check:` | `strings [lang] [-v]` `events` `staged` `links` `assets` |
 | `list:` | `verify [-md]` `plans` `todo [module] [-v]` |
@@ -244,8 +244,12 @@ Run `make:ai` again in a project that already has the workspace: it adds only th
 
 **Events out of the box.**
 
-- `make:analytics` adds `firebaseEvent()` and the [Event Box](https://github.com/JpOriginDev/event-box) library
-  (dependency, JitPack repository, `DebugConfig.kt` with the bypass rules, `Analytics.init(this)`).
+- `make:analytics` creates a `:core:analytics` module that every Android module can use:
+  - it holds `firebaseEvent()`, `DebugConfig.kt` (the bypass rules) and `Analytics.init(this)`;
+  - it uses the [Event Box](https://github.com/JpOriginDev/event-box) library;
+  - it's included in settings and wired into the app and each Android library.
+  It resolves everything itself: plugins in your style (catalog or `id`), the app's compileSdk/minSdk/JVM target, the
+  app's Firebase version (or the latest), the latest Event Box, and JitPack. `event:box` updates Event Box later.
 - `make:event` adds a row, checking the name: snake_case, under 30 characters.
 - `check:events` compares the code and event.md both ways.
 - `artisan hooks install` stops a commit when they disagree. The hook also rebuilds `event_sheet.xlsx` and stages it,

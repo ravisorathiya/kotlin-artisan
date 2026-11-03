@@ -455,7 +455,7 @@ class WorkflowTest {
         val config = assertNotNull(javaClass.getResource("/templates/analytics/DebugConfig.kt.stub")).readText()
         assertTrue("const val ENABLE_EVENT_BOX = false" in config && "const val EVENT_BOX_BYPASS = true" in config)
         assertTrue(listOf("EVENT_BOX_BYPASS_SUFFIXES", "EVENT_BOX_BYPASS_PREFIXES", "EVENT_BOX_BYPASS_NAMES", "EVENT_BOX_ALWAYS_SHOW", "\"_on_create\"").all { it in config })
-        assertTrue("fun firebaseEvent(name: String" in config && "fun Context.firebaseEvent(" in config && "fun Fragment.firebaseEvent(" in config)
+        assertTrue("fun firebaseEvent(name: String" in config && "fun Context.firebaseEvent(" in config && "androidx" !in config, "no androidx: the module has no dependency on it")
         assertTrue("OGEventBoxLog.log(name, bundle)" in config && "BuildConfig" !in config)
         val init = assertNotNull(javaClass.getResource("/templates/analytics/Analytics.kt.stub")).readText()
         assertTrue("object Analytics" in init && "fun init(app: Application)" in init && ".install(app)" in init)

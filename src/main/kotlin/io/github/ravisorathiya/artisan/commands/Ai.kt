@@ -132,9 +132,9 @@ internal fun scaffoldAi(p: Project, version: String, events: Map<String, List<St
 }
 
 /** Adds the :ai include after the last include statement (or at the end), keeping the file's line endings. */
-internal fun addInclude(settings: String, kts: Boolean): String {
+internal fun addInclude(settings: String, kts: Boolean, module: String = ":ai"): String {
     val nl = if ("\r\n" in settings) "\r\n" else "\n"
-    val line = if (kts) """include(":ai")""" else "include ':ai'"
+    val line = if (kts) """include("$module")""" else "include '$module'"
     val lines = settings.split(nl).toMutableList()
     var last = lines.indexOfLast { Regex("""^\s*include\b""").containsMatchIn(it) }
     if (last < 0) {
@@ -202,8 +202,8 @@ internal fun eventDoc(p: Project, events: Map<String, List<String>>): String {
         |
         |## How firebaseEvent is wired
         |
-        |- ${definedIn?.let { "Defined in `$it`" } ?: "Not in the app yet: `artisan make:analytics` adds it"} as `Context.firebaseEvent(name, bundle)` and
-        |  `Fragment.firebaseEvent(name, bundle)`. Each call logs to Firebase Analytics, prints `I/GlobalFirebaseEventNameTag <name>`
+        |- ${definedIn?.let { "Defined in `$it`" } ?: "Not in the app yet: `artisan make:analytics` adds it"} as `firebaseEvent(name, bundle)`, callable from
+        |  any module that depends on the analytics module (Activity, Fragment, ViewModel, background thread). Each call logs to Firebase Analytics, prints `I/GlobalFirebaseEventNameTag <name>`
         |  in debug builds, and shows the name in the event box when that's on.
         |- **Event box** (${box?.let { "`$it`" } ?: "the [Event Box](https://github.com/JpOriginDev/event-box) library, from `artisan make:analytics`"}): a floating
         |  bubble that lists events as they fire (with their parameters, and a warning when one breaks a Firebase limit), on every

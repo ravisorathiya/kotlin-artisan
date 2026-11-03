@@ -5,8 +5,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import androidx.core.os.bundleOf
-import androidx.fragment.app.Fragment
 import com.ogmediaapps.eventbox.OGEventBoxLog
 
 /*
@@ -72,14 +70,12 @@ private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 /** The naming rule: snake_case, starting with a letter, under 30 characters. */
 private val EVENT_NAME = Regex("^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
 
-/** Logs [name] to Firebase Analytics, logcat (`GlobalFirebaseEventNameTag`, debug builds) and, when on, the event box. */
-fun firebaseEvent(name: String, bundle: Bundle = bundleOf()) = logEvent(name, bundle)
+/** Logs [name] to Firebase Analytics, logcat (`GlobalFirebaseEventNameTag`, debug builds) and, when on, the event box.
+ * Works from anywhere: an Activity, a Fragment, a ViewModel, an ad SDK callback on a background thread. */
+fun firebaseEvent(name: String, bundle: Bundle = Bundle()) = logEvent(name, bundle)
 
 /** Same as [firebaseEvent], from any Activity, Service or View context. */
-fun Context.firebaseEvent(name: String, bundle: Bundle = bundleOf()) = logEvent(name, bundle)
-
-/** Same as [firebaseEvent], from a Fragment (safe after it's detached). */
-fun Fragment.firebaseEvent(name: String, bundle: Bundle = bundleOf()) = logEvent(name, bundle)
+fun Context.firebaseEvent(name: String, bundle: Bundle = Bundle()) = logEvent(name, bundle)
 
 private fun logEvent(name: String, bundle: Bundle) {
     try {

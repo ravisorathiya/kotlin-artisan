@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.11.0: make:analytics builds a :core:analytics module
+
+- **`make:analytics [--path :core:analytics] [--build]`** now creates an Android library module, like the Zombie app's,
+  instead of writing into the app. It holds `firebaseEvent()`, `DebugConfig.kt` (switches and bypass rules) and
+  `Analytics.init(this)`, in the app's base package. The module is included in settings, and
+  `implementation(project(":core:analytics"))` goes into the app and every Android library, so events can be logged
+  from any module. Pure JVM modules are skipped.
+- **Dependencies are resolved from the project:**
+  - plugins in its own style (catalog alias or `id`); the library plugin is added to the catalog and the root build
+    file when missing;
+  - compileSdk, minSdk, compileOptions and the Kotlin JVM target copied from the app;
+  - the app's Firebase BOM or version, else the latest from Google Maven;
+  - the latest Event Box from JitPack;
+  - JitPack added to the settings, or to the root `allprojects` repositories.
+
+  Every change is worked out before anything is written. `--build` runs `:core:analytics:assembleDebug`.
+- **`event:box [version]`** updates the Event Box library to the latest version on JitPack, wherever it's pinned: a
+  catalog version, a `version.ref`, or a coordinate in any build file. `make:analytics` takes the latest too, and
+  falls back to the app's version, then 1.3.1, when JitPack can't be reached.
+- `firebaseEvent()` no longer needs androidx: the `Fragment.` overload is gone, because the top-level function works
+  from a Fragment.
+
 ## 0.10.2: the event box is the Event Box library
 
 - `make:analytics` uses the [Event Box](https://github.com/JpOriginDev/event-box) library

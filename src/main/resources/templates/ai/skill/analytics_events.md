@@ -6,16 +6,30 @@ managers read the generated `event/event_sheet.xlsx`. Use this skill whenever yo
 
 ## 1. Wiring (once per app)
 
-- `artisan make:analytics` adds:
-  - `Context.firebaseEvent(name, bundle)` and `Fragment.firebaseEvent(...)`, which log to Firebase and print `I/GlobalFirebaseEventNameTag <name>` in debug builds;
-  - `logging(...)` for debug logs that are not analytics;
-  - `DebugConfig.kt`: `firebaseEvent(...)` (top-level, `Context.` and `Fragment.`), `ENABLE_EVENT_BOX`, the bypass rules
-    and `logging(...)`. In debug builds it warns in logcat when a name isn't snake_case or is 30+ characters.
-  - `Analytics.kt`: `Analytics.init(app)`, the Firebase instance and the event box. The box is the [Event Box](https://github.com/JpOriginDev/event-box) library
-    (`com.github.JpOriginDev:event-box`, on JitPack), a floating bubble listing events with their parameters.
-    It warns when an event breaks a Firebase limit. make:analytics adds the dependency and the JitPack repository.
+`artisan make:analytics` creates the **`:core:analytics` module** and wires it into every Android module, so
+`firebaseEvent(...)` works anywhere. It works out the dependencies itself:
+
+- **Plugins:** the app's own style (catalog alias or `id`). It adds the library plugin to the catalog and the root when it's missing.
+- **Copied from the app:** compileSdk, minSdk, compileOptions and the Kotlin JVM target.
+- **Firebase Analytics:** the app's BOM or version, else the latest from Google Maven.
+- **Event Box:** the latest from JitPack. JitPack is added to the repositories.
+
+The module holds two files, in the app's base package, so code there needs no import:
+
+- `DebugConfig.kt`:
+  - `firebaseEvent(...)`, top-level and `Context.`; it works from Activities, Fragments, ViewModels and background threads;
+  - `ENABLE_EVENT_BOX` and the bypass rules;
+  - `logging(...)`;
+  - in debug builds, a logcat warning when a name isn't snake_case or is 30+ characters.
+- `Analytics.kt`: `Analytics.init(app)`, the Firebase instance, and the [Event Box](https://github.com/JpOriginDev/event-box)
+  library. The box is a floating bubble listing events with their parameters, and it warns when an event breaks a
+  Firebase limit.
+
+A new module that should log events: `implementation(project(":core:analytics"))`.
+`artisan event:box` moves Event Box to its latest version.
+
 - Then:
-  - add `com.google.firebase:firebase-analytics` and `google-services.json`;
+  - google-services in the app (plugin + `google-services.json`), if it isn't there;
   - put `Analytics.init(this)` in `Application.onCreate()`.
 - If the app already has its own `firebaseEvent` (top-level or an extension), keep it. The top of event.md says where it lives.
 - **Every project needs this setup.** `artisan make:ai` offers `make:analytics` when the app has no `firebaseEvent` yet.
