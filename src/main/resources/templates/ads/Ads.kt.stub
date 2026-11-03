@@ -1,0 +1,118 @@
+package {{PACKAGE}}
+
+import android.app.Activity
+import android.app.Application
+import android.os.Bundle
+import com.google.android.libraries.ads.mobile.sdk.MobileAds
+import com.google.android.libraries.ads.mobile.sdk.common.AdValue
+import com.google.android.libraries.ads.mobile.sdk.initialization.InitializationConfig
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import {{PACKAGE}}.appopen.AppOpenAds
+import {{PACKAGE}}.inter.Interstitial
+import {{PACKAGE}}.moreapps.MoreApps
+import {{FIREBASE}}.events.firebaseEvent
+import {{FIREBASE}}.log.logging
+import {{FIREBASE}}.remote.AdsConstant
+import {{FIREBASE}}.remote.RemoteConfig
+import java.lang.ref.WeakReference
+
+/**
+ * Ads for the whole app (added by `artisan make:ads`). Call [init] once from Application.onCreate(), after
+ * Analytics.init(this). Every ad unit and switch is a key in AdsConstant (the Firebase module): see README.md here.
+ */
+object Ads {
+    /** For background work of this module. Never cancelled. */
+    internal val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /** Called for every paid impression (banner, native, interstitial, app open): send it to your revenue SDK. */
+    var onPaid: ((AdValue) -> Unit)? = null
+
+    /** A full-screen ad (interstitial, app open, splash) is on screen now. */
+    @Volatile
+    var isFullScreenShowing = false
+        internal set
+
+    /** Activities where the app-open ad never shows (the splash, a payment screen, a call screen). */
+    val appOpenExcluded = mutableSetOf<Class<out Activity>>()
+
+    private var suppressAppOpenUntil = 0L
+    private var current: WeakReference<Activity>? = null
+    private var started = false
+
+    /** The activity on screen, if any. */
+    internal val currentActivity: Activity? get() = current?.get()
+
+    /**
+     * Once, from Application.onCreate(), after Analytics.init(this). Starts the SDK, the app-open ad on resume,
+     * and, after Remote Config's first answer, the More Apps feed and the interstitial preload.
+     * [appOpenOnResume] false = no app-open ad when the app comes back to the front.
+     */
+    fun init(app: Application, appOpenOnResume: Boolean = true, excluded: List<Class<out Activity>> = emptyList()) {
+        if (started) return
+        started = true
+        appOpenExcluded += excluded
+        app.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityResumed(activity: Activity) { current = WeakReference(activity) }
+            override fun onActivityPaused(activity: Activity) {}
+            override fun onActivityCreated(activity: Activity, state: Bundle?) {}
+            override fun onActivityStarted(activity: Activity) { current = WeakReference(activity) }
+            override fun onActivityStopped(activity: Activity) {}
+            override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) {}
+            override fun onActivityDestroyed(activity: Activity) { if (current?.get() === activity) current = null }
+        })
+        scope.launch(Dispatchers.IO) {
+            try {
+                MobileAds.initialize(app, InitializationConfig.Builder(AdsConstant.APP_ID).build()) {
+                    firebaseEvent("ads_init")
+                }
+            } catch (e: Exception) {
+                logging("Ads.init", e)
+            }
+        }
+        if (appOpenOnResume) AppOpenAds.start(app)
+        scope.launch {
+            RemoteConfig.awaitFetch()
+            MoreApps.loadIfNeeded()
+            Interstitial.load()
+            if (appOpenOnResume) AppOpenAds.load()
+        }
+        RemoteConfig.onApplied { MoreApps.loadIfNeeded() }
+    }
+
+    /**
+     * The next app-open ad on resume is skipped: call before leaving the app on purpose (share, camera, a browser,
+     * an ad click: the module does it for ad and More Apps clicks).
+     */
+    fun suppressAppOpen(millis: Long = 15_000L) {
+        suppressAppOpenUntil = System.currentTimeMillis() + millis
+    }
+
+    internal val isAppOpenSuppressed: Boolean get() = System.currentTimeMillis() < suppressAppOpenUntil
+
+    internal fun paid(value: AdValue) {
+        try {
+            onPaid?.invoke(value)
+        } catch (e: Exception) {
+            logging("Ads.onPaid", e)
+        }
+    }
+
+    /** What a placement shows. */
+    enum class Source { GOOGLE, MORE_APPS, NONE }
+
+    /**
+     * The rule every placement follows: `onlyShowMoreApp...` = "yes" forces More Apps; else `show...` = "yes" loads the
+     * Google ad (More Apps when it fails and `showMoreApp...` = "yes"); else More Apps when `showMoreApp...` = "yes" and
+     * the feed has apps; else nothing.
+     */
+    internal fun decide(show: String, moreAppFallback: String, onlyMoreApp: String): Source = when {
+        onlyMoreApp.isYes() && MoreApps.hasApps -> Source.MORE_APPS
+        show.isYes() -> Source.GOOGLE
+        else -> Source.NONE
+    }
+
+    internal fun String.isYes() = trim().equals("yes", ignoreCase = true) || trim().equals("true", ignoreCase = true)
+}

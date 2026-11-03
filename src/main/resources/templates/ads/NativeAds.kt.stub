@@ -1,0 +1,197 @@
+package {{PACKAGE}}.nativead
+
+import android.app.Activity
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.os.Bundle
+import android.text.TextUtils
+import android.util.TypedValue
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
+import com.google.android.libraries.ads.mobile.sdk.common.AdValue
+import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
+import com.google.android.libraries.ads.mobile.sdk.nativead.MediaView
+import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAd
+import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdEventCallback
+import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdLoader
+import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdLoaderCallback
+import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdRequest
+import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdView
+import kotlinx.coroutines.launch
+import {{PACKAGE}}.Ads
+import {{PACKAGE}}.Ads.isYes
+import {{PACKAGE}}.moreapps.MoreApps
+import {{PACKAGE}}.moreapps.MoreAppsViews
+import {{PACKAGE}}.moreapps.MoreAppsViews.dp
+import {{FIREBASE}}.events.firebaseEvent
+import {{FIREBASE}}.log.logging
+import {{FIREBASE}}.remote.AdsConstant
+
+/**
+ * Native placements: a native banner (icon, title, text, button; [big] = false) or a big native with media
+ * ([big] = true). Same rule as banners: Google ad, More Apps fallback or forced, hidden when nothing.
+ *
+ *     NativeAds.show(this, "lang", binding.flNative, AdsConstant.languageSmallNativeAd, AdsConstant.showLanguageNativeAd,
+ *         moreAppFallback = AdsConstant.showMoreAppLanguage, onlyMoreApp = AdsConstant.onlyShowMoreAppLanguage)
+ *
+ * Events: `<placement>_nat_load / _show / _fail / _click` (bundle "size" = big / small), More Apps
+ * `<placement>_more_show / _more_click`. The views are built here: restyle [Style] once for every placement.
+ */
+object NativeAds {
+
+    /** Colors of the Google native views. */
+    object Style {
+        var background: Int = Color.WHITE
+        var title: Int = Color.BLACK
+        var body: Int = Color.DKGRAY
+        var button: Int = Color.parseColor("#1A73E8")
+        var buttonText: Int = Color.WHITE
+        var adBadge: String = "Ad"
+    }
+
+    fun show(
+        activity: Activity,
+        placement: String,
+        container: ViewGroup,
+        adUnit: String,
+        show: String = "yes",
+        big: Boolean = false,
+        moreAppFallback: String = AdsConstant.showMoreAppNBanner,
+        onlyMoreApp: String = AdsConstant.onlyShowMoreAppNBanner,
+        loadingView: View? = null,
+        onResult: ((Ads.Source) -> Unit)? = null,
+    ) {
+        when (Ads.decide(show, moreAppFallback, onlyMoreApp)) {
+            Ads.Source.MORE_APPS -> showMoreApps(activity, placement, container, big, loadingView, onResult)
+            Ads.Source.NONE -> done(container, loadingView, Ads.Source.NONE, onResult)
+            Ads.Source.GOOGLE -> loadGoogle(activity, placement, container, adUnit, big, moreAppFallback, loadingView, onResult)
+        }
+    }
+
+    private fun loadGoogle(
+        activity: Activity, placement: String, container: ViewGroup, adUnit: String, big: Boolean,
+        moreAppFallback: String, loadingView: View?, onResult: ((Ads.Source) -> Unit)?,
+    ) {
+        val size = Bundle().apply { putString("size", if (big) "big" else "small") }
+        firebaseEvent("${placement}_nat_load", size)
+        loadingView?.visibility = View.VISIBLE
+        container.visibility = View.VISIBLE
+        try {
+            val request = NativeAdRequest.Builder(adUnit, listOf(NativeAd.NativeAdType.NATIVE)).build()
+            NativeAdLoader.load(request, object : NativeAdLoaderCallback {
+                override fun onNativeAdLoaded(nativeAd: NativeAd) {
+                    nativeAd.adEventCallback = object : NativeAdEventCallback {
+                        override fun onAdPaid(value: AdValue) = Ads.paid(value)
+                        override fun onAdClicked() {
+                            firebaseEvent("${placement}_nat_click", size)
+                            Ads.suppressAppOpen()
+                        }
+                    }
+                    Ads.scope.launch {
+                        if (activity.isFinishing || activity.isDestroyed) {
+                            nativeAd.destroy()
+                            return@launch
+                        }
+                        container.removeAllViews()
+                        container.addView(render(activity, nativeAd, big))
+                        (activity as? LifecycleOwner)?.lifecycle?.addObserver(LifecycleEventObserver { _, event ->
+                            if (event == Lifecycle.Event.ON_DESTROY) nativeAd.destroy()
+                        })
+                        firebaseEvent("${placement}_nat_show", size)
+                        done(container, loadingView, Ads.Source.GOOGLE, onResult)
+                    }
+                }
+
+                override fun onAdFailedToLoad(adError: LoadAdError) {
+                    firebaseEvent("${placement}_nat_fail", Bundle(size).apply { putString("error", adError.message.take(100)) })
+                    Ads.scope.launch {
+                        if (activity.isFinishing || activity.isDestroyed) return@launch
+                        if (moreAppFallback.isYes() && MoreApps.hasApps) showMoreApps(activity, placement, container, big, loadingView, onResult)
+                        else done(container, loadingView, Ads.Source.NONE, onResult)
+                    }
+                }
+            })
+        } catch (e: Exception) {
+            logging("NativeAds.$placement", e)
+            done(container, loadingView, Ads.Source.NONE, onResult)
+        }
+    }
+
+    /** The Google native ad view: icon + title + body (+ media when [big]) + button, registered with the SDK. */
+    private fun render(activity: Activity, ad: NativeAd, big: Boolean): NativeAdView {
+        val ctx = activity
+        val adView = NativeAdView(ctx)
+        val column = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(ctx.dp(10), ctx.dp(8), ctx.dp(10), ctx.dp(10))
+            background = GradientDrawable().apply { setColor(Style.background); cornerRadius = ctx.dp(10).toFloat() }
+        }
+        val head = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val icon = ImageView(ctx).apply { layoutParams = LinearLayout.LayoutParams(ctx.dp(44), ctx.dp(44)) }
+        val texts = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+        val title = TextView(ctx).apply {
+            setTypeface(typeface, Typeface.BOLD); setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f); setTextColor(Style.title)
+            maxLines = 1; ellipsize = TextUtils.TruncateAt.END
+        }
+        val body = TextView(ctx).apply {
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f); setTextColor(Style.body); maxLines = 2; ellipsize = TextUtils.TruncateAt.END
+        }
+        val badge = TextView(ctx).apply {
+            text = Style.adBadge; setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f); setTextColor(Style.buttonText)
+            setPadding(ctx.dp(4), 0, ctx.dp(4), 0)
+            background = GradientDrawable().apply { setColor(Style.button); cornerRadius = ctx.dp(3).toFloat() }
+        }
+        texts.addView(badge, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        texts.addView(title)
+        texts.addView(body)
+        head.addView(icon)
+        head.addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = ctx.dp(10) })
+        column.addView(head)
+        val media = if (big) MediaView(ctx).also {
+            column.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ctx.dp(180)).apply { topMargin = ctx.dp(8) })
+        } else null
+        val cta = Button(ctx).apply {
+            isAllCaps = false; setTextColor(Style.buttonText)
+            background = GradientDrawable().apply { setColor(Style.button); cornerRadius = ctx.dp(6).toFloat() }
+        }
+        column.addView(cta, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ctx.dp(44)).apply { topMargin = ctx.dp(8) })
+        adView.addView(column)
+
+        title.text = ad.headline
+        if (ad.body.isNullOrBlank()) body.visibility = View.GONE else body.text = ad.body
+        ad.icon?.drawable?.let { icon.setImageDrawable(it) } ?: run { icon.visibility = View.GONE }
+        if (ad.callToAction.isNullOrBlank()) cta.visibility = View.INVISIBLE else cta.text = ad.callToAction
+        adView.headlineView = title
+        adView.bodyView = body
+        adView.iconView = icon
+        adView.callToActionView = cta
+        adView.registerNativeAd(ad, media)
+        return adView
+    }
+
+    private fun showMoreApps(activity: Activity, placement: String, container: ViewGroup, big: Boolean, loadingView: View?, onResult: ((Ads.Source) -> Unit)?) {
+        val app = MoreApps.next() ?: return done(container, loadingView, Ads.Source.NONE, onResult)
+        container.removeAllViews()
+        container.addView(MoreAppsViews.card(activity, app, placement, big))
+        done(container, loadingView, Ads.Source.MORE_APPS, onResult)
+    }
+
+    private fun done(container: ViewGroup, loadingView: View?, source: Ads.Source, onResult: ((Ads.Source) -> Unit)?) {
+        loadingView?.visibility = View.GONE
+        container.visibility = if (source == Ads.Source.NONE) View.GONE else View.VISIBLE
+        try {
+            onResult?.invoke(source)
+        } catch (e: Exception) {
+            logging("NativeAds.onResult", e)
+        }
+    }
+}

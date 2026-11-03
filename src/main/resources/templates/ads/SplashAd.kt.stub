@@ -1,0 +1,104 @@
+package {{PACKAGE}}.appopen
+
+import android.app.Activity
+import android.os.Bundle
+import com.google.android.libraries.ads.mobile.sdk.appopen.AppOpenAd
+import com.google.android.libraries.ads.mobile.sdk.appopen.AppOpenAdEventCallback
+import com.google.android.libraries.ads.mobile.sdk.common.AdLoadCallback
+import com.google.android.libraries.ads.mobile.sdk.common.AdRequest
+import com.google.android.libraries.ads.mobile.sdk.common.AdValue
+import com.google.android.libraries.ads.mobile.sdk.common.FullScreenContentError
+import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+import {{PACKAGE}}.Ads
+import {{PACKAGE}}.Ads.isYes
+import {{FIREBASE}}.events.firebaseEvent
+import {{FIREBASE}}.log.logging
+import {{FIREBASE}}.remote.AdsConstant
+import {{FIREBASE}}.remote.RemoteConfig
+import kotlin.coroutines.resume
+
+/**
+ * The splash app-open ad (AdsConstant.splashAppOpenAd, switch showSplashAppOpenAd). Call from the splash screen; [next]
+ * (open the next screen) always runs, once: after the ad, or right away when there's none in [timeoutMillis].
+ *
+ *     SplashAd.show(this) { startActivity(Intent(this, MainActivity::class.java)); finish() }
+ *
+ * onlineSplashAppOpen = "yes": wait for Remote Config first (inside the same timeout), so the unit id and the switch
+ * come from the console, not the defaults. Add the splash to Ads.init's excluded activities, so the resume app-open ad
+ * doesn't show over it. Events: splash_ad_load, splash_ad_show, splash_ad_fail, splash_ad_timeout.
+ */
+object SplashAd {
+
+    fun show(activity: Activity, timeoutMillis: Long = 8_000L, next: () -> Unit) {
+        var finished = false
+        val done = {
+            if (!finished) {
+                finished = true
+                Ads.isFullScreenShowing = false
+                try { next() } catch (e: Exception) { logging("SplashAd.next", e) }
+            }
+        }
+        Ads.scope.launch {
+            val ad = withTimeoutOrNull(timeoutMillis) {
+                if (AdsConstant.onlineSplashAppOpen.isYes()) RemoteConfig.awaitFetch(timeoutMillis)
+                if (!AdsConstant.showSplashAppOpenAd.isYes()) return@withTimeoutOrNull null
+                load(AdsConstant.splashAppOpenAd)
+            }
+            if (ad == null) {
+                if (AdsConstant.showSplashAppOpenAd.isYes()) firebaseEvent("splash_ad_timeout", Bundle().apply { putLong("millis", timeoutMillis) })
+                return@launch done()
+            }
+            if (activity.isFinishing || activity.isDestroyed) return@launch done()
+            ad.adEventCallback = object : AppOpenAdEventCallback {
+                override fun onAdShowedFullScreenContent() {
+                    Ads.isFullScreenShowing = true
+                    firebaseEvent("splash_ad_show")
+                }
+
+                override fun onAdDismissedFullScreenContent() {
+                    Ads.scope.launch { done() }
+                }
+
+                override fun onAdFailedToShowFullScreenContent(fullScreenContentError: FullScreenContentError) {
+                    Ads.scope.launch {
+                        firebaseEvent("splash_ad_fail", Bundle().apply { putString("stage", "show"); putString("error", fullScreenContentError.message.take(100)) })
+                        done()
+                    }
+                }
+
+                override fun onAdClicked() = Ads.suppressAppOpen()
+
+                override fun onAdPaid(value: AdValue) = Ads.paid(value)
+            }
+            try {
+                ad.show(activity)
+            } catch (e: Exception) {
+                logging("SplashAd.show", e)
+                done()
+            }
+        }
+    }
+
+    /** One app-open ad for the splash, or null when it fails. */
+    private suspend fun load(adUnit: String): AppOpenAd? = suspendCancellableCoroutine { cont ->
+        firebaseEvent("splash_ad_load")
+        try {
+            AppOpenAd.load(AdRequest.Builder(adUnit).build(), object : AdLoadCallback<AppOpenAd> {
+                override fun onAdLoaded(ad: AppOpenAd) {
+                    if (cont.isActive) cont.resume(ad)
+                }
+
+                override fun onAdFailedToLoad(adError: LoadAdError) {
+                    firebaseEvent("splash_ad_fail", Bundle().apply { putString("stage", "load"); putString("error", adError.message.take(100)) })
+                    if (cont.isActive) cont.resume(null)
+                }
+            })
+        } catch (e: Exception) {
+            logging("SplashAd.load", e)
+            if (cont.isActive) cont.resume(null)
+        }
+    }
+}

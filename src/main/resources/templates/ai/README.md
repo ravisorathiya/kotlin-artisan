@@ -17,6 +17,7 @@ Written by agents for agents: it doesn't need polish, but it must be accurate, s
 | [`plan/`](#plan) | One file per plan; re-apply bundles for porting a shipped feature | `make:plan`, `list:plans`, `make:bundle` |
 | [`event/`](#event) | `event.md`: every active `firebaseEvent`, one table per screen · `event_sheet.xlsx`: the same as a sheet (generated) | `make:event`, `make:permission`, `check:events`, `event:sheet` |
 | `core/firebase/` (a Gradle module) | All of Firebase: `firebaseEvent`, remote keys in `AdsConstant`, Crashlytics, push, Timber. Not part of `:ai` | `make:firebase`, `event:box`, `app:logcat RemoteConfigAudit` |
+| `core/ads/` (a Gradle module) | Every ad: banner, native, interstitial, app open, splash, More Apps fallback. Not part of `:ai` | `make:ads` |
 | [`skill/`](#skill) | Reusable how-tos: permission flow, analytics events, crash hardening | `make:permission`, `make:firebase` |
 | [`scripts/`](#scripts) | Helper scripts agents run (resource variants, bulk edits, checks) | |
 | [`assets/`](#assets) | Screenshots, mockups, screen recordings | `app:shot`, `app:record`, `make:bug --shot` |
@@ -33,7 +34,8 @@ Before changing production code:
 3. Open the newest `workflow/v_*` folder: its `overview.md`, then the relevant `phase_N.md`. Read the whole task entry.
 4. Open any screenshots it references, then the actual production code, earlier notes and pending verification.
    If the task is a kind `skill/` covers, read that skill too:
-   - Firebase, an ad unit or switch, a remote key, push: `skill/firebase_module.md`;
+   - Firebase, a remote key, push: `skill/firebase_module.md`;
+   - an ad (placement, More Apps fallback, interstitial, app open, splash): `skill/ads.md`;
    - analytics events: `skill/analytics_events.md`;
    - permissions: `skill/permission.md`;
    - a crash: `skill/crash_hardening.md`.

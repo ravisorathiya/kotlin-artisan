@@ -1,0 +1,135 @@
+package {{PACKAGE}}.banner
+
+import android.app.Activity
+import android.os.Bundle
+import android.view.View
+import android.view.ViewGroup
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
+import com.google.android.libraries.ads.mobile.sdk.banner.AdSize
+import com.google.android.libraries.ads.mobile.sdk.banner.AdView
+import com.google.android.libraries.ads.mobile.sdk.banner.BannerAd
+import com.google.android.libraries.ads.mobile.sdk.banner.BannerAdEventCallback
+import com.google.android.libraries.ads.mobile.sdk.banner.BannerAdRequest
+import com.google.android.libraries.ads.mobile.sdk.common.AdLoadCallback
+import com.google.android.libraries.ads.mobile.sdk.common.AdValue
+import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
+import kotlinx.coroutines.launch
+import {{PACKAGE}}.Ads
+import {{PACKAGE}}.Ads.isYes
+import {{PACKAGE}}.moreapps.MoreApps
+import {{PACKAGE}}.moreapps.MoreAppsViews
+import {{FIREBASE}}.events.firebaseEvent
+import {{FIREBASE}}.log.logging
+import {{FIREBASE}}.remote.AdsConstant
+
+/**
+ * Banner placements: one call per placement, everything else (Google ad, More Apps fallback or forced, loading view,
+ * events, paid hook, app-open skip after a click) is here.
+ *
+ *     BannerAds.show(this, "main", binding.flBanner, AdsConstant.mainBannerAd, AdsConstant.showMainBannerAd,
+ *         loadingView = binding.shimmerBanner)
+ *
+ * Events, with [placement] as prefix (short, snake_case): `<placement>_banner_load / _show / _fail / _click`, and for
+ * More Apps `<placement>_more_show / _more_click`. Add them to event.md (`artisan make:event`).
+ */
+object BannerAds {
+
+    /**
+     * Fills [container] with the banner for [placement]. [show] is the placement's switch ("yes" / "no"). The More Apps
+     * pair defaults to the app-wide banner pair (showMoreAppNBanner / onlyShowMoreAppNBanner). [loadingView] (a
+     * shimmer of your own) shows while the Google ad loads. [onResult] tells what ended up there; on NONE the container
+     * is hidden.
+     */
+    fun show(
+        activity: Activity,
+        placement: String,
+        container: ViewGroup,
+        adUnit: String,
+        show: String = "yes",
+        moreAppFallback: String = AdsConstant.showMoreAppNBanner,
+        onlyMoreApp: String = AdsConstant.onlyShowMoreAppNBanner,
+        loadingView: View? = null,
+        onResult: ((Ads.Source) -> Unit)? = null,
+    ) {
+        when (Ads.decide(show, moreAppFallback, onlyMoreApp)) {
+            Ads.Source.MORE_APPS -> showMoreApps(activity, placement, container, loadingView, onResult)
+            Ads.Source.NONE -> done(container, loadingView, Ads.Source.NONE, onResult)
+            Ads.Source.GOOGLE -> loadGoogle(activity, placement, container, adUnit, moreAppFallback, loadingView, onResult)
+        }
+    }
+
+    private fun loadGoogle(
+        activity: Activity, placement: String, container: ViewGroup, adUnit: String,
+        moreAppFallback: String, loadingView: View?, onResult: ((Ads.Source) -> Unit)?,
+    ) {
+        firebaseEvent("${placement}_banner_load")
+        loadingView?.visibility = View.VISIBLE
+        container.visibility = View.VISIBLE
+        val adView = AdView(activity)
+        container.removeAllViews()
+        container.addView(adView, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val size = adSize(activity, container)
+        container.minimumHeight = size.getHeightInPixels(activity)
+        (activity as? LifecycleOwner)?.lifecycle?.addObserver(LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_DESTROY) runCatching { adView.destroy() }
+        })
+        try {
+            adView.loadAd(BannerAdRequest.Builder(adUnit, size).build(), object : AdLoadCallback<BannerAd> {
+                override fun onAdLoaded(ad: BannerAd) {
+                    ad.adEventCallback = object : BannerAdEventCallback {
+                        override fun onAdPaid(value: AdValue) = Ads.paid(value)
+                        override fun onAdClicked() {
+                            firebaseEvent("${placement}_banner_click")
+                            Ads.suppressAppOpen()
+                        }
+                    }
+                    Ads.scope.launch {
+                        if (activity.isFinishing || activity.isDestroyed) return@launch
+                        adView.registerBannerAd(ad, activity)
+                        firebaseEvent("${placement}_banner_show")
+                        done(container, loadingView, Ads.Source.GOOGLE, onResult)
+                    }
+                }
+
+                override fun onAdFailedToLoad(adError: LoadAdError) {
+                    firebaseEvent("${placement}_banner_fail", Bundle().apply { putString("error", adError.message.take(100)) })
+                    Ads.scope.launch {
+                        if (activity.isFinishing || activity.isDestroyed) return@launch
+                        if (moreAppFallback.isYes() && MoreApps.hasApps) showMoreApps(activity, placement, container, loadingView, onResult)
+                        else done(container, loadingView, Ads.Source.NONE, onResult)
+                    }
+                }
+            })
+        } catch (e: Exception) {
+            logging("BannerAds.$placement", e)
+            done(container, loadingView, Ads.Source.NONE, onResult)
+        }
+    }
+
+    private fun showMoreApps(activity: Activity, placement: String, container: ViewGroup, loadingView: View?, onResult: ((Ads.Source) -> Unit)?) {
+        val app = MoreApps.next() ?: return done(container, loadingView, Ads.Source.NONE, onResult)
+        container.removeAllViews()
+        container.addView(MoreAppsViews.banner(activity, app, placement))
+        done(container, loadingView, Ads.Source.MORE_APPS, onResult)
+    }
+
+    private fun done(container: ViewGroup, loadingView: View?, source: Ads.Source, onResult: ((Ads.Source) -> Unit)?) {
+        loadingView?.visibility = View.GONE
+        container.visibility = if (source == Ads.Source.NONE) View.GONE else View.VISIBLE
+        try {
+            onResult?.invoke(source)
+        } catch (e: Exception) {
+            logging("BannerAds.onResult", e)
+        }
+    }
+
+    /** An adaptive banner as wide as the container (or the screen, before layout). */
+    @Suppress("DEPRECATION")
+    private fun adSize(activity: Activity, container: ViewGroup): AdSize {
+        val density = activity.resources.displayMetrics.density
+        val widthPx = container.width.takeIf { it > 0 } ?: activity.resources.displayMetrics.widthPixels
+        return AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(activity, (widthPx / density).toInt())
+    }
+}

@@ -1,0 +1,100 @@
+package {{PACKAGE}}.moreapps
+
+import android.content.Context
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.text.TextUtils
+import android.util.TypedValue
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.widget.Button
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import {{FIREBASE}}.events.firebaseEvent
+
+/**
+ * The More Apps ad views, built in code (no layouts to copy): [banner] for banner slots (about 60dp high) and [card]
+ * for native slots (icon row + optional large image + button). Restyle here once and every placement follows.
+ */
+object MoreAppsViews {
+    /** Button and badge color. */
+    var accent: Int = Color.parseColor("#1A73E8")
+
+    /** Text of the call-to-action button. */
+    var installText: String = "Install"
+
+    fun banner(context: Context, app: MoreApp, placement: String): View {
+        firebaseEvent("${placement}_more_show")
+        val row = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(context.dp(8), context.dp(6), context.dp(8), context.dp(6))
+            minimumHeight = context.dp(56)
+            setBackgroundColor(Color.WHITE)
+        }
+        row.addView(icon(context, app, 44))
+        row.addView(texts(context, app), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = context.dp(8) })
+        row.addView(button(context, app, placement))
+        row.setOnClickListener { MoreApps.open(context, app, placement) }
+        return row
+    }
+
+    fun card(context: Context, app: MoreApp, placement: String, big: Boolean): View {
+        firebaseEvent("${placement}_more_show")
+        val card = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(context.dp(10), context.dp(10), context.dp(10), context.dp(10))
+            background = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = context.dp(10).toFloat() }
+        }
+        val head = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        head.addView(icon(context, app, 48))
+        head.addView(texts(context, app), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = context.dp(10) })
+        card.addView(head)
+        if (big && app.banner.isNotBlank()) {
+            val image = ImageView(context).apply { scaleType = ImageView.ScaleType.CENTER_CROP; adjustViewBounds = true }
+            MoreApps.loadImage(image, app.banner)
+            card.addView(image, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, context.dp(170)).apply { topMargin = context.dp(8) })
+        }
+        card.addView(button(context, app, placement), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, context.dp(44)).apply { topMargin = context.dp(8) })
+        card.setOnClickListener { MoreApps.open(context, app, placement) }
+        return card
+    }
+
+    private fun icon(context: Context, app: MoreApp, sizeDp: Int) = ImageView(context).apply {
+        layoutParams = LinearLayout.LayoutParams(context.dp(sizeDp), context.dp(sizeDp))
+        scaleType = ImageView.ScaleType.CENTER_CROP
+        MoreApps.loadImage(this, app.icon)
+    }
+
+    private fun texts(context: Context, app: MoreApp) = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        addView(TextView(context).apply {
+            text = app.name
+            setTypeface(typeface, Typeface.BOLD)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(Color.BLACK)
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+        })
+        addView(TextView(context).apply {
+            text = app.description
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setTextColor(Color.DKGRAY)
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
+        })
+    }
+
+    private fun button(context: Context, app: MoreApp, placement: String) = Button(context).apply {
+        text = installText
+        isAllCaps = false
+        setTextColor(Color.WHITE)
+        background = GradientDrawable().apply { setColor(accent); cornerRadius = context.dp(6).toFloat() }
+        setOnClickListener { MoreApps.open(context, app, placement) }
+    }
+
+    internal fun Context.dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+}

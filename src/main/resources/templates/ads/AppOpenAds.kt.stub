@@ -1,0 +1,119 @@
+package {{PACKAGE}}.appopen
+
+import android.app.Application
+import android.os.Bundle
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
+import com.google.android.libraries.ads.mobile.sdk.appopen.AppOpenAd
+import com.google.android.libraries.ads.mobile.sdk.appopen.AppOpenAdEventCallback
+import com.google.android.libraries.ads.mobile.sdk.common.AdLoadCallback
+import com.google.android.libraries.ads.mobile.sdk.common.AdRequest
+import com.google.android.libraries.ads.mobile.sdk.common.AdValue
+import com.google.android.libraries.ads.mobile.sdk.common.FullScreenContentError
+import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import {{PACKAGE}}.Ads
+import {{FIREBASE}}.events.firebaseEvent
+import {{FIREBASE}}.log.logging
+import {{FIREBASE}}.remote.AdsConstant
+
+/**
+ * The app-open ad when the app comes back to the front (AdsConstant.googleAppOpen). Started by Ads.init. Skipped when:
+ * a full-screen ad is already showing, the activity is in Ads.appOpenExcluded (the splash, ...), the user just left
+ * through an ad or More Apps click or Ads.suppressAppOpen(), or the ad is older than 4 hours (it's reloaded).
+ *
+ * Events: appopen_load, appopen_show, appopen_fail (bundle "stage" = load / show), appopen_click.
+ */
+object AppOpenAds {
+    private const val MAX_AGE_MILLIS = 4 * 60 * 60 * 1000L
+    private var ad: AppOpenAd? = null
+    private var loadedAt = 0L
+    private var loading = false
+    private var started = false
+
+    internal fun start(app: Application) {
+        if (started) return
+        started = true
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStart(owner: LifecycleOwner) {
+                Ads.scope.launch {
+                    delay(300)
+                    showIfAvailable()
+                }
+            }
+        })
+    }
+
+    private val isFresh: Boolean get() = ad != null && System.currentTimeMillis() - loadedAt < MAX_AGE_MILLIS
+
+    fun load() {
+        if (loading || isFresh) return
+        loading = true
+        firebaseEvent("appopen_load")
+        try {
+            AppOpenAd.load(AdRequest.Builder(AdsConstant.googleAppOpen).build(), object : AdLoadCallback<AppOpenAd> {
+                override fun onAdLoaded(ad: AppOpenAd) {
+                    Ads.scope.launch {
+                        loading = false
+                        this@AppOpenAds.ad = ad
+                        loadedAt = System.currentTimeMillis()
+                    }
+                }
+
+                override fun onAdFailedToLoad(adError: LoadAdError) {
+                    Ads.scope.launch {
+                        loading = false
+                        firebaseEvent("appopen_fail", Bundle().apply { putString("stage", "load"); putString("error", adError.message.take(100)) })
+                    }
+                }
+            })
+        } catch (e: Exception) {
+            loading = false
+            logging("AppOpenAds.load", e)
+        }
+    }
+
+    private fun showIfAvailable() {
+        val activity = Ads.currentActivity ?: return
+        if (Ads.isFullScreenShowing || Ads.isAppOpenSuppressed) return
+        if (Ads.appOpenExcluded.any { it.isInstance(activity) }) return
+        val current = ad?.takeIf { isFresh } ?: return load()
+        if (activity.isFinishing || activity.isDestroyed) return
+        current.adEventCallback = object : AppOpenAdEventCallback {
+            override fun onAdShowedFullScreenContent() {
+                Ads.isFullScreenShowing = true
+                firebaseEvent("appopen_show")
+            }
+
+            override fun onAdDismissedFullScreenContent() {
+                Ads.isFullScreenShowing = false
+                ad = null
+                Ads.scope.launch { load() }
+            }
+
+            override fun onAdFailedToShowFullScreenContent(fullScreenContentError: FullScreenContentError) {
+                Ads.isFullScreenShowing = false
+                ad = null
+                Ads.scope.launch {
+                    firebaseEvent("appopen_fail", Bundle().apply { putString("stage", "show"); putString("error", fullScreenContentError.message.take(100)) })
+                    load()
+                }
+            }
+
+            override fun onAdClicked() {
+                firebaseEvent("appopen_click")
+                Ads.suppressAppOpen()
+            }
+
+            override fun onAdPaid(value: AdValue) = Ads.paid(value)
+        }
+        try {
+            current.show(activity)
+        } catch (e: Exception) {
+            Ads.isFullScreenShowing = false
+            logging("AppOpenAds.show", e)
+        }
+    }
+}

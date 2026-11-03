@@ -31,6 +31,7 @@ fun registerEvents() {
     registerAnalytics()
     registerEventSheet()
     registerEventBox()
+    registerAds()
     registerPermission()
     Registry.add(
         "make:event", "make:event [Screen] [event_name] [when] [--from x]", "Add an analytics event to event.md (snake_case, under 30 chars) and print its firebaseEvent line",
@@ -318,6 +319,66 @@ internal fun registerAnalytics() {
         "A :core:firebase module for all of Firebase (events, Crashlytics, Messaging, Remote Config; one BOM, latest versions), Timber and the Event Box, wired into every Android module",
     ) { makeAnalytics(it) }
     Registry.alias("make:analytics", "make:firebase")
+}
+
+internal fun registerAds() {
+    Registry.add(
+        "make:ads", "make:ads [--path :core:ads] [--ui views|compose|both] [--no-verify]",
+        "A :core:ads module: banner, native, interstitial, app open, splash, More Apps fallback, keys in AdsConstant; wired into every Android module",
+    ) { makeAds(it) }
+}
+
+/** make:ads: the ads module, on top of the Firebase module (offered first when it's missing). */
+internal fun makeAds(ctx: Ctx) {
+    val p = ctx.project
+    if (findFirebaseModule(p) == null) {
+        Ui.say("The ads read their keys from the Firebase module's AdsConstant and log through it: it comes first.", Tone.WARN)
+        if (!Ui.offer("Create the Firebase module now (artisan make:firebase)?")) throw CliError("Run artisan make:firebase first, then make:ads.")
+        makeAnalytics(ctx)
+    }
+    val p2 = Project.find(p.root) ?: p
+    // the UI: asked when a person is at the keyboard, else what the app uses
+    val appBuild = p2.appModule?.buildFile?.readText().orEmpty()
+    val appCompose = "org.jetbrains.kotlin.plugin.compose" in appBuild || "plugin.compose" in appBuild || "kotlin.compose" in appBuild ||
+        Regex("""\bcompose\s*(=\s*)?true""").containsMatchIn(appBuild)
+    val ui = ctx.option("--ui") ?: if (Ui.canAsk) {
+        val items = listOf(
+            "both" to "XML views + Compose wrappers",
+            "views" to "XML views only (AdView / NativeAdView in a FrameLayout)",
+            "compose" to "Compose wrappers (+ the views they use)",
+        ).let { if (appCompose) it else listOf(it[1], it[0], it[2]) }
+        Ui.say("Ad UI for this project (detected: ${if (appCompose) "Compose" else "views"}; 1 = recommended)", Tone.DIM)
+        items[Ui.pick("Ad UI", items)].first
+    } else null
+    Ui.say("Fetching the latest versions (ads SDK, lifecycle${if (ui != "views" && (appCompose || ui != null)) ", Compose BOM" else ""})...", Tone.DIM)
+    val plan = planAnalyticsModule(p2, ctx.option("--path") ?: ModuleKind.ADS.defaultPath, kind = ModuleKind.ADS, ui = ui)
+    applyAnalyticsModule(p2, plan)
+    p2.notes?.dir?.takeIf { File(it, "skill").isDirectory || File(it, "event").isDirectory }?.let { ws ->
+        val r = refreshAiTemplates(ws, listOf("skill/ads.md", "skill/README.md"))
+        (r.added + r.updated).forEach { Ui.say("  ${p2.rel(it)}: ${if (it in r.added) "added" else "updated"} (the ads skill for agents)", Tone.DIM) }
+        r.newCopies.forEach { Ui.say("  ${p2.rel(it)}: the skill list has a new row for ads.md; merge it into your skill/README.md", Tone.WARN) }
+    }
+    documentModuleEvents(p2, plan)?.let { Ui.say("  event.md: the ads module's own events ($it added, the sheet too)", Tone.DIM) }
+
+    Ui.table(
+        "make:ads: ${plan.module}", listOf("File", "What"),
+        plan.created.keys.map { Row(listOf(it, "created"), colors = listOf(null, Tone.OK)) } +
+            plan.changed.keys.map { Row(listOf(it, "changed"), colors = listOf(null, Tone.WARN)) },
+    )
+    Ui.say("Code in ${plan.pkg}: banner/ nativead/ inter/ appopen/ moreapps/${if (plan.created.keys.any { it.endsWith("/AdsCompose.kt") }) " compose/" else ""}", Tone.OK)
+    if (plan.wired.isNotEmpty()) Ui.say("  implementation(project(\"${plan.module}\")) added to ${plan.wired.joinToString(", ")}", Tone.OK)
+    plan.skipped.forEach { (m, why) -> Ui.say("  $m: skipped, $why", Tone.DIM) }
+    plan.notes.forEach { Ui.say("  $it", Tone.WARN) }
+    Ui.say("Still to do (once):", Tone.WARN)
+    Ui.say("  1. In Application.onCreate(), after Analytics.init(this):  Ads.init(this, excluded = listOf(SplashActivity::class.java))   (import ${plan.pkg}.Ads)")
+    Ui.say("  2. Splash: SplashAd.show(this) { goNext() }.  Each placement: BannerAds.show(...) / NativeAds.show(...) / Interstitial.show(...) { }")
+    Ui.say("  3. AdsConstant.APP_ID and the ad units are Google's test ids: set the real ones before a release.")
+    Ui.say("  How to use it all: ${plan.module.trimStart(':').replace(':', '/')}/README.md", Tone.DIM)
+
+    if (!ctx.has("--no-verify") && p2.gradlew.isFile) {
+        Ui.head("Verify")
+        verifyAgainstApp(p2, plan) { lib -> fetchBody(googleMavenMetadata(lib))?.let { stableVersions(it) } ?: emptyList() }
+    }
 }
 
 internal fun makeAnalytics(ctx: Ctx) {

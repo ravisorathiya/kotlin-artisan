@@ -82,7 +82,9 @@ Report LOCAL MISSING and unexpected OVERRIDE rows in the task notes.
 
 ## 4. Growing the module
 
-- **A new feature area** (in-app billing, an ads loader, app update, in-app review): a folder with a matching package,
+- **Ads** have their own module, `core/ads/` (`artisan make:ads`, skill `ads.md`). Its keys still live in `AdsConstant`
+  here. Never put ad loading code in this module.
+- **A new feature area** (in-app billing, app update, in-app review): a folder with a matching package,
   `core/firebase/src/main/java/<app>/firebase/<area>/`, only if it's Firebase- or ads-related; anything else is its own
   module. Keep `DebugConfig` settings-only: add the area's switches there, in their own commented section.
 - **A new Firebase product** (Performance, App Check, In-App Messaging): add it to `core/firebase`'s dependencies

@@ -1,0 +1,146 @@
+package {{PACKAGE}}.inter
+
+import android.app.Activity
+import android.os.Bundle
+import com.google.android.libraries.ads.mobile.sdk.common.AdLoadCallback
+import com.google.android.libraries.ads.mobile.sdk.common.AdRequest
+import com.google.android.libraries.ads.mobile.sdk.common.AdValue
+import com.google.android.libraries.ads.mobile.sdk.common.FullScreenContentError
+import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
+import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAd
+import com.google.android.libraries.ads.mobile.sdk.interstitial.InterstitialAdEventCallback
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import {{PACKAGE}}.Ads
+import {{FIREBASE}}.events.firebaseEvent
+import {{FIREBASE}}.log.logging
+import {{FIREBASE}}.remote.AdsConstant
+
+/**
+ * The interstitial, with the app's pacing rules from AdsConstant:
+ *   googleInterMaxInterAdsShow     at most this many per session
+ *   googleInterGapBetweenTwoInter  this many show() calls are skipped between two ads
+ *   googleInterCountDownTimer      no ad for this long (ms) after one closes, unless force = true
+ *
+ *     Interstitial.show(this, "home_to_detail") { startActivity(detailIntent) }   // onDone: always called, once
+ *
+ * Preloaded by Ads.init and again after each ad. Events: inter_load, inter_show, inter_fail, inter_click, and
+ * inter_skip (bundle "reason": max / gap / cooldown / not_ready / showing / finishing), with "from" = where.
+ */
+object Interstitial {
+    private var ad: InterstitialAd? = null
+    private var loading = false
+    private var cooldown: Job? = null
+    private var attempts = 0
+
+    /** Interstitials shown this session. */
+    var shown = 0
+        private set
+
+    val isReady: Boolean get() = ad != null
+
+    /** Loads one ad if none is ready (and the session limit isn't reached). */
+    fun load() {
+        if (loading || ad != null || shown >= AdsConstant.googleInterMaxInterAdsShow) return
+        loading = true
+        firebaseEvent("inter_load")
+        try {
+            InterstitialAd.load(AdRequest.Builder(AdsConstant.interstitialAds).build(), object : AdLoadCallback<InterstitialAd> {
+                override fun onAdLoaded(ad: InterstitialAd) {
+                    Ads.scope.launch {
+                        loading = false
+                        this@Interstitial.ad = ad
+                    }
+                }
+
+                override fun onAdFailedToLoad(adError: LoadAdError) {
+                    Ads.scope.launch {
+                        loading = false
+                        firebaseEvent("inter_fail", Bundle().apply { putString("stage", "load"); putString("error", adError.message.take(100)) })
+                    }
+                }
+            })
+        } catch (e: Exception) {
+            loading = false
+            logging("Interstitial.load", e)
+        }
+    }
+
+    /**
+     * Shows the interstitial if the pacing rules allow it, then runs [onDone] (after the ad closes, or right away when
+     * no ad shows). [from] names the place in events. [force] ignores the gap and the cooldown (never the session max).
+     */
+    fun show(activity: Activity, from: String, force: Boolean = false, onDone: () -> Unit) {
+        var finished = false
+        val done = {
+            if (!finished) {
+                finished = true
+                try { onDone() } catch (e: Exception) { logging("Interstitial.onDone", e) }
+            }
+        }
+        val reason = when {
+            shown >= AdsConstant.googleInterMaxInterAdsShow -> "max"
+            Ads.isFullScreenShowing -> "showing"
+            activity.isFinishing || activity.isDestroyed -> "finishing"
+            ad == null -> "not_ready"
+            !force && cooldown?.isActive == true -> "cooldown"
+            !force && ++attempts <= AdsConstant.googleInterGapBetweenTwoInter && shown > 0 -> "gap"
+            else -> null
+        }
+        if (reason != null) {
+            firebaseEvent("inter_skip", Bundle().apply { putString("reason", reason); putString("from", from.take(40)) })
+            if (reason == "not_ready") load()
+            done()
+            return
+        }
+        val current = ad ?: return done()
+        attempts = 0
+        current.adEventCallback = object : InterstitialAdEventCallback {
+            override fun onAdShowedFullScreenContent() {
+                Ads.isFullScreenShowing = true
+                shown++
+                firebaseEvent("inter_show", Bundle().apply { putString("from", from.take(40)) })
+            }
+
+            override fun onAdDismissedFullScreenContent() {
+                Ads.isFullScreenShowing = false
+                ad = null
+                Ads.scope.launch {
+                    startCooldown()
+                    done()
+                    load()
+                }
+            }
+
+            override fun onAdFailedToShowFullScreenContent(fullScreenContentError: FullScreenContentError) {
+                Ads.isFullScreenShowing = false
+                ad = null
+                Ads.scope.launch {
+                    firebaseEvent("inter_fail", Bundle().apply { putString("stage", "show"); putString("error", fullScreenContentError.message.take(100)) })
+                    done()
+                    load()
+                }
+            }
+
+            override fun onAdClicked() {
+                firebaseEvent("inter_click", Bundle().apply { putString("from", from.take(40)) })
+                Ads.suppressAppOpen()
+            }
+
+            override fun onAdPaid(value: AdValue) = Ads.paid(value)
+        }
+        try {
+            current.show(activity)
+        } catch (e: Exception) {
+            Ads.isFullScreenShowing = false
+            logging("Interstitial.show", e)
+            done()
+        }
+    }
+
+    private fun startCooldown() {
+        cooldown?.cancel()
+        cooldown = Ads.scope.launch { delay(AdsConstant.googleInterCountDownTimer.coerceAtLeast(0L)) }
+    }
+}

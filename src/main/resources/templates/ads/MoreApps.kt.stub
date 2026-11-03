@@ -1,0 +1,155 @@
+package {{PACKAGE}}.moreapps
+
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.LruCache
+import android.widget.ImageView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import {{PACKAGE}}.Ads
+import {{FIREBASE}}.events.firebaseEvent
+import {{FIREBASE}}.log.logging
+import {{FIREBASE}}.remote.AdsConstant
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
+
+/** One app of the More Apps feed (your own cross-promotion). */
+data class MoreApp(
+    val id: Int,
+    val name: String,
+    val description: String,
+    val link: String,
+    val icon: String,
+    val banner: String,
+    val screenshot: String,
+)
+
+/**
+ * The More Apps feed: `POST <AdsConstant.moreAppUrl>index.php` with `account_name = AdsConstant.moreAccountName`,
+ * answering `{"MESSAGE":..,"STATUS":..,"DATA":[{"id","app_name","app_description","app_link","app_icon",
+ * "app_banner","app_screenshot"}]}`. Loaded by Ads.init after Remote Config answers; every placement takes the next
+ * app in turn ([next]), so the apps rotate. No Retrofit / Gson / Glide: plain HTTP, org.json and a small image cache.
+ */
+object MoreApps {
+    @Volatile
+    private var apps: List<MoreApp> = emptyList()
+    @Volatile
+    private var loading = false
+    @Volatile
+    private var lastFailed = false
+    private var index = -1
+    private var loadedFor = ""
+
+    /** The apps of the last successful load (this app itself left out). */
+    val all: List<MoreApp> get() = apps
+
+    val hasApps: Boolean get() = apps.isNotEmpty()
+
+    /** The next app in turn, or null when the feed is empty. */
+    fun next(): MoreApp? = synchronized(this) {
+        val list = apps
+        if (list.isEmpty()) return null
+        index = (index + 1) % list.size
+        list[index]
+    }
+
+    /** Loads the feed when it's empty, failed last time, or the URL / account changed. */
+    fun loadIfNeeded() {
+        val url = AdsConstant.moreAppUrl.trim()
+        val account = AdsConstant.moreAccountName.trim()
+        if (url.isEmpty() || account.isEmpty() || loading) return
+        if (apps.isNotEmpty() && !lastFailed && loadedFor == "$url|$account") return
+        load(url, account)
+    }
+
+    /** Loads the feed now. */
+    fun load(url: String = AdsConstant.moreAppUrl, account: String = AdsConstant.moreAccountName) {
+        if (loading) return
+        loading = true
+        firebaseEvent("more_apps_load")
+        Ads.scope.launch {
+            val result = withContext(Dispatchers.IO) { runCatching { fetch(url.trim(), account.trim()) } }
+            loading = false
+            result.onSuccess { list ->
+                apps = list
+                lastFailed = false
+                loadedFor = "${url.trim()}|${account.trim()}"
+                firebaseEvent("more_apps_success", android.os.Bundle().apply { putInt("count", list.size) })
+            }.onFailure { e ->
+                lastFailed = true
+                firebaseEvent("more_apps_fail")
+                logging("MoreApps.load", e)
+            }
+        }
+    }
+
+    private fun fetch(url: String, account: String): List<MoreApp> {
+        val endpoint = if (url.endsWith(".php")) url else url.trimEnd('/') + "/index.php"
+        val c = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 15_000
+            readTimeout = 15_000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+        }
+        try {
+            c.outputStream.use { it.write("account_name=${URLEncoder.encode(account, "UTF-8")}".toByteArray()) }
+            if (c.responseCode !in 200..299) error("HTTP ${c.responseCode}")
+            val body = c.inputStream.bufferedReader().use { it.readText() }
+            val data = JSONObject(body).optJSONArray("DATA") ?: return emptyList()
+            val own = Ads.currentActivity?.packageName.orEmpty()
+            return (0 until data.length()).mapNotNull { i ->
+                val o = data.optJSONObject(i) ?: return@mapNotNull null
+                MoreApp(
+                    id = o.optInt("id"),
+                    name = o.optString("app_name"),
+                    description = o.optString("app_description"),
+                    link = o.optString("app_link"),
+                    icon = o.optString("app_icon"),
+                    banner = o.optString("app_banner"),
+                    screenshot = o.optString("app_screenshot"),
+                ).takeIf { it.link.isNotBlank() && (own.isEmpty() || own !in it.link) }
+            }
+        } finally {
+            c.disconnect()
+        }
+    }
+
+    /** Opens the app's store page. The app-open ad is skipped when the user comes back. */
+    fun open(context: Context, app: MoreApp, placement: String) {
+        firebaseEvent("${placement}_more_click")
+        Ads.suppressAppOpen()
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(app.link)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (e: ActivityNotFoundException) {
+            logging("MoreApps.open", e)
+        }
+    }
+
+    // ---------- images (icons, banners): a small in-memory cache, no image library ----------
+
+    private val images = object : LruCache<String, Bitmap>(8 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap) = value.byteCount
+    }
+
+    /** Shows the image at [url] in [view] (the view's tag guards against recycled views). */
+    fun loadImage(view: ImageView, url: String) {
+        if (url.isBlank()) return
+        view.tag = url
+        images.get(url)?.let { view.setImageBitmap(it); return }
+        Ads.scope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                runCatching { URL(url).openStream().use { BitmapFactory.decodeStream(it) } }.getOrNull()
+            } ?: return@launch
+            images.put(url, bitmap)
+            if (view.tag == url) view.setImageBitmap(bitmap)
+        }
+    }
+}

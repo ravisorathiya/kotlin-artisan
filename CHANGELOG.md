@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.16.0: make:ads, the second feature module
+
+- **`make:ads [--path :core:ads] [--ui views|compose|both] [--no-verify]`** creates a `:core:ads` module on top of the
+  Firebase module. If that module is missing, it offers to run `make:firebase` first.
+- **What the module does:**
+  - `Ads.init(app, excluded = ...)` starts the SDK and the app-open ad on resume. After Remote Config answers, it loads
+    the More Apps feed and preloads the interstitial.
+  - `BannerAds.show(...)` and `NativeAds.show(..., big)` (and `BannerAd` / `NativeAd` composables) apply one rule:
+    forced More Apps, else the Google ad, else the More Apps fallback, else the slot hides.
+  - `Interstitial.show(activity, from) { next() }` follows the `googleInter*` pacing (session max, gap, cooldown).
+  - `AppOpenAds` shows on resume. It is skipped over excluded screens, while another full-screen ad shows, and after
+    ad or More Apps clicks.
+  - `SplashAd.show(activity) { next() }` honours `onlineSplashAppOpen`.
+  - `MoreApps` is the feed (`moreAppUrl` + `moreAccountName`, plain HTTP and org.json), with rotation and its own
+    views and images: no Retrofit, Gson or Glide.
+  - There's an `Ads.onPaid` hook and `Ads.suppressAppOpen()`.
+- **It plugs into the rest:**
+  - the ad keys come from `AdsConstant`, and keys an older `AdsConstant` lacks are added;
+  - events go through `firebaseEvent`, and the fixed ones (`ads_init`, `inter_*`, `appopen_*`, `splash_ad_*`,
+    `more_apps_*`) go into event.md and the sheet;
+  - placement events (`<placement>_banner_*`, `_nat_*`, `_more_*`) take the placement name;
+  - errors go through `logging`;
+  - `skill/ads.md` is added to `:ai`, with rows in the workspace README.
+- **UI:** `make:ads` asks views, Compose or both, with the detected setup pre-selected. `--ui` skips the question,
+  and scripts and agents get the detected setup. The Compose wrappers copy the app's Compose plugin and reuse its
+  Compose BOM.
+- **Latest versions, checked against the app:** after compiling the module, it runs `<app>:checkDebugAarMetadata`.
+  When a library needs a newer compileSdk than the app has (lifecycle 2.11 needs 37), that library steps down to the
+  newest older minor that fits, and artisan says so.
+- **Catalog version refs shared with other libraries are never moved**, when bumping or stepping down. Our entry gets
+  its own `version = "..."` instead, so a library's version no longer drags another along.
+- Wiring skips the modules a new module depends on, so `:core:ads` is never added back into `:core:firebase`.
+
 ## 0.15.0: the :ai workspace knows the Firebase module
 
 - **New skill `skill/firebase_module.md`**, the playbook for `:core:firebase`. It covers:

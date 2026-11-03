@@ -137,7 +137,7 @@ artisan list                   # everything
 |---|---|
 | — | `find [words]` `list` `version` `doctor` `setup` `completion [shell]` `hotkeys` `hooks` `bump` `init [notes]` `status` `stats` |
 | `self:` | `update` |
-| `make:` | `string` `event` `permission` `screen` `bundle` `firebase` `plan` `version` `phase` `bug [--shot]` `ai` |
+| `make:` | `string` `event` `permission` `screen` `bundle` `firebase` `ads` `plan` `version` `phase` `bug [--shot]` `ai` |
 | `event:` | `sheet` `box [version]` |
 | `del:` | `asset` |
 | `check:` | `strings [lang] [-v]` `events` `staged` `links` `assets` |
@@ -259,6 +259,15 @@ new version goes next to it as `.new`.
     applied, updated live, and listed in a debug audit table (MATCH / OVERRIDE / MISSING / LOCAL MISSING). Then add
     the same key in the Firebase console.
   - `event:box` updates Event Box later. `make:analytics` still works as an alias.
+- `make:ads` creates a `:core:ads` module on top of it.
+  - **Formats:** banner, native, interstitial (max shows, gap and cooldown from `AdsConstant`), app open, and splash.
+  - **More Apps:** each placement falls back to your own More Apps feed when the Google ad fails, or always shows it
+    when forced.
+  - **One call per placement:** `BannerAds.show(...)`, `NativeAds.show(...)`, or `BannerAd(...)` in Compose.
+    Placement events are named after the placement.
+  - **Setup:** it asks views, Compose or both (detected; `--ui` skips the question) and uses the latest ads SDK.
+    It also checks the app still builds: a library that needs a newer compileSdk than the app has steps down to the
+    newest version that fits.
 - `make:event` adds a row, checking the name: snake_case, under 30 characters.
 - `check:events` compares the code and event.md both ways.
 - `artisan hooks install` stops a commit when they disagree. The hook also rebuilds `event_sheet.xlsx` and stages it,

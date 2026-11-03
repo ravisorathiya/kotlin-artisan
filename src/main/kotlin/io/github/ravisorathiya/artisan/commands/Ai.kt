@@ -15,7 +15,7 @@ fun registerAi() {
 
 /** Files every workspace gets from templates/ai/ (also added to an existing workspace when missing). */
 internal val AI_TEMPLATE_FILES = listOf(
-    "skill/README.md", "skill/firebase_module.md", "skill/permission.md", "skill/analytics_events.md", "skill/crash_hardening.md",
+    "skill/README.md", "skill/firebase_module.md", "skill/ads.md", "skill/permission.md", "skill/analytics_events.md", "skill/crash_hardening.md",
     "scripts/README.md", "scripts/recolor.py",
 )
 

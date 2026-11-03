@@ -1,0 +1,66 @@
+package {{PACKAGE}}.compose
+
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.widget.FrameLayout
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
+import {{PACKAGE}}.Ads
+import {{PACKAGE}}.banner.BannerAds
+import {{PACKAGE}}.nativead.NativeAds
+import {{FIREBASE}}.remote.AdsConstant
+
+/*
+ * Compose front end of the same placements (the views and the rules are in banner/ and nativead/):
+ *
+ *     BannerAd("main", AdsConstant.mainBannerAd, AdsConstant.showMainBannerAd)
+ *     NativeAd("lang", AdsConstant.languageSmallNativeAd, AdsConstant.showLanguageNativeAd,
+ *         moreAppFallback = AdsConstant.showMoreAppLanguage, onlyMoreApp = AdsConstant.onlyShowMoreAppLanguage)
+ *
+ * The slot collapses when nothing shows. Loaded once per composition (remember).
+ */
+
+@Composable
+fun BannerAd(
+    placement: String,
+    adUnit: String,
+    show: String = "yes",
+    modifier: Modifier = Modifier,
+    moreAppFallback: String = AdsConstant.showMoreAppNBanner,
+    onlyMoreApp: String = AdsConstant.onlyShowMoreAppNBanner,
+    onResult: ((Ads.Source) -> Unit)? = null,
+) {
+    val activity = LocalContext.current.findActivity() ?: return
+    val container = remember(placement) {
+        FrameLayout(activity).also { BannerAds.show(activity, placement, it, adUnit, show, moreAppFallback, onlyMoreApp, onResult = onResult) }
+    }
+    AndroidView(factory = { container }, modifier = modifier)
+}
+
+@Composable
+fun NativeAd(
+    placement: String,
+    adUnit: String,
+    show: String = "yes",
+    big: Boolean = false,
+    modifier: Modifier = Modifier,
+    moreAppFallback: String = AdsConstant.showMoreAppNBanner,
+    onlyMoreApp: String = AdsConstant.onlyShowMoreAppNBanner,
+    onResult: ((Ads.Source) -> Unit)? = null,
+) {
+    val activity = LocalContext.current.findActivity() ?: return
+    val container = remember(placement) {
+        FrameLayout(activity).also { NativeAds.show(activity, placement, it, adUnit, show, big, moreAppFallback, onlyMoreApp, onResult = onResult) }
+    }
+    AndroidView(factory = { container }, modifier = modifier)
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
