@@ -1,0 +1,274 @@
+# Firebase module
+
+The app's single place for Firebase:
+
+- analytics events, through `firebaseEvent()` and the event box for testers;
+- Crashlytics, Remote Config and Cloud Messaging;
+- logging, through Timber.
+
+Every Android module depends on it, so this all works from anywhere.
+Create it with `artisan make:firebase` (a walkthrough: [Add Firebase to an app](#/recipes/firebase)). The code is under package `com.example.app.firebase`, one folder (subpackage) per feature:
+
+```text
+com.example.app.firebase
+├── Analytics.kt          Analytics.init(app), setIcon, setRemoteHolders, setUserId, setUserProperty
+├── DebugConfig.kt        settings only: event box, bypass rules, log tags, Crashlytics and Remote Config switches
+├── events/
+│   └── FirebaseEvents.kt firebaseEvent(name, bundle)
+├── remote/
+│   ├── AdsConstant.kt    ad units and remote switches: one line per key
+│   ├── RemoteValue.kt    remoteString / remoteAdUnit / remoteInt / remoteLong / remoteDouble / remoteBoolean
+│   └── RemoteConfig.kt   fetch + live updates of every `by remote...` property, awaitFetch, onApplied, the audit
+├── crash/
+│   └── Crash.kt          Crash.log, Crash.record, Crash.setKey
+├── messaging/
+│   └── Messaging.kt      Messaging.token, subscribe, unsubscribe, setAutoInit
+└── log/
+    └── Logging.kt        logging(message), logging(tag, throwable)
+```
+
+Imports (Android Studio adds them on its own):
+
+```kotlin
+import com.example.app.firebase.Analytics
+import com.example.app.firebase.events.firebaseEvent
+import com.example.app.firebase.remote.AdsConstant
+import com.example.app.firebase.remote.RemoteConfig
+import com.example.app.firebase.crash.Crash
+import com.example.app.firebase.messaging.Messaging
+import com.example.app.firebase.log.logging
+```
+
+A new feature goes in its own folder (e.g. `ads/`, `billing/`) with a matching package.
+
+## Dependencies
+
+Everything Firebase comes from **one BOM** (`firebase-bom` (latest)), declared here as `api`. Every module that
+depends on this one gets the same versions:
+
+| Library | Use |
+|---|---|
+| `firebase-analytics` | events |
+| `firebase-crashlytics` | crash and non-fatal reports |
+| `firebase-messaging` | push |
+| `firebase-config` | Remote Config |
+| `timber` | logging (`api`, so every module can call `Timber` too) |
+| `kotlinx-coroutines-android` + `-play-services` | background work, `await()` on Firebase tasks |
+| `com.github.JpOriginDev:event-box` | the floating event box (JitPack) |
+
+- **Update Firebase:** change the BOM version in one place. All four libraries follow.
+- **Update Event Box:** `artisan event:box` moves it to the latest version.
+- **Gradle plugins in the app module:**
+  - `com.google.gms.google-services` and `google-services.json` are required;
+  - `com.google.firebase.crashlytics` is needed for crash reports with readable stack traces.
+
+## Set up
+
+`artisan make:firebase` wires this into your Application (or creates `App.kt` and names it in the manifest):
+
+```kotlin
+class App : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        Analytics                                         // Firebase, Timber (debug builds), Crashlytics, the event box,
+            .setIcon(R.mipmap.ic_launcher)                // and Remote Config for every property in AdsConstant
+            .setBubbleIconScaleType(ImageView.ScaleType.CENTER_CROP)
+            .setBubbleBackgroundColor(Color.parseColor("#0D9379"))
+            .setBubbleBorderColor(Color.parseColor("#CCE6E1"))
+            .setBubbleBorderWidthDp(1.5f)
+            .setBubbleCornerRadiusDp(-1f) // -1 = fully round
+            .init(this)
+    }
+}
+```
+
+- The builder calls go before `init`. Each one is optional: one left out keeps the default shown above (the icon:
+  the library's own).
+- `setRemoteHolders(AdsConstant, FeatureFlags)` does the same as `Analytics.init(this, AdsConstant, FeatureFlags)`.
+- The switches (event box on/off, session hours, Crashlytics in debug) stay in `DebugConfig`.
+- After `artisan self:update`, run `artisan make:firebase` again: files you haven't changed move to the new version, an
+  edited one gets the new version next to it as `.new`, and `DebugConfig` / `AdsConstant` are never touched.
+
+A new module that should log events or use Firebase: `implementation(project(":core:firebase"))`.
+
+## Analytics events
+
+```kotlin
+firebaseEvent("home_search_click")
+firebaseEvent("home_contact_click", bundleOf("source" to "list"))
+```
+
+- Names: snake_case, under 30 characters, `<screen>_<thing>_<action>`. Debug builds warn in logcat when a name breaks
+  the rule.
+- Every event is listed in `ai/.../event/event.md`:
+  - `artisan make:event <Screen> <name>` adds a row;
+  - `artisan check:events` compares the code with event.md;
+  - the event sheet is generated from event.md.
+- It works from any thread. The event box part runs on the main thread by itself, through a coroutine.
+- To watch events:
+  - the event box: set `DebugConfig.ENABLE_EVENT_BOX = true`, and back to `false` before a release;
+  - or logcat: `artisan app:logcat GlobalFirebaseEventNameTag`.
+
+### What the event box shows (bypass)
+
+Edit the **Bypass** section of `DebugConfig`. Left-out events still go to Firebase and logcat.
+
+| Setting | Default | Effect |
+|---|---|---|
+| `EVENT_BOX_BYPASS` | `true` | `false` shows every event |
+| `BYPASS_SUFFIXES` | lifecycle: `_on_create`, `_on_resume`, `_on_pause`, `_on_destroy`, `_on_backpress`, ... | name endings left out |
+| `BYPASS_PREFIXES` | none | name starts left out, e.g. `appopen_` |
+| `BYPASS_NAMES` | none | exact names left out |
+| `ALWAYS_SHOW` | none | exact names always shown, even when a rule above leaves them out |
+
+## Crashlytics
+
+```kotlin
+Crash.log("opened settings")                 // breadcrumb on the next report
+Crash.setKey("screen", "home")
+try { load() } catch (e: IOException) { Crash.record(e, "PlayerActivity.load") }
+Analytics.setUserId(user.id)                 // your own id, never an email or phone number
+```
+
+- Debug builds don't send reports (`DebugConfig.CRASHLYTICS_IN_DEBUG`).
+- `logging(tag, throwable)` also records a non-fatal in release builds (`DebugConfig.RECORD_CAUGHT_ERRORS`).
+
+## Remote Config
+
+**Add a key in one line, in `AdsConstant`** (or in your own object). That's all the code there is:
+
+```kotlin
+object AdsConstant {
+    // HOME: HomeActivity
+    var homeNativeAd by remoteAdUnit("ca-app-pub-xxx/yyy")       // Firebase key: "homeNativeAd"
+    var showHomeNativeAd by remoteString("yes")
+    var interGapSeconds by remoteLong(30L)
+}
+```
+
+Then add the same key in the Firebase console (Remote Config) when you want to change it remotely. Read it anywhere,
+like a normal property:
+
+```kotlin
+if (AdsConstant.showHomeNativeAd == "yes") loadNative(AdsConstant.homeNativeAd)
+```
+
+What happens:
+
+1. Until Remote Config answers, every property has its default (the value in the code).
+2. `Analytics.init` fetches. Each registered key then takes its Firebase value, and an empty value keeps the
+   default. Text that isn't a number becomes `invalidFallback`.
+3. With **live updates** on (`DebugConfig.REMOTE_CONFIG_LIVE_UPDATES`), a change published in the console applies
+   while the app is open.
+4. Debug builds log the **audit table** (logcat tag `RemoteConfigAudit`), most important first:
+
+```text
+REMOTE CONFIG: 9 keys, 1 local missing, 1 override, 2 missing, 5 match
+STATUS        | KEY              | LOCAL         | FIREBASE      | APPLIED
+--------------+------------------+---------------+---------------+--------
+LOCAL MISSING | oldBannerAd      | <no property> | "ca-app-..."  | <not used>
+OVERRIDE      | interGapSeconds  | "30"          | "45"          | "45"
+MISSING       | showHomeNativeAd | "yes"         | -             | "yes"
+MATCH         | homeNativeAd     | "ca-app-..."  | "ca-app-..."  | "ca-app-..."
+```
+
+| Status | Means | Do |
+|---|---|---|
+| `LOCAL MISSING` | a key in Firebase with no property | add the property, or delete the key in the console |
+| `OVERRIDE` | Firebase differs from the default | expected: the Firebase value is in use |
+| `MISSING` | a property not set in Firebase | fine, the default is in use; add it in the console to control it remotely |
+| `MATCH` | Firebase equals the default | nothing |
+
+| Delegate | Type | Empty Firebase value | Bad value |
+|---|---|---|---|
+| `remoteString(default, keepCurrentWhenEmpty = true, legacyKeys = [])` | `String` | keeps the current value (`false`: becomes `""`) | n/a |
+| `remoteAdUnit(default)` | `String` | keeps the current id | n/a |
+| `remoteInt(default, invalidFallback)` / `remoteLong` / `remoteDouble` | number | keeps the current value | `invalidFallback` |
+| `remoteBoolean(default)` | `Boolean` (`true/false`, `yes/no`, `1/0`) | keeps the current value | keeps the current value |
+
+### Keys every app has
+
+`AdsConstant` starts with the keys every app uses. Keep their names, because the Firebase console uses the same ones:
+
+| Section | Keys |
+|---|---|
+| Splash | `splashAppOpenAd`, `showSplashAppOpenAd`, `onlineSplashAppOpen` |
+| App open (on resume) | `googleAppOpen` |
+| Interstitial | `interstitialAds`, `googleInterMaxInterAdsShow`, `googleInterGapBetweenTwoInter`, `googleInterCountDownTimer` |
+| Language screen | `langBigNativeBanner`, `languageSmallNativeAd`, `showBigNativeLanguage`, `showLanguageNativeAd`, `showMoreAppLanguage`, `onlyShowMoreAppLanguage` |
+| Exit dialog | `nativeExitDialogAds`, `showAdsExitDialog`, `showMoreAppNative`, `onlyShowMoreAppNative` |
+| Banner (sample) | `mainBannerAd`, `showMainBannerAd`: copy per screen |
+| More Apps for banners | `showMoreAppNBanner`, `onlyShowMoreAppNBanner` |
+| More Apps feed, update, store | `moreAppUrl`, `moreAccountName` (legacy `moreAppAccountName`), `updateNow`, `playStoreLink` |
+| Flags | `firstTime` |
+
+**More Apps** (your own cross-promotion ad), per placement:
+
+- `showMoreApp...` = `"yes"`: when the Google ad **fails**, a More Apps ad shows there instead (fallback).
+- `onlyShowMoreApp...` = `"yes"`: the More Apps ad **always** shows there, never the Google one (forced).
+
+```kotlin
+when {
+    AdsConstant.onlyShowMoreAppNBanner == "yes" -> showMoreAppsBanner()
+    AdsConstant.showMainBannerAd == "yes" -> loadBanner(AdsConstant.mainBannerAd, onFailed = {
+        if (AdsConstant.showMoreAppNBanner == "yes") showMoreAppsBanner()
+    })
+}
+```
+
+`moreAppUrl` is `http://` by default. Android blocks plain HTTP unless the app's network security config allows that
+host, so use `https://`, or allow the host in the config.
+
+- **Renamed a key in the console?** Use `legacyKeys = listOf("oldName")`: the old key is read while the new one is empty.
+- **Splash screen:** wait for the first fetch, at most `DebugConfig.REMOTE_CONFIG_TIMEOUT_MILLIS`:
+  ```kotlin
+  lifecycleScope.launch { RemoteConfig.awaitFetch(); if (AdsConstant.showSplashAppOpenAd == "yes") showAppOpen() }
+  ```
+- **React to changes:** `RemoteConfig.onApplied { refreshAds() }` runs on the main thread after each fetch and live update.
+- **Your own holder object:** `Analytics.init(this, AdsConstant, FeatureFlags)`. Every key must be unique across holders.
+- **A one-off key without a property:** `RemoteConfig.string("welcome_text", "Hi")`, plus `bool`, `long`, `double`.
+- **Events** (already in event.md): `remote_cfg_load_start`, `_load_success`, `_load_failed`, `_timeout`,
+  `_live_applied`, `_live_failed`.
+- The ids in `AdsConstant` are Google's **test ids**. Replace them, or set them in the console, before a release.
+
+## Cloud Messaging
+
+```kotlin
+lifecycleScope.launch {
+    val token = Messaging.token()            // send to your server
+    Messaging.subscribe("news")
+}
+```
+
+To show pushes while the app is open, add your own service to the app module and declare it in its manifest:
+
+```kotlin
+class PushService : FirebaseMessagingService() {
+    override fun onMessageReceived(message: RemoteMessage) { /* build a notification */ }
+    override fun onNewToken(token: String) { /* send to your server */ }
+}
+```
+
+```xml
+<service android:name=".PushService" android:exported="false">
+    <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+</service>
+```
+
+Android 13+ needs `POST_NOTIFICATIONS`: `artisan make:permission <Screen> noti` adds the permission flow.
+
+## Logging
+
+```kotlin
+logging("cache cleared")                     // debug log (Timber, debug builds only)
+logging("SyncWorker", e)                     // error: logcat, plus a Crashlytics non-fatal in release
+Timber.d("anything else")                    // Timber is available in every module too
+```
+
+Not for analytics: use `firebaseEvent` for events.
+
+## Rules
+
+- Keep app logic out of this module: it's Firebase and logging only.
+- Only one place calls `Analytics.init`: `Application.onCreate()`.
+- `DebugConfig.ENABLE_EVENT_BOX` is `false` in every release build.

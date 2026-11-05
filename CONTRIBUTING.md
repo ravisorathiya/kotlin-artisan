@@ -14,8 +14,17 @@ Run it inside any Android project to try a change.
 
 ## Docs
 
-The docs are `README.md` (and `CHANGELOG.md`). A user-facing change (command, flag, `artisan.json` key) updates
-them in the same change as the code. The `:ai` workspace rules live in `src/main/resources/templates/ai/`.
+The docs are `README.md`, `CHANGELOG.md` and the site in `docs/`. A user-facing change (command, flag,
+`artisan.json` key) updates them in the same change as the code.
+
+The site is GitHub Pages from `main` / `docs`: Vue 3 and Tailwind from a CDN, no build step and no `node_modules`.
+
+- **Pages:** Markdown in `docs/content/`. The sidebar, the top nav and the page order are `SIDEBAR` in `docs/app.js`;
+  a new page is one entry there plus its `.md` file.
+- **Blocks:** `::: tip Title` / `warning` / `danger` / `info` / `details`, closed by `:::`. `::: steps` turns its
+  `###` headings into numbered steps. Link other pages as `#/guide/installation`.
+- **Changelog and Contributing pages:** read straight from this repo, so they're never out of date.
+- **Preview:** `python -m http.server 8000 -d docs`, then open http://localhost:8000. The `:ai` workspace rules live in `src/main/resources/templates/ai/`.
 
 ## Releasing (maintainers)
 

@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <b><a href="https://ravisorathiya.github.io/kotlin-artisan/">Documentation</a></b> ·
   <b><a href="#install">Install</a></b> ·
   <a href="#setup-java-and-adb">Setup</a> ·
   <a href="#30-second-tour">30-second tour</a> ·

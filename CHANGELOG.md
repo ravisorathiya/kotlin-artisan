@@ -11,7 +11,7 @@
 - **Bubble style, builder style:** `setBubbleIconScaleType`, `setBubbleBackgroundColor`, `setBubbleBorderColor`,
   `setBubbleBorderWidthDp` and `setBubbleCornerRadiusDp` (-1 = round). The wired call writes each default out
   (CENTER_CROP, #0D9379, #CCE6E1, 1.5dp, round), so you change them where you call `init`.
-- **An existing module is updated, not refused.** After `artisan update`, `make:firebase` on a project that has the
+- **An existing module is updated, not refused.** After `artisan self:update`, `make:firebase` on a project that has the
   module brings it to the new version:
   - a missing file is added;
   - a file artisan wrote and nobody changed is replaced (module code now carries an `// artisan:managed` marker);

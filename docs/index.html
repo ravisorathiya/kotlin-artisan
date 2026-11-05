@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>kotlin-artisan · an artisan-style CLI for Android projects</title>
+  <meta name="description" content="Type a word and your Android project does the rest: phone switches for QA, generators, Firebase and ads modules, translation checks, and an AI agent workspace.">
+  <meta property="og:title" content="kotlin-artisan">
+  <meta property="og:description" content="An artisan-style command line for Android projects.">
+  <meta property="og:image" content="https://raw.githubusercontent.com/ravisorathiya/kotlin-artisan/main/.github/assets/banner.png">
+  <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+
+  <!-- dark mode before first paint: no flash -->
+  <script>
+    (function () {
+      var t = localStorage.getItem('theme');
+      if (t === 'dark' || (!t && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark');
+    })();
+  </script>
+
+  <script src="https://cdn.tailwindcss.com/3.4.16?plugins=typography"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#ecfdf7', 100: '#d1faec', 200: '#a7f3d9', 300: '#6ee7c0', 400: '#34d3a3', 500: '#10b981', 600: '#0d9379', 700: '#0b7563', 800: '#0b5d50', 900: '#0a4d43' },
+          },
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link id="hljs-light" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/styles/github.min.css">
+  <link id="hljs-dark" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/styles/github-dark.min.css" disabled>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-white text-slate-700 antialiased dark:bg-[#1b1b1f] dark:text-slate-300">
+  <div id="app" v-cloak>
+    <div class="fixed inset-x-0 top-0 z-[60] h-0.5 origin-left bg-brand-500 transition-all duration-300" :style="{ transform: 'scaleX(' + progress + ')', opacity: progress > 0 && progress < 1 ? 1 : 0 }"></div>
+    <!-- ============ top bar ============ -->
+    <header class="sticky top-0 z-40 border-b border-slate-200/80 bg-white/85 backdrop-blur dark:border-white/10 dark:bg-[#1b1b1f]/85">
+      <div class="mx-auto flex h-16 max-w-[90rem] items-center gap-4 px-4 sm:px-6">
+        <button class="-ml-1 rounded-md p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 lg:hidden" @click="menuOpen = !menuOpen" aria-label="Menu" v-if="!isHome">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+        <a href="#/" class="flex items-center gap-2.5 font-semibold text-slate-900 dark:text-white">
+          <img src="assets/logo.svg" alt="" class="h-7 w-7">
+          <span class="text-[17px] tracking-tight">kotlin-artisan</span>
+        </a>
+        <a :href="releaseUrl" target="_blank" rel="noopener" class="hidden rounded-full border border-brand-500/30 bg-brand-50 px-2 py-0.5 font-mono text-xs font-medium text-brand-700 hover:border-brand-500 dark:bg-brand-500/10 dark:text-brand-300 sm:inline">{{ version }}</a>
+
+        <button @click="openSearch" class="ml-auto flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm text-slate-400 transition hover:border-brand-500 dark:border-white/10 dark:bg-white/5 md:ml-6 md:w-64">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path stroke-linecap="round" d="m20 20-3.5-3.5"/></svg>
+          <span class="hidden md:inline">Search docs</span>
+          <kbd class="ml-auto hidden rounded border border-slate-200 px-1.5 font-sans text-[11px] dark:border-white/10 md:inline">Ctrl K</kbd>
+        </button>
+
+        <nav class="ml-auto hidden items-center gap-6 text-sm font-medium lg:flex">
+          <a v-for="l in topNav" :key="l.path" :href="'#' + l.path" class="transition hover:text-brand-600 dark:hover:text-brand-400" :class="section === l.section ? 'text-brand-600 dark:text-brand-400' : 'text-slate-600 dark:text-slate-300'">{{ l.text }}</a>
+        </nav>
+        <div class="flex items-center gap-1 lg:border-l lg:border-slate-200 lg:pl-4 dark:lg:border-white/10">
+          <button @click="toggleDark" class="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-white/5 dark:hover:text-white" :aria-label="dark ? 'Light mode' : 'Dark mode'">
+            <svg v-if="dark" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path stroke-linecap="round" d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            <svg v-else class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linejoin="round" d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+          </button>
+          <a :href="repo" target="_blank" rel="noopener" class="rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-white/5 dark:hover:text-white" aria-label="GitHub">
+            <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.38-5.26 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- ============ home ============ -->
+    <transition name="view" mode="out-in">
+    <main v-if="isHome" key="home">
+      <section class="relative overflow-hidden">
+        <div class="pointer-events-none absolute inset-x-0 -top-40 -z-10 flex justify-center blur-3xl">
+          <div class="h-[28rem] w-[56rem] rounded-full bg-gradient-to-tr from-brand-300/40 via-teal-200/30 to-sky-300/30 opacity-70 dark:from-brand-500/20 dark:via-teal-500/10 dark:to-sky-500/10"></div>
+        </div>
+        <div class="mx-auto grid max-w-6xl items-center gap-12 px-6 pb-16 pt-16 lg:grid-cols-[1.1fr_1fr] lg:pt-24">
+          <div>
+            <p class="mb-4 inline-flex items-center gap-2 rounded-full border border-brand-500/30 bg-brand-50/80 px-3 py-1 text-xs font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
+              <span class="h-1.5 w-1.5 rounded-full bg-brand-500"></span> Windows · macOS · Linux, Java 17+
+            </p>
+            <h1 class="text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-6xl">
+              <span class="bg-gradient-to-r from-brand-600 to-teal-400 bg-clip-text text-transparent">kotlin-artisan</span>
+            </h1>
+            <p class="mt-4 text-2xl font-semibold tracking-tight text-slate-800 dark:text-slate-100 sm:text-3xl">Type a word. Your Android project does the rest.</p>
+            <p class="mt-5 max-w-xl text-lg leading-relaxed text-slate-600 dark:text-slate-400">
+              An <code class="rounded bg-slate-100 px-1.5 py-0.5 text-[0.9em] dark:bg-white/10">artisan</code>-style command line for Android: dark mode on the phone, a screenshot, the debug install, missing translations, a whole Firebase module. One word each.
+            </p>
+            <div class="mt-8 flex flex-wrap gap-3">
+              <a href="#/guide/introduction" class="rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand-600/20 transition hover:bg-brand-700">Get started</a>
+              <a href="#/guide/installation" class="rounded-full border border-slate-300 px-6 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-brand-500 hover:text-brand-700 dark:border-white/15 dark:text-slate-200 dark:hover:text-brand-300">Install</a>
+              <a href="#/commands/" class="rounded-full px-6 py-2.5 text-sm font-semibold text-slate-600 transition hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300">All commands →</a>
+            </div>
+          </div>
+          <!-- terminal -->
+          <div class="overflow-hidden rounded-2xl border border-slate-200 bg-[#0f1419] shadow-2xl shadow-slate-900/20 dark:border-white/10">
+            <div class="flex items-center gap-1.5 border-b border-white/5 px-4 py-3">
+              <span class="h-3 w-3 rounded-full bg-[#ff5f57]"></span><span class="h-3 w-3 rounded-full bg-[#febc2e]"></span><span class="h-3 w-3 rounded-full bg-[#28c840]"></span>
+              <span class="ml-3 font-mono text-xs text-slate-500">~/projects/my-app</span>
+            </div>
+            <pre class="overflow-x-auto px-5 py-4 font-mono text-[13px] leading-7 text-slate-300"><template v-for="(line, i) in terminal" :key="i"><span v-if="line.c" class="text-slate-500">{{ line.c }}
+</span><span v-else><span class="text-brand-400">$</span> <span class="text-white">{{ line.cmd }}</span><span class="text-slate-500">{{ line.note }}</span>
+</span></template><span class="text-brand-400">$</span> <span class="inline-block h-4 w-2 translate-y-0.5 animate-pulse bg-brand-400"></span></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- install -->
+      <section class="mx-auto max-w-6xl px-6">
+        <div class="rounded-2xl border border-slate-200 bg-slate-50/70 p-6 dark:border-white/10 dark:bg-white/[0.03]">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="mr-2 text-sm font-semibold text-slate-900 dark:text-white">Install</span>
+            <button v-for="(cmd, os) in installs" :key="os" @click="installTab = os" class="rounded-full px-3 py-1 text-xs font-medium transition" :class="installTab === os ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-200/70 dark:text-slate-400 dark:hover:bg-white/10'">{{ os }}</button>
+          </div>
+          <div class="mt-4 flex items-center gap-3 rounded-xl bg-[#0f1419] px-4 py-3 font-mono text-[13px] text-slate-200">
+            <span class="select-none text-brand-400">$</span>
+            <code class="flex-1 overflow-x-auto whitespace-nowrap">{{ installs[installTab] }}</code>
+            <button @click="copy(installs[installTab], 'install')" class="shrink-0 rounded-md border border-white/10 px-2 py-1 text-xs text-slate-400 transition hover:border-brand-400 hover:text-white">{{ copied === 'install' ? 'Copied' : 'Copy' }}</button>
+          </div>
+          <p class="mt-3 text-sm text-slate-500">Installs <code>kotlin-artisan</code> and the short alias <code>artisan</code>, then puts them on your PATH. Open a new terminal afterwards. <a href="#/guide/installation" class="font-medium text-brand-600 hover:underline dark:text-brand-400">More about installing</a></p>
+        </div>
+      </section>
+
+      <!-- features -->
+      <section class="mx-auto max-w-6xl px-6 py-20">
+        <h2 class="text-center text-3xl font-bold tracking-tight text-slate-900 dark:text-white">The parts of Android work you repeat every day</h2>
+        <p class="mx-auto mt-3 max-w-2xl text-center text-slate-600 dark:text-slate-400">It finds the project root, the modules, the app module, the applicationId, the version and the Firebase project on its own. There's nothing to set up.</p>
+        <div class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <a v-for="f in features" :key="f.title" :href="'#' + f.link" class="group rounded-2xl border border-slate-200 bg-white p-6 transition hover:-translate-y-0.5 hover:border-brand-500/60 hover:shadow-xl hover:shadow-brand-600/5 dark:border-white/10 dark:bg-white/[0.02]">
+            <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-xl dark:bg-brand-500/10">{{ f.icon }}</div>
+            <h3 class="mt-4 font-semibold text-slate-900 group-hover:text-brand-700 dark:text-white dark:group-hover:text-brand-300">{{ f.title }}</h3>
+            <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">{{ f.text }}</p>
+          </a>
+        </div>
+      </section>
+
+      <!-- screenshots -->
+      <section class="border-y border-slate-200 bg-slate-50/70 py-20 dark:border-white/10 dark:bg-white/[0.02]">
+        <div class="mx-auto max-w-6xl px-6">
+          <h2 class="text-center text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Output that reads like a report</h2>
+          <p class="mx-auto mt-3 max-w-2xl text-center text-slate-600 dark:text-slate-400">Coloured boxed tables in a terminal. Compact tab-separated rows when the output goes to a script or an AI agent. This is real output from a production app.</p>
+          <div class="mt-10 grid gap-6 md:grid-cols-2">
+            <figure v-for="s in shots" :key="s.src" class="overflow-hidden rounded-2xl border border-slate-200 bg-[#0f1419] dark:border-white/10">
+              <img :src="s.src" :alt="s.alt" class="w-full" loading="lazy">
+              <figcaption class="border-t border-white/5 px-4 py-2.5 font-mono text-xs text-slate-400">{{ s.cap }}</figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <section class="mx-auto max-w-3xl px-6 py-20 text-center">
+        <h2 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">Start with one command</h2>
+        <p class="mt-3 text-slate-600 dark:text-slate-400">Run <code class="rounded bg-slate-100 px-1.5 py-0.5 dark:bg-white/10">artisan</code> inside any Gradle project and type what you want. It searches every command as you type.</p>
+        <div class="mt-8 flex justify-center gap-3">
+          <a href="#/guide/quick-start" class="rounded-full bg-brand-600 px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700">Take the 30-second tour</a>
+          <a :href="repo" target="_blank" rel="noopener" class="rounded-full border border-slate-300 px-6 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-brand-500 dark:border-white/15 dark:text-slate-200">Star on GitHub</a>
+        </div>
+      </section>
+
+      <footer class="border-t border-slate-200 py-8 text-center text-sm text-slate-500 dark:border-white/10">
+        Released under the <a :href="repo + '/blob/main/LICENSE'" class="hover:text-brand-600">MIT License</a>. Copyright © 2026 ravisorathiya
+      </footer>
+    </main>
+
+    <!-- ============ docs ============ -->
+    <div v-else key="docs" class="mx-auto flex max-w-[90rem]">
+      <!-- sidebar -->
+      <div v-if="menuOpen" class="fixed inset-0 z-30 bg-black/30 backdrop-blur-sm lg:hidden" @click="menuOpen = false"></div>
+      <aside class="fixed bottom-0 top-16 z-30 w-72 shrink-0 overflow-y-auto border-r border-slate-200 bg-white px-6 pb-10 pt-6 transition-transform dark:border-white/10 dark:bg-[#1b1b1f] lg:sticky lg:block lg:translate-x-0 lg:bg-transparent dark:lg:bg-transparent"
+             :class="menuOpen ? 'translate-x-0' : '-translate-x-full'">
+        <nav>
+          <div v-for="g in sidebar" :key="g.text" class="mb-7">
+            <p class="mb-2 text-[13px] font-semibold uppercase tracking-wider text-slate-900 dark:text-white">{{ g.text }}</p>
+            <ul class="space-y-0.5 border-l border-slate-200 dark:border-white/10">
+              <li v-for="item in g.items" :key="item.path">
+                <a :href="'#' + item.path" @click="menuOpen = false"
+                   class="-ml-px block border-l py-1.5 pl-4 text-[14px] transition"
+                   :class="item.path === path ? 'border-brand-500 font-medium text-brand-600 dark:text-brand-400' : 'border-transparent text-slate-600 hover:border-slate-400 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'">{{ item.text }}</a>
+              </li>
+            </ul>
+          </div>
+        </nav>
+      </aside>
+
+      <!-- content -->
+      <main class="min-w-0 flex-1 px-5 pb-24 pt-10 sm:px-10 xl:px-16">
+        <div class="mx-auto max-w-3xl">
+          <p v-if="page" class="mb-2 text-sm font-medium text-brand-600 transition-opacity dark:text-brand-400">{{ page.group }}</p>
+          <div v-if="loading" class="space-y-4">
+            <div class="h-9 w-2/3 animate-pulse rounded bg-slate-100 dark:bg-white/5"></div>
+            <div class="h-4 animate-pulse rounded bg-slate-100 dark:bg-white/5"></div>
+            <div class="h-4 w-5/6 animate-pulse rounded bg-slate-100 dark:bg-white/5"></div>
+          </div>
+          <transition name="page" mode="out-in" @after-enter="buildToc">
+          <article v-show="!loading" :key="renderedPath" ref="article" @click="onArticleClick"
+                   class="doc prose prose-slate max-w-none dark:prose-invert prose-headings:scroll-mt-24 prose-headings:tracking-tight prose-a:text-brand-600 prose-a:no-underline hover:prose-a:underline dark:prose-a:text-brand-400 prose-code:before:content-none prose-code:after:content-none prose-pre:bg-transparent prose-pre:p-0"
+                   v-html="html"></article>
+          </transition>
+
+          <div v-if="!loading && page" class="mt-14 border-t border-slate-200 pt-6 dark:border-white/10">
+            <a v-if="page.file" :href="editUrl" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 20h4L18.5 9.5a2.8 2.8 0 0 0-4-4L4 16v4Z"/></svg>
+              Edit this page on GitHub
+            </a>
+            <div class="mt-6 grid gap-4 sm:grid-cols-2">
+              <a v-if="prev" :href="'#' + prev.path" class="rounded-xl border border-slate-200 px-4 py-3 transition hover:border-brand-500 dark:border-white/10">
+                <span class="block text-xs text-slate-500">Previous</span>
+                <span class="font-medium text-brand-600 dark:text-brand-400">← {{ prev.text }}</span>
+              </a>
+              <span v-else></span>
+              <a v-if="next" :href="'#' + next.path" class="rounded-xl border border-slate-200 px-4 py-3 text-right transition hover:border-brand-500 dark:border-white/10">
+                <span class="block text-xs text-slate-500">Next</span>
+                <span class="font-medium text-brand-600 dark:text-brand-400">{{ next.text }} →</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- on this page -->
+      <aside class="sticky top-16 hidden h-[calc(100vh-4rem)] w-60 shrink-0 overflow-y-auto py-10 pr-6 xl:block">
+        <div v-if="toc.length">
+          <p class="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-900 dark:text-white">On this page</p>
+          <ul class="space-y-1.5 border-l border-slate-200 text-[13px] dark:border-white/10">
+            <li v-for="h in toc" :key="h.id">
+              <a :href="'#' + path + '#' + h.id" @click.prevent="scrollTo(h.id)"
+                 class="-ml-px block border-l transition"
+                 :class="[h.level === 3 ? 'pl-7' : 'pl-4', activeId === h.id ? 'border-brand-500 text-brand-600 dark:text-brand-400' : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white']">{{ h.text }}</a>
+            </li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+    </transition>
+
+    <!-- ============ search ============ -->
+    <div v-if="searchOpen" class="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 px-4 pt-[12vh] backdrop-blur-sm" @click.self="searchOpen = false">
+      <div class="w-full max-w-xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-white/10 dark:bg-[#222226]">
+        <div class="flex items-center gap-3 border-b border-slate-200 px-4 dark:border-white/10">
+          <svg class="h-5 w-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path stroke-linecap="round" d="m20 20-3.5-3.5"/></svg>
+          <input ref="searchInput" v-model="query" @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)" @keydown.enter.prevent="go(results[selected])" @keydown.esc="searchOpen = false"
+                 class="h-14 flex-1 bg-transparent text-[15px] text-slate-900 outline-none placeholder:text-slate-400 dark:text-white" placeholder="Search commands, modules, settings...">
+          <kbd class="rounded border border-slate-200 px-1.5 text-[11px] text-slate-400 dark:border-white/10">Esc</kbd>
+        </div>
+        <ul class="max-h-[60vh] overflow-y-auto p-2" v-if="results.length">
+          <li v-for="(r, i) in results" :key="r.key">
+            <a :href="'#' + r.path + (r.id ? '#' + r.id : '')" @click.prevent="go(r)" @mousemove="selected = i"
+               class="block rounded-lg px-3 py-2.5" :class="i === selected ? 'bg-brand-600 text-white' : 'text-slate-700 dark:text-slate-300'">
+              <span class="block text-xs" :class="i === selected ? 'text-brand-100' : 'text-slate-400'">{{ r.page }}</span>
+              <span class="block font-medium">{{ r.title }}</span>
+              <span v-if="r.snippet" class="mt-0.5 block truncate text-xs" :class="i === selected ? 'text-brand-50' : 'text-slate-500'">{{ r.snippet }}</span>
+            </a>
+          </li>
+        </ul>
+        <p v-else-if="query" class="px-4 py-10 text-center text-sm text-slate-500">No results for "{{ query }}"</p>
+        <p v-else class="px-4 py-8 text-center text-sm text-slate-500">Try <button class="text-brand-600 dark:text-brand-400" @click="query = 'dark'">dark</button>, <button class="text-brand-600 dark:text-brand-400" @click="query = 'remote config'">remote config</button> or <button class="text-brand-600 dark:text-brand-400" @click="query = 'permission'">permission</button></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@15.0.7/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/languages/powershell.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/languages/kotlin.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/languages/groovy.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

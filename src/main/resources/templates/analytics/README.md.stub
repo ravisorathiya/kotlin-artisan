@@ -86,7 +86,7 @@ class App : Application() {
   the library's own).
 - `setRemoteHolders(AdsConstant, FeatureFlags)` does the same as `Analytics.init(this, AdsConstant, FeatureFlags)`.
 - The switches (event box on/off, session hours, Crashlytics in debug) stay in `DebugConfig`.
-- After `artisan update`, run `artisan make:firebase` again: files you haven't changed move to the new version, an
+- After `artisan self:update`, run `artisan make:firebase` again: files you haven't changed move to the new version, an
   edited one gets the new version next to it as `.new`, and `DebugConfig` / `AdsConstant` are never touched.
 
 A new module that should log events or use Firebase: `implementation(project("{{MODULE}}"))`.
