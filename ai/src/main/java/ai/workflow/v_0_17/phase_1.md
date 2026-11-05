@@ -8,7 +8,7 @@
   - Tests share the global `Registry`: `Registry.clear()` keeps groups registered by one test (make:ads) from changing FuzzyTest results.
   - First made as `notes/` (artisan's notes format); the user wanted the `:ai` workspace: moved here 2026-11-05.
 * [x] **make:lang** — see [make_lang.md](../../plan/make_lang.md)
-* [~] **purge** — see [purge.md](../../plan/purge.md) (asked 2026-11-05)
+* [x] **purge** — see [purge.md](../../plan/purge.md) (asked 2026-11-05)
 * [ ] **check:release** — see [check_release.md](../../plan/check_release.md)
 * [ ] **make:update** — see [make_update.md](../../plan/make_update.md)
 * [ ] **deps:outdated / deps:update** — see [deps.md](../../plan/deps.md)

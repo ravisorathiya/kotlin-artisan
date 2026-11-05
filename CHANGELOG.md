@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.18.0: purge, to take out what artisan made
+
+- **`artisan purge [ai|ads|firebase|permission|notes|hooks|config|all]`** removes what artisan generated. With no
+  argument it shows a picker of what this project has.
+  - `ads` / `firebase`: the module folder, its include, the `implementation(project(...))` lines, the catalog entries
+    nothing else uses and the module's own events in event.md (the sheet is rebuilt).
+  - `firebase` also undoes the Application wiring: the `Analytics...init(this)` call goes, and an `App.kt` that
+    `make:firebase` created goes with its `android:name`.
+  - `ai`, `permission`, `notes`, `hooks` (yours come back) and `config` (`artisan.json`, `artisan/stubs/`, the cache).
+- **It never edits your code.** When something you wrote still uses it (a `firebaseEvent` call, an import,
+  `PermissionFlow(...)`), it removes nothing and lists every `file:line`. Firebase waits for ads, or goes with it.
+- **Preview, confirm, undo.** It shows every file it deletes or changes and what it leaves alone (the google-services
+  and Crashlytics plugins, JitPack). It needs those files committed, so `git checkout -- .` undoes it (`--force`
+  skips the check). `--dry-run` only shows.
+- For contributors: the repo's own agent workspace is now an `:ai` module (`ai/src/main/java/ai/`), like `make:ai` makes.
+
 ## 0.17.0: make:lang, every language in one go
 
 - **`make:lang [codes...] [--module :x]`** adds the languages most apps ship: `ar bn de es fr hi ja pt ru ur zh`

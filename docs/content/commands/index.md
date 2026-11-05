@@ -22,6 +22,7 @@ Plain `artisan` searches all of these as you type, by name, word, initials or de
 | `hooks [install\|uninstall\|status]` | Git hooks: block commits with event.md or translations out of sync |
 | `status` | Version, phase table and every open item |
 | `stats` | Code per module, biggest files, notes totals |
+| `purge [ai\|ads\|firebase\|permission\|notes\|hooks\|config\|all] [--dry-run] [--force]` | Remove what artisan generated: shows everything first, stops if your code still uses it |
 | `bump [patch\|minor\|major\|code]` | Raise versionName / versionCode in the app build file and start the workflow folder |
 
 ## Phone: `app:`

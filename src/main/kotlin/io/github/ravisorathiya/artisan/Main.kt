@@ -12,6 +12,7 @@ import io.github.ravisorathiya.artisan.commands.registerCustom
 import io.github.ravisorathiya.artisan.commands.registerMisc
 import io.github.ravisorathiya.artisan.commands.registerNotes
 import io.github.ravisorathiya.artisan.commands.registerOpen
+import io.github.ravisorathiya.artisan.commands.registerPurge
 import io.github.ravisorathiya.artisan.commands.registerSetup
 import io.github.ravisorathiya.artisan.commands.registerTerminal
 import io.github.ravisorathiya.artisan.commands.StatusCache
@@ -43,6 +44,7 @@ fun registerBuiltIns() {
     registerEvents()
     registerBundle()
     registerTerminal()
+    registerPurge()
 }
 
 fun main(argv: Array<String>) {

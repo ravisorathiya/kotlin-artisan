@@ -11,7 +11,7 @@ import java.io.File
 // ---------- Wiring Analytics into the app's Application class ----------
 
 /** The `<application ...>` opening tag, or null. */
-private fun applicationTag(manifest: String): MatchResult? = Regex("""<application\b[^>]*>""").find(manifest)
+internal fun applicationTag(manifest: String): MatchResult? = Regex("""<application\b[^>]*>""").find(manifest)
 
 /** The manifest's `<application android:name>`, e.g. `.App`, or null. */
 internal fun manifestAppName(manifest: String): String? =
@@ -56,7 +56,7 @@ internal fun analyticsCall(icon: String?, indent: String, java: Boolean, nl: Str
 }
 
 /** Where `Analytics(.INSTANCE)? .setX(...)... .init(` starts and its chain ends (the index of `.init`), or null. */
-private fun findAnalyticsInit(src: String): Pair<Int, Int>? {
+internal fun findAnalyticsInit(src: String): Pair<Int, Int>? {
     for (m in Regex("""\bAnalytics\b""").findAll(src)) {
         var i = m.range.last + 1
         while (true) {

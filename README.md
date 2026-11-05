@@ -38,7 +38,7 @@ anywhere a JDK runs (Windows, macOS, Linux).
 | ⚡ **Zero setup** | Run it anywhere inside a Gradle project. It finds the root, the modules (Kotlin or Groovy DSL), the app module, `applicationId`, version, and Firebase project by itself. |
 | 🧰 **Easy tool setup** | Missing Java or adb? The Windows installer and `artisan setup` reuse Android Studio's JDK and SDK, or install them with `winget` / `brew`. Guide: [Setup](#setup-java-and-adb). |
 | ⌨️ **Suggestions as you type** | At your normal prompt, `artisan da` shows `app:dark` in gray as you type; → accepts (PowerShell 5.1 and 7, zsh, fish). Or run `artisan` and type to search every command (`dark`, `translation`, even `drak`). `artisan app:<Tab>` completes with descriptions. |
-| 🏭 **Generators for the repetitive parts** | `make:string` (every locale at once), `make:lang` (12 languages in one go, with the Android 13 locale config), `make:event` + `check:events` (event.md and its Excel sheet in sync, naming rules checked), `make:permission` (the full ask/deny/Settings flow with events), `make:screen`, `bump`, `make:bundle` (git diff → re-apply bundle), `make:firebase` (firebaseEvent + the [Event Box](https://github.com/JpOriginDev/event-box) library). |
+| 🏭 **Generators for the repetitive parts** | `make:string` (every locale at once), `make:lang` (12 languages in one go, with the Android 13 locale config), `make:event` + `check:events` (event.md and its Excel sheet in sync, naming rules checked), `make:permission` (the full ask/deny/Settings flow with events), `make:screen`, `bump`, `make:bundle` (git diff → re-apply bundle), `make:firebase` (firebaseEvent + the [Event Box](https://github.com/JpOriginDev/event-box) library). Changed your mind? `purge` takes it out again. |
 | ⌨️ **In your terminal, not only a CLI** | Ctrl+g hotkeys (`i` install, `s` screenshot, `l` logcat...), project status in your prompt, git hooks that stop commits with event.md or translations out of sync, clickable output paths. |
 | 🔢 **Pickers instead of memorising** | `artisan make`, `artisan app` and `artisan open` show just that group's commands. Leave out a value (`artisan app:font`) and it shows the choices. |
 | 🎨 **Readable output** | Coloured boxed tables that fit your terminal. |
@@ -130,6 +130,7 @@ artisan app:shot               # screenshot into the notes assets folder
 artisan app:logcat             # pick: this app / crashes only / your tags
 artisan check:strings          # missing translations, one row per module, one column per language
 artisan open:firebase crash    # Crashlytics for this project
+artisan purge                  # remove what artisan made (a module, :ai, hooks): shows it all first
 artisan list                   # everything
 ```
 
@@ -137,7 +138,7 @@ artisan list                   # everything
 
 | Group | Commands |
 |---|---|
-| — | `find [words]` `list` `version` `doctor` `setup` `completion [shell]` `hotkeys` `hooks` `bump` `init [notes]` `status` `stats` |
+| — | `find [words]` `list` `version` `doctor` `setup` `completion [shell]` `hotkeys` `hooks` `bump` `init [notes]` `status` `stats` `purge [what]` |
 | `self:` | `update` |
 | `make:` | `string` `lang [codes]` `event` `permission` `screen` `bundle` `firebase` `ads` `plan` `version` `phase` `bug [--shot]` `ai` |
 | `event:` | `sheet` `box [version]` |

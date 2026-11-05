@@ -42,7 +42,7 @@ private fun listHotkeys(ctx: Ctx) {
 
 // ---------- git hooks ----------
 
-private fun hooksDir(p: Project): File {
+internal fun hooksDir(p: Project): File {
     val r = Proc.run("git", "rev-parse", "--git-path", "hooks", dir = p.root)
     if (!r.ok) throw CliError("${p.root} isn't a git repository.")
     return File(r.out.trim()).let { if (it.isAbsolute) it else File(p.root, it.path) }
@@ -74,7 +74,7 @@ private fun refreshHook(name: String) = """
     |exit 0
     |""".trimMargin()
 
-private fun isOurs(f: File) = f.isFile && HOOK_MARKER in f.readText()
+internal fun isOurs(f: File) = f.isFile && HOOK_MARKER in f.readText()
 
 /** Writes artisan's hooks; a hook of your own is renamed to <name>.local and still runs first. */
 internal fun installHooks(dir: File): List<String> {

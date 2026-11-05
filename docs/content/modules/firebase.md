@@ -272,3 +272,11 @@ Not for analytics: use `firebaseEvent` for events.
 - Keep app logic out of this module: it's Firebase and logging only.
 - Only one place calls `Analytics.init`: `Application.onCreate()`.
 - `DebugConfig.ENABLE_EVENT_BOX` is `false` in every release build.
+
+## Remove it
+
+```sh
+artisan purge firebase --dry-run
+```
+
+It removes the module, its include and dependency lines, the catalog entries nothing else uses and its events in event.md (and the Analytics call it added to your Application). Calls you added (`firebaseEvent(...)`) stop it, with each `file:line` listed. See [purge](#/commands/tools).

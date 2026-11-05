@@ -124,3 +124,11 @@ The ad is preloaded after Remote Config answers, and again after each one.
 - Ads code lives here. A screen makes one call per placement and doesn't copy load or fallback code.
 - Test ids until release. Never click your own live ads.
 - A new format or placement type goes in its own folder here (e.g. `rewarded/`), following the same rule and events.
+
+## Remove it
+
+```sh
+artisan purge ads
+```
+
+It removes the module, its include and dependency lines, the catalog entries nothing else uses and its events in event.md. Calls you added (`BannerAds.show(...)`) stop it, with each `file:line` listed. See [purge](#/commands/tools).

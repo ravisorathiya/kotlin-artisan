@@ -15,7 +15,7 @@ updated in the same change (`DocsSyncTest` checks it).
 |---|---|---|---|
 | (internal) | Repo AI workspace (`ai/`, CLAUDE.md) + DocsSyncTest | [repo_workspace.md](../../plan/repo_workspace.md) | `[x]` |
 | 0.17.0 | `make:lang`: the 11 default locales, English copy marked for translation, localeConfig | [make_lang.md](../../plan/make_lang.md) | `[x]` |
-| 0.18.0 | `purge`: remove what artisan generated (:ai, :core:firebase, :core:ads, ...) | [purge.md](../../plan/purge.md) | `[~]` |
+| 0.18.0 | `purge`: remove what artisan generated (:ai, :core:firebase, :core:ads, ...) | [purge.md](../../plan/purge.md) | `[x]` |
 | 0.19.0 | `check:release` + gate in `build:release` | [check_release.md](../../plan/check_release.md) | `[ ]` |
 | 0.20.0 | `make:update`: in-app update + review in `:core:firebase` | [make_update.md](../../plan/make_update.md) | `[ ]` |
 | 0.21.0 | `deps:outdated` / `deps:update` | [deps.md](../../plan/deps.md) | `[ ]` |
