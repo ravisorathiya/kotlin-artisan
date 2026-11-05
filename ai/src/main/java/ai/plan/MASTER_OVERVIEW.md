@@ -2,6 +2,8 @@
 
 One file per feature. The roadmap and the order are in [workflow/v_0_17/overview.md](../workflow/v_0_17/overview.md).
 
+**Start with [next.md](next.md)**: what to do next, step by step.
+
 | Plan | Version | Status |
 |---|---|---|
 | [repo_workspace.md](repo_workspace.md) | (internal) | `[x]` |

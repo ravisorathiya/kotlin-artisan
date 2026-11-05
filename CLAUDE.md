@@ -17,7 +17,8 @@ Try a change inside a real Android project (a copy, not the original).
 `ai/src/main/java/ai/` is this repo's agent workspace, the same `:ai` module `artisan make:ai` gives an Android
 project (`artisan status`, `artisan list:plans` read it). Its README has the rules.
 
-- `workflow/<version>/overview.md`: the roadmap and what each release holds. Start here.
+- `plan/next.md`: what to do next. "Go ahead" means: do what it says.
+- `workflow/<version>/overview.md`: the roadmap and what each release holds.
 - `plan/<feature>.md`: one per feature: decisions the user made, steps, what was verified.
 - `skill/`: how this repo adds a command, updates the docs site, changes the `:ai` templates, ships a version.
 
