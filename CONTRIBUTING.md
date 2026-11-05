@@ -15,7 +15,9 @@ Run it inside any Android project to try a change.
 ## Docs
 
 The docs are `README.md`, `CHANGELOG.md` and the site in `docs/`. A user-facing change (command, flag,
-`artisan.json` key) updates them in the same change as the code.
+`artisan.json` key) updates them in the same change as the code. `DocsSyncTest` fails `./gradlew test` when a
+command is missing from the README table or `docs/content/commands/`, when `docs/app.js` and the pages disagree, or
+when the top CHANGELOG entry isn't the build version. The full checklist is in `CLAUDE.md`; the roadmap is in `notes/`.
 
 The site is GitHub Pages from `main` / `docs`: Vue 3 and Tailwind from a CDN, no build step and no `node_modules`.
 

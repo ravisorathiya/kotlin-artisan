@@ -28,6 +28,23 @@ import kotlin.system.exitProcess
 
 val VERSION: String = Ctx::class.java.`package`?.implementationVersion ?: "dev"
 
+/** Every built-in command, in `list` order. Tests call it too (DocsSyncTest). */
+fun registerBuiltIns() {
+    registerMisc()
+    registerNotes()
+    registerAi()
+    registerCode()
+    registerApp()
+    registerOpen()
+    registerUpdate()
+    registerSetup()
+    registerCompletion()
+    registerMake()
+    registerEvents()
+    registerBundle()
+    registerTerminal()
+}
+
 fun main(argv: Array<String>) {
     val ctx = Ctx(argv.drop(1))
     Ui.assumeYes = ctx.yes
@@ -36,19 +53,7 @@ fun main(argv: Array<String>) {
     val command = argv.firstOrNull() ?: if (Palette.available) "find" else "list"
     UpdateCheck.start()
     val code = try {
-        registerMisc()
-        registerNotes()
-        registerAi()
-        registerCode()
-        registerApp()
-        registerOpen()
-        registerUpdate()
-        registerSetup()
-        registerCompletion()
-        registerMake()
-        registerEvents()
-        registerBundle()
-        registerTerminal()
+        registerBuiltIns()
         ctx.projectOrNull?.let { registerCustom(it) }
         Registry.dispatch(command, ctx)
         runCatching { Completion.refresh() }

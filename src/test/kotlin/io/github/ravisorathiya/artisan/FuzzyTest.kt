@@ -22,6 +22,7 @@ import kotlin.test.assertTrue
 
 class FuzzyTest {
     init {
+        Registry.clear() // other tests register more groups (make:ads would win "ad")
         registerMisc(); registerNotes(); registerAi(); registerCode(); registerApp(); registerOpen(); registerCompletion()
     }
 

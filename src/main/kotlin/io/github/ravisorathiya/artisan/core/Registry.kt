@@ -101,6 +101,9 @@ object Registry {
         commands[name] = Command(name, usage, description, choices, custom, choicesFrom, run)
     }
 
+    /** Forget every command (tests that need an exact set of commands). */
+    internal fun clear() = commands.clear()
+
     /** Every command in `list` order. */
     fun all(): List<Command> = groups().values.flatten()
 

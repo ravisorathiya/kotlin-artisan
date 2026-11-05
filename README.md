@@ -146,6 +146,7 @@ artisan list                   # everything
 | `app:` | `install` `logcat [tag]` `clean` `shot [name]` `record [name] [sec]` `lang [code]` `dark [on\|off]` `light` `font [scale]` `rotate [land\|port\|auto]` `text` `open` `grant` `revoke` `reset-perms` `clear` `demo` `mirror` |
 | `open:` | `firebase [overview\|crash\|config\|analytics]` `play` `admob` `app` `studio` `report` `folder` |
 | `build:` | `release [apk\|aab]` |
+| `stub:` | `publish` |
 
 <p align="center">
   <img src=".github/assets/doctor.svg" alt="artisan doctor: Java, SDK, adb, phone, git and notes checks" width="49%" align="top">
