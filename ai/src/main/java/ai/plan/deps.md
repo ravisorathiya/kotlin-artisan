@@ -1,4 +1,4 @@
-# deps:outdated / deps:update — `[ ]` 0.20.0
+# deps:outdated / deps:update — `[ ]` 0.21.0
 
 - Move the catalog/version helpers from AnalyticsModule.kt to commands/Deps.kt (`tomlEntries`, `catalogVersion`,
   `bumpCatalogVersion`, `refUses`, `detachVersion`, `stableVersions`, `minorStepDowns`, `aarMetadataProblem`,

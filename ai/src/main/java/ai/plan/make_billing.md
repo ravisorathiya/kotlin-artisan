@@ -1,4 +1,4 @@
-# make:billing — `[ ]` 0.21.0
+# make:billing — `[ ]` 0.22.0
 
 `:core:billing`, built like `make:ads` (plan → apply → verify → document); offers `make:firebase` first.
 

@@ -14,12 +14,17 @@ Try a change inside a real Android project (a copy, not the original).
 
 ## Where the work stands
 
-`notes/` is this repo's workspace, in artisan's own notes format (`artisan status`, `artisan list:plans`):
+`ai/src/main/java/ai/` is this repo's agent workspace, the same `:ai` module `artisan make:ai` gives an Android
+project (`artisan status`, `artisan list:plans` read it). Its README has the rules.
 
-- `notes/workflow/<version>/overview.md`: the roadmap and what each release holds. Start here.
-- `notes/plans/<feature>.md`: one per feature: goal, decisions, steps. Update its status when it ships.
+- `workflow/<version>/overview.md`: the roadmap and what each release holds. Start here.
+- `plan/<feature>.md`: one per feature: decisions the user made, steps, what was verified.
+- `skill/`: how this repo adds a command, updates the docs site, changes the `:ai` templates, ships a version.
 
-Keep both current in the same change as the code.
+Keep it current in the same change as the code.
+
+**Only this repository.** Never edit another project. To try a command on a real Android app, ask first, then use a
+copy in the scratch folder.
 
 ## A command changed: the checklist
 
@@ -34,9 +39,9 @@ Keep both current in the same change as the code.
    and the workspace `README.md`).
 7. ✔ `CHANGELOG.md` entry `## x.y.z: ...` = `version` in `build.gradle.kts` (one version per feature).
 8. A test for parsing / detection / file-editing logic.
-9. `notes/`: tick the item in the workflow overview and the plan.
+9. `ai/`: the plan's **Done**, the workflow overview row, `plan/MASTER_OVERVIEW.md`.
 
-Internal-only changes (tests, refactors, notes) need no version bump.
+Internal-only changes (tests, refactors, the workspace) need no version bump.
 
 ## Style
 

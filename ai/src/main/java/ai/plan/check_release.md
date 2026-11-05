@@ -1,4 +1,4 @@
-# check:release — `[ ]` 0.18.0
+# check:release — `[ ]` 0.19.0
 
 PASS / WARN / FAIL table; `build:release` runs it first and stops on FAIL (`--force` skips).
 
