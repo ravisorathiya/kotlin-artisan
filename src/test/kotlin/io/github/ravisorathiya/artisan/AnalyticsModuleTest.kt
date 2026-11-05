@@ -286,7 +286,7 @@ class AnalyticsModuleTest {
         assertTrue(listOf("fun remoteString(", "fun remoteAdUnit(", "fun remoteInt(", "fun remoteLong(", "fun remoteDouble(", "fun remoteBoolean(", "object RemoteRegistry").all { it in values })
         val rc = read("$src/remote/RemoteConfig.kt")
         assertTrue("addOnConfigUpdateListener" in rc && "fun awaitFetch(" in rc && "fun onApplied(" in rc && "LOCAL MISSING" in rc && "RemoteRegistry.apply" in rc)
-        assertTrue("fun init(app: Application, vararg remoteHolders: Any = arrayOf(AdsConstant))" in read("$src/Analytics.kt") && "RemoteConfig.start(*remoteHolders)" in read("$src/Analytics.kt"))
+        assertTrue("fun init(app: Application, vararg remoteHolders: Any)" in read("$src/Analytics.kt") && "holders: Array<out Any> = arrayOf(AdsConstant)" in read("$src/Analytics.kt") && "RemoteConfig.start(*(if (remoteHolders.isNotEmpty()) remoteHolders else holders))" in read("$src/Analytics.kt"))
         assertTrue("REMOTE_CONFIG_TIMEOUT_MILLIS" in read("$src/DebugConfig.kt") && "REMOTE_CONFIG_LIVE_UPDATES" in read("$src/DebugConfig.kt"))
         assertTrue("LOCAL MISSING" in read("core/firebase/README.md") && "legacyKeys" in read("core/firebase/README.md"))
 

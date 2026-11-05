@@ -11,7 +11,7 @@ Created by `artisan make:firebase`. The code is under package `{{PACKAGE}}`, one
 
 ```text
 {{PACKAGE}}
-├── Analytics.kt          Analytics.init(app), setUserId, setUserProperty
+├── Analytics.kt          Analytics.init(app), setIcon, setRemoteHolders, setUserId, setUserProperty
 ├── DebugConfig.kt        settings only: event box, bypass rules, log tags, Crashlytics and Remote Config switches
 ├── events/
 │   └── FirebaseEvents.kt firebaseEvent(name, bundle)
@@ -72,6 +72,16 @@ class App : Application() {
                                              // and Remote Config for every property in AdsConstant
     }
 }
+```
+
+Optional settings go before `init`, builder style. The switches (event box, session hours, Crashlytics) stay in
+`DebugConfig`:
+
+```kotlin
+Analytics
+    .setIcon(R.mipmap.ic_launcher)               // the event box bubble icon (default: the library's)
+    .setRemoteHolders(AdsConstant, FeatureFlags) // same as Analytics.init(this, AdsConstant, FeatureFlags)
+    .init(this)
 ```
 
 A new module that should log events or use Firebase: `implementation(project("{{MODULE}}"))`.

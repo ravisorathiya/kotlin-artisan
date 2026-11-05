@@ -26,7 +26,7 @@ Config. Timber and coroutines are `api`, so every module gets them. Import what 
 |---|---|
 | `DebugConfig.kt` | settings only: the event box switch, bypass rules, log tags, Crashlytics and Remote Config switches |
 | `events/FirebaseEvents.kt` | `firebaseEvent(...)` (top-level and `Context.`), for any thread. The event box part runs on Main through a coroutine. Debug builds warn about bad names |
-| `Analytics.kt` | `Analytics.init(app)`: Firebase, a Timber `DebugTree` for debug builds, Crashlytics collection, the [Event Box](https://github.com/JpOriginDev/event-box) |
+| `Analytics.kt` | `Analytics.init(app)`: Firebase, a Timber `DebugTree` for debug builds, Crashlytics collection, the [Event Box](https://github.com/JpOriginDev/event-box). Optional builder before `init`: `setIcon(R.mipmap.ic_launcher)` (box bubble icon), `setRemoteHolders(...)`. Switches stay in `DebugConfig` |
 | `crash/`, `remote/`, `messaging/` | `Crash.log/record/setKey`, `RemoteConfig.fetch/bool/string/long`, `Messaging.token/subscribe` |
 | `log/Logging.kt` | `logging(...)` through Timber; caught errors become Crashlytics non-fatals in release |
 | `README.md` | how to use all of it |

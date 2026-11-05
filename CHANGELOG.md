@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.16.1: Analytics takes its settings builder style
+
+- **`Analytics.setIcon(R.mipmap.ic_launcher).init(this)`** sets the event box bubble icon
+  (`setBubbleIconResId` before `install`). Without it, the library's icon stays.
+- **`setRemoteHolders(AdsConstant, FeatureFlags)`** does the same as passing holders to `init`, builder style.
+  Holders passed to `init` still win.
+- The switches (event box, session hours, Crashlytics in debug) stay `DebugConfig` consts.
+- `Analytics.init(this)` and `Analytics.init(this, AdsConstant, FeatureFlags)` work as before.
+
 ## 0.16.0: make:ads, the second feature module
 
 - **`make:ads [--path :core:ads] [--ui views|compose|both] [--no-verify]`** creates a `:core:ads` module on top of the

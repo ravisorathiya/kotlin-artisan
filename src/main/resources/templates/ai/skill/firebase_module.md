@@ -13,7 +13,7 @@ skill that apply.
 
 ```text
 core/firebase/src/main/java/<app>/firebase/
-├── Analytics.kt          Analytics.init(app[, holders]): Firebase, Timber, Crashlytics, event box, Remote Config
+├── Analytics.kt          Analytics[.setIcon(resId)][.setRemoteHolders(...)].init(app[, holders]): Firebase, Timber, Crashlytics, event box, Remote Config
 ├── DebugConfig.kt        settings only: event box, bypass rules, log tags, Crashlytics and Remote Config switches
 ├── events/FirebaseEvents.kt   firebaseEvent(name, bundle)
 ├── remote/AdsConstant.kt      ad units and remote switches, one line per key
