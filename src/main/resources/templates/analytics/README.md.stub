@@ -64,25 +64,30 @@ depends on this one gets the same versions:
 
 ## Set up (once)
 
+`artisan make:firebase` wires this into your Application (or creates `App.kt` and names it in the manifest):
+
 ```kotlin
 class App : Application() {
     override fun onCreate() {
         super.onCreate()
-        Analytics.init(this)                 // Firebase, Timber (debug builds), Crashlytics, the event box,
-                                             // and Remote Config for every property in AdsConstant
+        Analytics                                         // Firebase, Timber (debug builds), Crashlytics, the event box,
+            .setIcon(R.mipmap.ic_launcher)                // and Remote Config for every property in AdsConstant
+            .setBubbleIconScaleType(ImageView.ScaleType.CENTER_CROP)
+            .setBubbleBackgroundColor(Color.parseColor("#0D9379"))
+            .setBubbleBorderColor(Color.parseColor("#CCE6E1"))
+            .setBubbleBorderWidthDp(1.5f)
+            .setBubbleCornerRadiusDp(-1f) // -1 = fully round
+            .init(this)
     }
 }
 ```
 
-Optional settings go before `init`, builder style. The switches (event box, session hours, Crashlytics) stay in
-`DebugConfig`:
-
-```kotlin
-Analytics
-    .setIcon(R.mipmap.ic_launcher)               // the event box bubble icon (default: the library's)
-    .setRemoteHolders(AdsConstant, FeatureFlags) // same as Analytics.init(this, AdsConstant, FeatureFlags)
-    .init(this)
-```
+- The builder calls go before `init`. Each one is optional: one left out keeps the default shown above (the icon:
+  the library's own).
+- `setRemoteHolders(AdsConstant, FeatureFlags)` does the same as `Analytics.init(this, AdsConstant, FeatureFlags)`.
+- The switches (event box on/off, session hours, Crashlytics in debug) stay in `DebugConfig`.
+- After `artisan update`, run `artisan make:firebase` again: files you haven't changed move to the new version, an
+  edited one gets the new version next to it as `.new`, and `DebugConfig` / `AdsConstant` are never touched.
 
 A new module that should log events or use Firebase: `implementation(project("{{MODULE}}"))`.
 

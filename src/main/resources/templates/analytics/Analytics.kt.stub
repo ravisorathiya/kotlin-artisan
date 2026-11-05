@@ -3,6 +3,7 @@ package {{PACKAGE}}
 import android.app.Application
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.widget.ImageView
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.ogmediaapps.eventbox.OGEventBoxLog
@@ -34,11 +35,26 @@ object Analytics {
         private set
 
     // ---------- Builder: optional settings, before init ----------
-    // Analytics.setIcon(R.mipmap.ic_launcher).setRemoteHolders(AdsConstant, FeatureFlags).init(this)
-    // Switches (event box, session hours, Crashlytics) stay in DebugConfig.
+    // Analytics.setIcon(R.mipmap.ic_launcher).setBubbleBackgroundColor(0xFF0D9379.toInt()).init(this)
+    // Every setting has a default below. Switches (event box, session hours, Crashlytics) stay in DebugConfig.
 
     @Volatile
     private var bubbleIcon = 0
+
+    @Volatile
+    private var bubbleIconScaleType = ImageView.ScaleType.CENTER_CROP
+
+    @Volatile
+    private var bubbleBackgroundColor = 0xFF0D9379.toInt()
+
+    @Volatile
+    private var bubbleBorderColor = 0xFFCCE6E1.toInt()
+
+    @Volatile
+    private var bubbleBorderWidthDp = 1.5f
+
+    @Volatile
+    private var bubbleCornerRadiusDp = -1f
 
     @Volatile
     private var holders: Array<out Any> = arrayOf(AdsConstant)
@@ -46,8 +62,25 @@ object Analytics {
     /** The event box bubble icon, e.g. R.mipmap.ic_launcher. 0 keeps the library's icon. */
     fun setIcon(resId: Int): Analytics = apply { bubbleIcon = resId }
 
+    /** How the icon fills the bubble. Default CENTER_CROP. */
+    fun setBubbleIconScaleType(scaleType: ImageView.ScaleType): Analytics = apply { bubbleIconScaleType = scaleType }
+
+    /** The bubble's fill, a color int: Color.parseColor("#0D9379") or 0xFF0D9379.toInt() (the default). */
+    fun setBubbleBackgroundColor(color: Int): Analytics = apply { bubbleBackgroundColor = color }
+
+    /** The bubble's border color. Default #CCE6E1. */
+    fun setBubbleBorderColor(color: Int): Analytics = apply { bubbleBorderColor = color }
+
+    /** The bubble's border width in dp. Default 1.5; 0 = no border. */
+    fun setBubbleBorderWidthDp(widthDp: Float): Analytics = apply { bubbleBorderWidthDp = widthDp }
+
+    /** The bubble's corner radius in dp. Default -1 = fully round. */
+    fun setBubbleCornerRadiusDp(radiusDp: Float): Analytics = apply { bubbleCornerRadiusDp = radiusDp }
+
     /** The objects with `by remote...` properties that Remote Config fetches and applies (AdsConstant by default). */
     fun setRemoteHolders(vararg remoteHolders: Any): Analytics = apply { holders = remoteHolders }
+
+    // ---------- End of builder ----------
 
     /**
      * Once, from Application.onCreate(), before any Activity starts, after the builder calls above. [remoteHolders]
@@ -67,6 +100,11 @@ object Analytics {
             OGEventBoxLog.setDebugModeEnabled(DebugConfig.ENABLE_EVENT_BOX)
                 .setDebugModeDurationHours(DebugConfig.EVENT_BOX_SESSION_HOURS)
                 .apply { if (bubbleIcon != 0) setBubbleIconResId(bubbleIcon) }
+                .setBubbleIconScaleType(bubbleIconScaleType)
+                .setBubbleBackgroundColor(bubbleBackgroundColor)
+                .setBubbleBorderColor(bubbleBorderColor)
+                .setBubbleBorderWidthDp(bubbleBorderWidthDp)
+                .setBubbleCornerRadiusDp(bubbleCornerRadiusDp)
                 .install(app)
             OGEventBoxLog.setEnabled(app, DebugConfig.ENABLE_EVENT_BOX)
         } catch (e: Exception) {

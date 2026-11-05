@@ -527,11 +527,13 @@ internal fun planAnalyticsModule(
     val src ="$dir/src/main/java/${pkg.replace('.', '/')}"
     val created = linkedMapOf(
         "$dir/${if (kts) "build.gradle.kts" else "build.gradle"}" to build,
-        "$dir/README.md" to stubText("README.md"),
+        "$dir/README.md" to stubText("README.md").let { if (kind == ModuleKind.FIREBASE) managedSource("README.md", it) else it },
         "$dir/src/main/AndroidManifest.xml" to "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n\n    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <uses-permission android:name=\"android.permission.ACCESS_NETWORK_STATE\" />\n\n</manifest>\n",
         "$dir/.gitignore" to "/build\n",
     )
+    // Firebase code carries the managed marker, so a later make:firebase can update what nobody changed
     for (f in if (kind == ModuleKind.FIREBASE) ANALYTICS_SOURCES else adsSources(compose)) created["$src/$f"] = stubText(f.substringAfterLast('/'))
+        .let { if (kind == ModuleKind.FIREBASE && f !in FIREBASE_SETTINGS) managedSource(f, it) else it }
 
     // settings: include + JitPack; root / catalog edits from above
     val changed = linkedMapOf<String, String>()

@@ -383,10 +383,16 @@ internal fun makeAds(ctx: Ctx) {
 
 internal fun makeAnalytics(ctx: Ctx) {
     val p = ctx.project
+    // already made by artisan: update it to this version instead (new code, the builder, the Application wiring)
+    findFirebaseModule(p)?.let { updateFirebaseModule(ctx, p, it); return }
     firebaseEventDefinition(p)?.let { throw CliError("firebaseEvent is already defined in $it. event.md documents how it's wired (artisan make:ai).") }
     if (findFirebaseEvent(p) != null) throw CliError("The app already has its own firebaseEvent. Keep it; event.md documents how it's wired.")
     Ui.say("Fetching the latest versions (Firebase BOM, Timber, coroutines, Event Box, plugins)...", Tone.DIM)
     val plan = planAnalyticsModule(p, ctx.option("--path") ?: ":core:firebase")
+    // the Application: Analytics builder (icon, bubble style) + init(this) in onCreate(), or a new App.kt
+    val wiring = planAppWiring(p, plan.pkg, plan.changed)
+    plan.created.putAll(wiring.created)
+    plan.changed.putAll(wiring.changed)
     applyAnalyticsModule(p, plan)
     p.notes?.dir?.takeIf { File(it, "skill").isDirectory || File(it, "event").isDirectory }?.let { ws ->
         val r = refreshAiTemplates(ws, listOf("skill/firebase_module.md", "skill/README.md"))
@@ -406,9 +412,11 @@ internal fun makeAnalytics(ctx: Ctx) {
     plan.skipped.forEach { (m, why) -> Ui.say("  $m: skipped, $why", Tone.DIM) }
     plan.notes.forEach { Ui.say("  $it", Tone.WARN) }
 
+    wiring.done?.let { Ui.say("  $it", Tone.OK) }
     Ui.say("Still to do (once):", Tone.WARN)
-    Ui.say("  1. In Application.onCreate():  Analytics.init(this)   (import ${plan.pkg}.Analytics)")
-    Ui.say("  2. Sync Gradle in Android Studio.")
+    wiring.todo?.let { Ui.say("  - $it") }
+    Ui.say("  - Sync Gradle in Android Studio.")
+    Ui.say("  Bubble look: the setBubble... lines before .init(this) in your Application (defaults shown).", Tone.DIM)
     Ui.say("  Event box on: ENABLE_EVENT_BOX = true in DebugConfig.kt while testing; false before release.", Tone.DIM)
     Ui.say("  What the box shows: the Bypass section of DebugConfig (lifecycle hidden by default; add suffixes, prefixes, names, or always-show names).", Tone.DIM)
     Ui.say("  How to use it all (events, Crash, RemoteConfig, Messaging, logging): ${plan.module.trimStart(':').replace(':', '/')}/README.md", Tone.DIM)

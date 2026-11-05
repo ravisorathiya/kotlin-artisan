@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.16.2: make:firebase wires the Application, and updates an older module
+
+- **The Application is wired.** `make:firebase` adds the Analytics builder and `.init(this)` to `onCreate()` of the
+  class the manifest names (Kotlin or Java). If there is none, it creates `App.kt` and sets `android:name` in the
+  manifest.
+  - The icon comes from the manifest's `android:icon`.
+  - An existing plain `Analytics.init(...)` gets the builder and keeps its arguments.
+  - A call that already has `setIcon` / `setBubble...` is left as is.
+- **Bubble style, builder style:** `setBubbleIconScaleType`, `setBubbleBackgroundColor`, `setBubbleBorderColor`,
+  `setBubbleBorderWidthDp` and `setBubbleCornerRadiusDp` (-1 = round). The wired call writes each default out
+  (CENTER_CROP, #0D9379, #CCE6E1, 1.5dp, round), so you change them where you call `init`.
+- **An existing module is updated, not refused.** After `artisan update`, `make:firebase` on a project that has the
+  module brings it to the new version:
+  - a missing file is added;
+  - a file artisan wrote and nobody changed is replaced (module code now carries an `// artisan:managed` marker);
+  - an edited one gets the new version next to it as `.new`;
+  - an `Analytics.kt` from before the builder gets the builder patched in, keeping the rest;
+  - `DebugConfig.kt` and `AdsConstant.kt` are never touched.
+
 ## 0.16.1: Analytics takes its settings builder style
 
 - **`Analytics.setIcon(R.mipmap.ic_launcher).init(this)`** sets the event box bubble icon

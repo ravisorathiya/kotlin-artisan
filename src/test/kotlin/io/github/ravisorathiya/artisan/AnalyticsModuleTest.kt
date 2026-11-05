@@ -12,6 +12,8 @@ import io.github.ravisorathiya.artisan.commands.bumpCatalogVersion
 import io.github.ravisorathiya.artisan.commands.bumpEventBoxCoordinate
 import io.github.ravisorathiya.artisan.commands.buildStatement
 import io.github.ravisorathiya.artisan.commands.latestStable
+import io.github.ravisorathiya.artisan.commands.FIREBASE_SETTINGS
+import io.github.ravisorathiya.artisan.commands.managedCodeState
 import io.github.ravisorathiya.artisan.commands.planAnalyticsModule
 import io.github.ravisorathiya.artisan.commands.setBomVersion
 import io.github.ravisorathiya.artisan.commands.stableVersions
@@ -152,7 +154,10 @@ class AnalyticsModuleTest {
         val base = "core/firebase/src/main/java/com/demo/fx/firebase"
         for (f in ANALYTICS_SOURCES) {
             val pkg = "com.demo.fx.firebase" + f.substringBeforeLast('/', "").let { if (it.isEmpty()) "" else ".$it" }
-            assertTrue(read("$base/$f").startsWith("package $pkg\n"), "$f: package $pkg")
+            // module code (not the settings files) starts with the managed marker, so a later make:firebase can update it
+            val (body, unedited) = managedCodeState(read("$base/$f"))
+            assertTrue(body.startsWith("package $pkg\n"), "$f: package $pkg")
+            assertEquals(f !in FIREBASE_SETTINGS, unedited && read("$base/$f").startsWith("// artisan:managed "), f)
         }
         assertEquals("com.demo.fx.firebase", plan.pkg)
         assertTrue("import com.demo.fx.firebase.events.firebaseEvent" in read("$base/remote/RemoteConfig.kt"))
