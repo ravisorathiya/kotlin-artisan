@@ -15,6 +15,22 @@ artisan make:string welcome_title "Welcome" --module :feature:onboarding
 
 The string goes into `values/strings.xml` and every `values-xx/strings.xml` at once, marked for translation in the other languages. Then `check:strings` shows what's left to translate.
 
+## make:lang
+
+```sh
+artisan make:lang                     # the 12 languages: values/ + ar bn de es fr hi ja pt ru ur zh
+artisan make:lang de pt-BR            # just these
+artisan make:lang --module :core:ui   # one module (default: every module with values/strings.xml)
+```
+
+Each new `values-xx/strings.xml` gets every translatable string of `values/strings.xml`, in English, marked for translation. Escapes, plurals and string arrays are copied as written, and `translatable="false"` strings stay out. A language that's already there gets only the strings it's missing, so running it again is safe.
+
+It also writes `res/xml/locales_config.xml` with every language and sets `android:localeConfig` in the manifest, so the app's language can be picked in Android 13+ Settings. An existing locale config is extended, and a module with `generateLocaleConfig = true` is left to the Gradle plugin.
+
+::: tip Your own set
+`"languages": ["ar", "de", "pt-BR"]` in `artisan.json` replaces the default list.
+:::
+
 ## make:screen
 
 ```sh

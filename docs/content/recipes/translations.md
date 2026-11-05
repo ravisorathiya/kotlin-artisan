@@ -3,6 +3,14 @@
 Add a string once and it goes into `values/` and every `values-xx/`. Then see exactly what each language is missing, per module.
 
 ::: steps
+### Add the languages
+
+```sh
+artisan make:lang
+```
+
+`values-ar`, `-bn`, `-de`, `-es`, `-fr`, `-hi`, `-ja`, `-pt`, `-ru`, `-ur` and `-zh`, each with every string in English, marked for translation, plus the Android 13 locale config. Name your own: `artisan make:lang de pt-BR`.
+
 ### Add a string everywhere
 
 ```sh

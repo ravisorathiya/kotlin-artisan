@@ -66,8 +66,11 @@ internal fun addString(res: File, key: String, text: String): StringResult {
 }
 
 /** Every name in a resources file, translatable or not (a duplicate of either breaks the build). */
-private fun allStringNames(f: File): Set<String> =
-    Regex("""<(?:string|plurals|string-array)\s+[^>]*name\s*=\s*"([^"]+)"""").findAll(f.readText()).map { it.groupValues[1] }.toSet()
+private fun allStringNames(f: File): Set<String> = resourceNames(f.readText())
+
+/** Every string / plurals / string-array name in a resources file's text. */
+internal fun resourceNames(xml: String): Set<String> =
+    Regex("""<(?:string|plurals|string-array)\s+[^>]*name\s*=\s*"([^"]+)"""").findAll(xml).map { it.groupValues[1] }.toSet()
 
 internal fun makeString(ctx: Ctx) {
     val p = ctx.project

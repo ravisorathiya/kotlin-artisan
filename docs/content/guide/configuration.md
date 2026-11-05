@@ -19,6 +19,7 @@ Every key is optional:
   "ignoreModules": [":benchmark"],
   "extraSources": ["*.js"],
   "hotkeys": { "u": "deploy:beta" },
+  "languages": ["ar", "de", "es", "pt-BR"],
   "commands": {
     "deploy:beta": { "description": "Upload a beta to Firebase App Distribution", "run": "./gradlew appDistributionUploadRelease" }
   }
@@ -34,6 +35,7 @@ Every key is optional:
 | `ignoreModules` | Modules skipped by `stats` and `list:todo` |
 | `extraSources` | Extra file globs counted by `stats` and scanned by `list:todo` |
 | `hotkeys` | Change or add Ctrl+g hotkeys for this project |
+| `languages` | The languages `make:lang` adds when you name none (default: ar bn de es fr hi ja pt ru ur zh) |
 | `commands` | Your own commands. A name with `:` joins (or creates) a group picker |
 
 ## Your own commands

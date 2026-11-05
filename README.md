@@ -38,7 +38,7 @@ anywhere a JDK runs (Windows, macOS, Linux).
 | ⚡ **Zero setup** | Run it anywhere inside a Gradle project. It finds the root, the modules (Kotlin or Groovy DSL), the app module, `applicationId`, version, and Firebase project by itself. |
 | 🧰 **Easy tool setup** | Missing Java or adb? The Windows installer and `artisan setup` reuse Android Studio's JDK and SDK, or install them with `winget` / `brew`. Guide: [Setup](#setup-java-and-adb). |
 | ⌨️ **Suggestions as you type** | At your normal prompt, `artisan da` shows `app:dark` in gray as you type; → accepts (PowerShell 5.1 and 7, zsh, fish). Or run `artisan` and type to search every command (`dark`, `translation`, even `drak`). `artisan app:<Tab>` completes with descriptions. |
-| 🏭 **Generators for the repetitive parts** | `make:string` (every locale at once), `make:event` + `check:events` (event.md and its Excel sheet in sync, naming rules checked), `make:permission` (the full ask/deny/Settings flow with events), `make:screen`, `bump`, `make:bundle` (git diff → re-apply bundle), `make:firebase` (firebaseEvent + the [Event Box](https://github.com/JpOriginDev/event-box) library). |
+| 🏭 **Generators for the repetitive parts** | `make:string` (every locale at once), `make:lang` (12 languages in one go, with the Android 13 locale config), `make:event` + `check:events` (event.md and its Excel sheet in sync, naming rules checked), `make:permission` (the full ask/deny/Settings flow with events), `make:screen`, `bump`, `make:bundle` (git diff → re-apply bundle), `make:firebase` (firebaseEvent + the [Event Box](https://github.com/JpOriginDev/event-box) library). |
 | ⌨️ **In your terminal, not only a CLI** | Ctrl+g hotkeys (`i` install, `s` screenshot, `l` logcat...), project status in your prompt, git hooks that stop commits with event.md or translations out of sync, clickable output paths. |
 | 🔢 **Pickers instead of memorising** | `artisan make`, `artisan app` and `artisan open` show just that group's commands. Leave out a value (`artisan app:font`) and it shows the choices. |
 | 🎨 **Readable output** | Coloured boxed tables that fit your terminal. |
@@ -116,6 +116,7 @@ artisan doctor                 # Java, SDK, adb, phone, git: what's OK, what's m
 artisan setup                  # put adb on PATH + set JAVA_HOME (SDK copy, else winget/brew)
 artisan app:install            # build + install + launch the debug app   (or Ctrl+g i)
 artisan make:string call_ended "Call ended"   # values/ + every values-xx/ at once
+artisan make:lang                # ar bn de es fr hi ja pt ru ur zh: every string, in English to translate
 artisan make:event SplashActivity splash_on_create "Splash shown"   # event.md row + sheet + firebaseEvent line
 artisan make:permission HomeActivity contact noti   # permission flow + its events + manifest entries
 artisan make:screen activity Settings          # class + layout + manifest entry
@@ -138,7 +139,7 @@ artisan list                   # everything
 |---|---|
 | — | `find [words]` `list` `version` `doctor` `setup` `completion [shell]` `hotkeys` `hooks` `bump` `init [notes]` `status` `stats` |
 | `self:` | `update` |
-| `make:` | `string` `event` `permission` `screen` `bundle` `firebase` `ads` `plan` `version` `phase` `bug [--shot]` `ai` |
+| `make:` | `string` `lang [codes]` `event` `permission` `screen` `bundle` `firebase` `ads` `plan` `version` `phase` `bug [--shot]` `ai` |
 | `event:` | `sheet` `box [version]` |
 | `del:` | `asset` |
 | `check:` | `strings [lang] [-v]` `events` `staged` `links` `assets` |
@@ -177,6 +178,7 @@ Set `ARTISAN_DEBUG=1` to get the stack trace when something fails unexpectedly.
   "ignoreModules": [":benchmark"],
   "extraSources": ["*.js"],
   "hotkeys": { "u": "deploy:beta" },
+  "languages": ["ar", "de", "es", "pt-BR"],
   "commands": {
     "deploy:beta": { "description": "Upload a beta to Firebase App Distribution", "run": "./gradlew appDistributionUploadRelease" }
   }
@@ -192,6 +194,7 @@ Set `ARTISAN_DEBUG=1` to get the stack trace when something fails unexpectedly.
 | `ignoreModules` | Modules skipped by `stats` and `list:todo` |
 | `extraSources` | Extra file globs counted by `stats` / scanned by `list:todo` |
 | `hotkeys` | Change or add Ctrl+g hotkeys for this project |
+| `languages` | The languages `make:lang` adds when you name none (default: ar bn de es fr hi ja pt ru ur zh) |
 | `commands` | Your own commands; a name with `:` joins (or creates) a group picker |
 
 Environment variables:

@@ -14,8 +14,9 @@ updated in the same change (`DocsSyncTest` checks it).
 | Version | What | Plan | Status |
 |---|---|---|---|
 | (no release) | Repo AI workspace (CLAUDE.md, notes/) + DocsSyncTest | [repo_workspace.md](../../plans/repo_workspace.md) | `[x]` |
-| 0.17.0 | `make:lang`: the 11 default locales, English copy marked for translation, localeConfig | [make_lang.md](../../plans/make_lang.md) | `[ ]` |
+| 0.17.0 | `make:lang`: the 11 default locales, English copy marked for translation, localeConfig | [make_lang.md](../../plans/make_lang.md) | `[x]` |
 | 0.18.0 | `check:release` + gate in `build:release` | [check_release.md](../../plans/check_release.md) | `[ ]` |
 | 0.19.0 | `make:update`: in-app update + review in `:core:firebase` | [make_update.md](../../plans/make_update.md) | `[ ]` |
 | 0.20.0 | `deps:outdated` / `deps:update` | [deps.md](../../plans/deps.md) | `[ ]` |
+| ? | `purge`: remove what artisan generated (:ai, :core:firebase, :core:ads, ...) | [purge.md](../../plans/purge.md) | `[ ]` |
 | 0.21.0 | `make:billing`: `:core:billing`, Premium turns off ads | [make_billing.md](../../plans/make_billing.md) | `[ ]` |

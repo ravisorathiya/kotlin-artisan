@@ -54,6 +54,7 @@ More in [Phone](#/commands/phone).
 | Command | What it does |
 |---|---|
 | `make:string [key] [text] [--module :x]` | Add a string to values/ and every values-xx/ (marked for translation) |
+| `make:lang [codes...] [--module :x]` | Add languages: each values-xx/strings.xml gets every string, in English to translate, + the Android 13 locale config |
 | `make:screen [kind] [Name] [--package x.y]` | New Activity / Fragment / Dialog / bottom sheet with its layout (and manifest entry) |
 | `make:event [Screen] [event_name] [when] [--from x]` | Add an analytics event to event.md (snake_case, under 30 chars) and print its firebaseEvent line |
 | `make:permission [Screen] [key=PERM[,PERM]]... [--package x.y]` | Permission flow for a screen: PermissionFlow.kt (once), its events in event.md + sheet, manifest entries |

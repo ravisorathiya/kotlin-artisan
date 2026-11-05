@@ -29,6 +29,8 @@ data class Config(
     val commands: Map<String, CustomCommand> = emptyMap(),
     /** Extra or changed hotkeys: key after the leader (Ctrl+g) -> artisan command, e.g. "u": "deploy:beta". */
     val hotkeys: Map<String, String> = emptyMap(),
+    /** Locales `make:lang` adds when given none, e.g. ["ar", "de", "pt-rBR"]. */
+    val languages: List<String> = emptyList(),
 )
 
 data class Module(val name: String, val dir: File) {

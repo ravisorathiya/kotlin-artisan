@@ -13,6 +13,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 fun registerCode() {
     Registry.add("check:strings", "check:strings [lang] [-v]", "Missing/extra translations per module and language", choicesFrom = ::projectLocales) { checkStrings(it) }
     Registry.add("make:string", "make:string [key] [text] [--module :x]", "Add a string to values/ and every values-xx/ (marked for translation)") { makeString(it) }
+    Registry.add("make:lang", "make:lang [codes...] [--module :x]", "Add languages: each values-xx/strings.xml gets every string, in English to translate, + the Android 13 locale config", languageChoices()) { makeLang(it) }
     Registry.add("list:todo", "list:todo [module] [-v]", "TODO / FIXME / HACK comments in source") { listTodo(it) }
     Registry.add("stats", "stats", "Code per module, biggest files, notes totals") { stats(it) }
 }
@@ -101,14 +102,14 @@ private fun checkStrings(ctx: Ctx) {
     }
     if (waiting.isNotEmpty()) {
         Ui.table(
-            "Waiting for translation (added by make:string)", listOf("Module", "Lang", "Keys"),
+            "Waiting for translation (copied in English by make:string / make:lang)", listOf("Module", "Lang", "Keys"),
             waiting.groupBy { it.first to it.second }.map { (k, v) -> Row(listOf(k.first, k.second, if (verbose) v.joinToString(", ") { it.third } else "${v.size}"), colors = listOf(null, null, Tone.WARN)) },
         )
     }
     if (!verbose) Ui.say("  Key names: artisan check:strings -v   (or one language: artisan check:strings ur)", Tone.DIM)
 }
 
-/** Marker make:string puts after a string it copied into a locale in English. */
+/** Marker make:string and make:lang put after a string it copied into a locale in English. */
 internal const val TRANSLATE_MARKER = "<!-- artisan: translate -->"
 
 /** Keys in [file] still carrying [TRANSLATE_MARKER]. */

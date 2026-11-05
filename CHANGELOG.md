@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.17.0: make:lang, every language in one go
+
+- **`make:lang [codes...] [--module :x]`** adds the languages most apps ship: `ar bn de es fr hi ja pt ru ur zh`
+  (with `values/`, 12). Name your own (`make:lang de pt-BR`) or set `"languages"` in `artisan.json`.
+  - Each new `values-xx/strings.xml` gets every translatable string of `values/strings.xml`, in English, marked for
+    translation, so `check:strings` lists them. Escapes, plurals and string arrays are copied as written;
+    `translatable="false"` strings and commented-out ones stay out.
+  - A language that's already there gets only the strings it's missing. Running it again adds nothing.
+  - Every module with `values/strings.xml` is filled; `--module` picks one.
+- **The Android 13 per-app language works.** It writes `res/xml/locales_config.xml` (every language, `en` first) and
+  sets `android:localeConfig` in the app manifest. An existing locale config is extended; a module with
+  `generateLocaleConfig = true` is left to the Gradle plugin.
+- `check:strings` names make:lang in its "waiting for translation" table.
+- For contributors: `DocsSyncTest` fails the build when a command, docs page or changelog entry is missing;
+  `CLAUDE.md` has the checklist and `notes/` the roadmap.
+
 ## 0.16.2: make:firebase wires the Application, and updates an older module
 
 - **The Application is wired.** `make:firebase` adds the Analytics builder and `.init(this)` to `onCreate()` of the

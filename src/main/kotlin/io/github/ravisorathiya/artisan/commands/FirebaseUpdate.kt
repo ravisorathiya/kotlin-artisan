@@ -23,12 +23,19 @@ internal fun manifestIconRef(manifest: String): String? =
         ?.let { "R.${it.groupValues[1]}.${it.groupValues[2]}" }
 
 /** Adds `android:name="[name]"` to `<application`, on its own line when the tag is written one attribute per line. */
-internal fun addManifestAppName(manifest: String, name: String): String? {
+internal fun addManifestAppName(manifest: String, name: String): String? = addApplicationAttr(manifest, "android:name", name)
+
+/** The value of [attr] on `<application>`, or null. */
+internal fun applicationAttr(manifest: String, attr: String): String? =
+    applicationTag(manifest)?.value?.let { Regex("""${Regex.escape(attr)}\s*=\s*"([^"]*)"""").find(it)?.groupValues?.get(1) }
+
+/** Adds `[attr]="[value]"` to `<application`, on its own line when the tag is written one attribute per line. */
+internal fun addApplicationAttr(manifest: String, attr: String, value: String): String? {
     val tag = applicationTag(manifest) ?: return null
     val at = tag.range.first + "<application".length
     val multi = Regex("""^<application[ \t]*\r?\n([ \t]+)""").find(tag.value)
     val nl = if ("\r\n" in manifest) "\r\n" else "\n"
-    val insert = if (multi != null) "$nl${multi.groupValues[1]}android:name=\"$name\"" else " android:name=\"$name\""
+    val insert = if (multi != null) "$nl${multi.groupValues[1]}$attr=\"$value\"" else " $attr=\"$value\""
     return manifest.substring(0, at) + insert + manifest.substring(at)
 }
 
