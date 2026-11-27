@@ -1,5 +1,6 @@
 package {{PACKAGE}}.remote
 
+import {{PACKAGE}}.DebugConfig
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
@@ -12,6 +13,13 @@ import kotlin.reflect.KProperty
  *
  * The default is used until Remote Config answers. After each fetch (and each live update) every registered property
  * takes the Firebase value; the debug audit lists them all. Properties stay writable for tests and local overrides.
+ *
+ * Live or test (DebugConfig.ENABLE_LIVE_AD):
+ *
+ *     var homeNativeAd by remoteAdUnit(test = "ca-app-pub-3940256099942544/2247696110", live = "ca-app-pub-123/456")
+ *
+ * Test mode uses the test id and ignores Firebase, so a QA build never shows a live ad. Live mode uses the live id and
+ * lets Firebase change it; an empty live id falls back to the test one (the debug log lists those keys).
  */
 
 /** One Remote Config value: its local default, the current value, and how a Firebase string turns into it. */
@@ -47,13 +55,21 @@ object RemoteRegistry {
         }
     }
 
+    /** Keys declared with an empty live id while DebugConfig.ENABLE_LIVE_AD is on: they use the test id. */
+    val emptyLive: List<String> get() = synchronized(missingLive) { missingLive.toList() }
+
+    private val missingLive = mutableListOf<String>()
+
+    internal fun markEmptyLive(key: String) = synchronized(missingLive) { missingLive += key }
+
     /** Current value of every key. */
     fun snapshot(): Map<String, Any?> = all.mapValues { it.value.value }
 }
 
-class RemoteDelegate<T>(private val remote: RemoteValue<T>) : ReadWriteProperty<Any?, T> {
+class RemoteDelegate<T>(private val remote: RemoteValue<T>, private val emptyLive: Boolean = false) : ReadWriteProperty<Any?, T> {
     operator fun provideDelegate(thisRef: Any?, property: KProperty<*>): RemoteDelegate<T> {
         RemoteRegistry.put(property.name, remote)
+        if (emptyLive) RemoteRegistry.markEmptyLive(property.name)
         return this
     }
 
@@ -64,12 +80,29 @@ class RemoteDelegate<T>(private val remote: RemoteValue<T>) : ReadWriteProperty<
     }
 }
 
+/** Any type: [resolve] turns the Firebase string (empty when there is none) and the current value into the new one. */
+fun <T> remote(defaultValue: T, legacyKeys: List<String> = emptyList(), resolve: (raw: String, current: T) -> T) =
+    RemoteDelegate(RemoteValue(defaultValue, legacyKeys, resolve))
+
 /** Text. An empty Firebase value keeps the current one unless [keepCurrentWhenEmpty] is false. */
 fun remoteString(defaultValue: String, keepCurrentWhenEmpty: Boolean = true, legacyKeys: List<String> = emptyList()) =
     RemoteDelegate(RemoteValue(defaultValue, legacyKeys) { raw, current -> if (keepCurrentWhenEmpty && raw.isEmpty()) current else raw })
 
 /** An ad unit id. Empty keeps the current id, so a missing key never leaves an ad without a unit. */
-fun remoteAdUnit(defaultValue: String) = remoteString(defaultValue)
+fun remoteAdUnit(defaultValue: String, legacyKeys: List<String> = emptyList()) = remoteString(defaultValue, legacyKeys = legacyKeys)
+
+/** An ad unit, live or test by DebugConfig.ENABLE_LIVE_AD. Test mode ignores Firebase; an empty [live] falls back to [test]. */
+fun remoteAdUnit(test: String, live: String, legacyKeys: List<String> = emptyList()) = remoteString(test = test, live = live, legacyKeys = legacyKeys)
+
+/** Text, live or test by DebugConfig.ENABLE_LIVE_AD (e.g. a live and a test feed URL). Same rules as [remoteAdUnit]. */
+fun remoteString(test: String, live: String, legacyKeys: List<String> = emptyList()): RemoteDelegate<String> = when {
+    !DebugConfig.ENABLE_LIVE_AD -> RemoteDelegate(RemoteValue(test, legacyKeys) { _, current -> current })
+    live.isEmpty() -> RemoteDelegate(RemoteValue(test, legacyKeys) { raw, current -> raw.ifEmpty { current } }, emptyLive = true)
+    else -> RemoteDelegate(RemoteValue(live, legacyKeys) { raw, current -> raw.ifEmpty { current } })
+}
+
+/** A value that isn't a Remote Config key (an SDK banner id, say), live or test by DebugConfig.ENABLE_LIVE_AD. */
+fun adUnit(test: String, live: String): String = if (DebugConfig.ENABLE_LIVE_AD && live.isNotEmpty()) live else test
 
 /** A whole number. Empty keeps the current value; text that isn't a number becomes [invalidFallback]. */
 fun remoteInt(defaultValue: Int, invalidFallback: Int = defaultValue) =

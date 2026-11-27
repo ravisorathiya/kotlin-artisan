@@ -1,0 +1,20 @@
+# Applied to the app's release build (consumerProguardFiles in this module's build file). Release builds plant no
+# Timber tree, so these calls print nothing there: strip them, and the work of building their messages, entirely.
+# logging(...) is kept: in release it sends breadcrumbs and caught errors to Crashlytics.
+-assumenosideeffects class {{PACKAGE}}.log.AppLogger {
+    public static void logVerbose(...);
+    public static void logDebug(...);
+    public static void logInfo(...);
+    public static void logWarn(...);
+    public static void logError(...);
+    public static void logWtf(...);
+}
+-assumenosideeffects class timber.log.Timber* {
+    public *** v(...);
+    public *** d(...);
+    public *** i(...);
+    public *** w(...);
+    public *** e(...);
+    public *** wtf(...);
+    public *** log(...);
+}

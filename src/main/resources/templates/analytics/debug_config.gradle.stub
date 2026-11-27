@@ -1,0 +1,165 @@
+// DebugConfig for the build (artisan make:firebase). The app's build file applies it, as its last line:
+//   apply(from = "<this module>/debug_config.gradle")
+//
+//   1. The AdMob app id: manifestPlaceholders.admobAppId, from DebugConfig.kt (ENABLE_LIVE_AD, ADMOB_APP_ID_TEST,
+//      ADMOB_APP_ID_LIVE). The app manifest uses it:
+//      <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="${admobAppId}" />
+//   2. checkReleaseSwitches: before every release build, a warning when DebugConfig isn't ready for the Play Store.
+//      It never fails the build.
+//   3. checkLogging: app code that logs around {{MODULE}} (android.util.Log, printStackTrace(), println(),
+//      stackTraceToString() in a log call). Release builds fail (DebugConfig.FAIL_RELEASE_ON_RAW_LOGS = false: warn
+//      only), debug builds warn. Run it any time: ./gradlew checkLogging
+//
+// The settings are in DebugConfig.kt. make:firebase keeps this file current. See README.md in this module.
+
+def artisanModule = rootProject.findProject("{{MODULE}}")
+def artisanModuleDir = artisanModule != null ? artisanModule.projectDir : rootProject.file("{{MODULE}}".substring(1).replace(':', '/'))
+def artisanDebugConfig = new File(artisanModuleDir, "src/main/java/" + "{{PACKAGE}}".replace('.', '/') + "/DebugConfig.kt")
+def artisanConfig = ArtisanDebugConfig.read(artisanDebugConfig)
+if (artisanConfig.isEmpty()) {
+    logger.warn("debug_config.gradle: no DebugConfig at ${artisanDebugConfig}: Google's test AdMob app id is used.")
+}
+android.defaultConfig.manifestPlaceholders.put("admobAppId", ArtisanDebugConfig.admobAppId(artisanConfig))
+
+def artisanSwitches = tasks.register("checkReleaseSwitches", ArtisanReleaseSwitches) {
+    group = "verification"
+    description = "Warns (never fails) when DebugConfig isn't ready for a Play Store release."
+    debugConfig = artisanDebugConfig
+}
+
+def artisanExclude = [
+    rootProject.projectDir.toPath().relativize(artisanModuleDir.toPath()).toString().replace('\\', '/'),
+    "ai",
+]
+def artisanLogging = tasks.register("checkLogging", ArtisanLoggingGuard) {
+    group = "verification"
+    description = "Fails (DebugConfig.FAIL_RELEASE_ON_RAW_LOGS) on app code that logs around {{MODULE}}."
+    root = rootProject.projectDir
+    exclude = artisanExclude
+    debugConfig = artisanDebugConfig
+    release = true
+}
+def artisanLoggingWarn = tasks.register("checkLoggingWarn", ArtisanLoggingGuard) {
+    group = "verification"
+    description = "Warns on app code that logs around {{MODULE}}."
+    root = rootProject.projectDir
+    exclude = artisanExclude
+    debugConfig = artisanDebugConfig
+    release = false
+}
+
+// pre<Variant>Build is the first task of a variant (flavors too: preFreeReleaseBuild)
+tasks.configureEach { t ->
+    if (t.name ==~ /pre\w*ReleaseBuild/) t.dependsOn(artisanSwitches, artisanLogging)
+    else if (t.name ==~ /pre\w*DebugBuild/) t.dependsOn(artisanLoggingWarn)
+    else if (t.name == "check") t.dependsOn(artisanLogging)
+}
+
+/** Reads DebugConfig.kt as text: each one-line `const val NAME = value`, with `QA_BUILD` / `!QA_BUILD` resolved. */
+class ArtisanDebugConfig {
+    static final String TEST_APP_ID = "ca-app-pub-3940256099942544~3347511713"
+
+    static Map<String, String> read(File file) {
+        Map<String, String> raw = [:]
+        if (!file.isFile()) return raw
+        def m = file.text =~ /(?m)^\s*const\s+val\s+(\w+)\s*(?::\s*[\w.]+\s*)?=\s*("[^"]*"|[^\s\/]+)/
+        m.each { g -> raw[g[1]] = g[2] }
+        Map<String, String> out = [:]
+        raw.each { k, v -> out[k] = resolve(raw, v, 0) }
+        out
+    }
+
+    private static String resolve(Map<String, String> raw, String v, int depth) {
+        if (v == null || depth > 8) return null
+        if (v.startsWith("!")) {
+            def r = resolve(raw, v.substring(1).trim(), depth + 1)
+            return r == "true" ? "false" : r == "false" ? "true" : null
+        }
+        if (v.length() >= 2 && v.startsWith('"') && v.endsWith('"')) return v.substring(1, v.length() - 1)
+        if (v ==~ /[A-Z_][A-Z0-9_]*/ && raw.containsKey(v)) return resolve(raw, raw[v], depth + 1)
+        v
+    }
+
+    static String admobAppId(Map<String, String> c) {
+        def live = c["ADMOB_APP_ID_LIVE"] ?: ""
+        if (c["ENABLE_LIVE_AD"] == "true" && live) return live
+        c["ADMOB_APP_ID_TEST"] ?: TEST_APP_ID
+    }
+}
+
+/** checkReleaseSwitches: what in DebugConfig isn't ready for the Play Store. A warning, never a failure. */
+class ArtisanReleaseSwitches extends DefaultTask {
+    @Internal File debugConfig
+
+    @TaskAction
+    void check() {
+        def c = ArtisanDebugConfig.read(debugConfig)
+        if (c.isEmpty()) {
+            logger.warn("Release guard: no DebugConfig at ${debugConfig}: switches not checked.")
+            return
+        }
+        def wrong = []
+        if (c["QA_BUILD"] == "true") wrong << "QA_BUILD = true: this is a QA build, not the Play Store release"
+        if (c["ENABLE_EVENT_BOX"] == "true") wrong << "ENABLE_EVENT_BOX = true: testers' event box on every screen"
+        if (c["ENABLE_LIVE_AD"] != "true") wrong << "ENABLE_LIVE_AD = false: Google's TEST ads and app id"
+        else if (!c["ADMOB_APP_ID_LIVE"]) wrong << "ADMOB_APP_ID_LIVE is empty: the test app id is used"
+        if (c["REMOTE_CONFIG_AUDIT_IN_RELEASE"] == "true") wrong << "REMOTE_CONFIG_AUDIT_IN_RELEASE = true: every Remote Config key and value in logcat"
+        if (wrong.isEmpty()) {
+            logger.lifecycle("Release guard: DebugConfig is release-ready (live ads, live app id, no event box).")
+            return
+        }
+        logger.warn([
+            "",
+            "==================================================================================",
+            "WARNING - RELEASE GUARD: DebugConfig is not ready for the Play Store (the build goes on):",
+        ].plus(wrong.collect { "  - $it" }).plus([
+            "Fix: ${debugConfig}",
+            "==================================================================================",
+        ]).join("\n"))
+    }
+}
+
+/** checkLogging / checkLoggingWarn: logging that goes around the Firebase module's logging. */
+class ArtisanLoggingGuard extends DefaultTask {
+    @Internal File root
+    @Internal List<String> exclude = []
+    @Internal File debugConfig
+    @Internal boolean release
+
+    static final List RULES = [
+        [~/^\s*import\s+android\.util\.Log\s*$/, "android.util.Log: use logDebug / logWarn / logError"],
+        [~/\.printStackTrace\(\)/, "printStackTrace(): use logging(\"Tag\", e)"],
+        [~/(?<![\w.])println\(/, "println(): use logDebug"],
+        [~/(logging|log\w*|\.e)\(.*stackTraceToString\(\)/, "stackTraceToString() in a log call: pass the throwable, logging(\"Tag\", e)"],
+    ]
+
+    @TaskAction
+    void check() {
+        def hits = []
+        def base = root.toPath()
+        def skip = ["build", ".gradle", ".git", ".idea", "node_modules"]
+        root.traverse(
+            type: groovy.io.FileType.FILES,
+            nameFilter: ~/.*\.kt/,
+            preDir: { if (it.name in skip) return groovy.io.FileVisitResult.SKIP_SUBTREE }
+        ) { f ->
+            def rel = base.relativize(f.toPath()).toString().replace('\\', '/')
+            if (!rel.contains("/src/main/")) return
+            if (exclude.any { rel == it || rel.startsWith(it + "/") }) return
+            f.readLines().eachWithIndex { line, i ->
+                def t = line.trim()
+                if (t.startsWith("//") || t.startsWith("*")) return
+                def rule = RULES.find { line =~ it[0] }
+                if (rule) hits << "  ${rel}:${i + 1}: ${rule[1]}"
+            }
+        }
+        if (hits.isEmpty()) {
+            logger.lifecycle("Logging guard: OK")
+            return
+        }
+        def message = "Logging guard: ${hits.size()} line(s) log around the Firebase module's logging\n" + hits.join("\n")
+        def fail = release && ArtisanDebugConfig.read(debugConfig)["FAIL_RELEASE_ON_RAW_LOGS"] != "false"
+        if (fail) throw new GradleException(message + "\n(Warn only: DebugConfig.FAIL_RELEASE_ON_RAW_LOGS = false)")
+        logger.warn("WARNING - " + message)
+    }
+}

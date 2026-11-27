@@ -1,0 +1,113 @@
+package {{PACKAGE}}.log
+
+import android.os.SystemClock
+import android.util.Log
+import {{PACKAGE}}.crash.Crash
+import timber.log.Timber
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.random.Random
+
+/*
+ * Flow tracing: follow one multi-step flow (a checkout, splash -> ad -> main) end to end.
+ *
+ *   val flow = logFlow("Checkout")
+ *   flow.step("cart loaded")
+ *   flow.fail("payment", e)        // also logging("Checkout.payment", e)
+ *   flow.end("paid")
+ *
+ * Logcat (debug):  D/Flow: Checkout#a3f2 +120ms (2) cart loaded  ·  pay(CheckoutActivity.kt:88)
+ *                  filter "tag:Flow" for every flow, or "Checkout#a3f2" for one.
+ * Release:         each line is a Crashlytics breadcrumb, the last step is the key "flow_Checkout", and every
+ *                  logging(tag, e) non-fatal lists the flows that were active when it happened.
+ *
+ * Never put phone numbers, emails or names in a step: use maskNumber().
+ */
+
+/** Starts a flow named [name] (PascalCase, no spaces). Each call is a new flow with its own id. */
+fun logFlow(name: String, firstStep: String = "start"): LogFlow = LogFlow(name).also {
+    LogFlow.register(it)
+    it.step(firstStep)
+}
+
+/** "•••••••123": enough to tell numbers apart in a log, never the number itself. */
+fun maskNumber(number: String?): String {
+    val digits = number?.filter { it.isDigit() }.orEmpty()
+    return if (digits.length <= 3) "•••" else "•".repeat(digits.length - 3) + digits.takeLast(3)
+}
+
+class LogFlow internal constructor(val name: String) {
+
+    /** "Checkout#a3f2": the same id on every line of this flow. */
+    val id: String = "$name#" + Random.nextInt(0x1000, 0x10000).toString(16)
+
+    private val startedAt = SystemClock.elapsedRealtime()
+    private val count = AtomicInteger()
+
+    @Volatile
+    var lastStep: String = ""
+        private set
+
+    @Volatile
+    var ended = false
+        private set
+
+    /** One step of the flow. Returns the flow, so steps can be chained. */
+    fun step(message: String): LogFlow = apply { write(message) }
+
+    /** A failed step: the step line, plus logging("Name.step", throwable) (a Crashlytics non-fatal in release). */
+    fun fail(step: String, throwable: Throwable) {
+        write("FAILED $step: ${throwable.javaClass.simpleName}: ${throwable.message}")
+        logging("$name.$step", throwable)
+    }
+
+    /** The last step, with the flow's total time. Further steps are still logged, the flow is just no longer "active". */
+    fun end(result: String = "done") {
+        if (ended) return
+        write("end: $result (total ${elapsed()}ms)")
+        ended = true
+        unregister(this)
+    }
+
+    private fun elapsed() = SystemClock.elapsedRealtime() - startedAt
+
+    private fun write(message: String) {
+        lastStep = message
+        val n = count.incrementAndGet()
+        if (Timber.treeCount > 0 && isLoggable(Log.DEBUG)) {
+            val line = "$id +${elapsed()}ms ($n) $message"
+            Timber.tag(TAG).d(withContext(line, flowCaller()))
+        }
+        if (breadcrumbsOn) {
+            Crash.log("[$id] $message")
+            Crash.setKey("flow_$name", message)
+        }
+    }
+
+    /** The real caller: skips this file and app wrappers named *FlowLog, so file:line points at the call site. */
+    private fun flowCaller(): StackTraceElement? = Throwable().stackTrace.firstOrNull { frame ->
+        val cls = frame.className.substringBefore('$')
+        cls != LogFlow::class.java.name && cls != FILE_CLASS && !cls.endsWith("FlowLog")
+    }
+
+    override fun toString() = "$id@$lastStep"
+
+    companion object {
+        private const val TAG = "Flow"
+        private const val MAX_ACTIVE = 8
+        private const val FILE_CLASS = "{{PACKAGE}}.log.LogFlowKt"
+
+        private val active = LinkedHashMap<String, LogFlow>()
+
+        internal fun register(flow: LogFlow) = synchronized(active) {
+            if (active.size >= MAX_ACTIVE) active.remove(active.keys.first())
+            active[flow.id] = flow
+        }
+
+        private fun unregister(flow: LogFlow) = synchronized(active) { active.remove(flow.id) }
+
+        /** "Checkout#a3f2@cart loaded, Startup#91c0@ad shown", or null when no flow is active. */
+        internal fun activeSummary(): String? = synchronized(active) {
+            if (active.isEmpty()) null else active.values.joinToString()
+        }
+    }
+}

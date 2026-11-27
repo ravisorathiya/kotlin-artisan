@@ -15,7 +15,7 @@ fun registerAi() {
 
 /** Files every workspace gets from templates/ai/ (also added to an existing workspace when missing). */
 internal val AI_TEMPLATE_FILES = listOf(
-    "skill/README.md", "skill/firebase_module.md", "skill/ads.md", "skill/permission.md", "skill/analytics_events.md", "skill/crash_hardening.md",
+    "skill/README.md", "skill/firebase_module.md", "skill/ads.md", "skill/logging.md", "skill/permission.md", "skill/analytics_events.md", "skill/crash_hardening.md",
     "scripts/README.md", "scripts/recolor.py",
 )
 
@@ -414,7 +414,7 @@ internal fun aiReadme(p: Project, version: String): String {
         add("│   ├── MASTER_OVERVIEW.md    (feature index + apply order: start here)")
         add("│   └── <feature>/            (overview.md, reference/*.txt, apply_bundle.ps1)")
         add("├── scripts/                  (README.md rules, recolor.py, ... helper scripts)")
-        add("├── skill/                    (permission.md, analytics_events.md, crash_hardening.md)")
+        add("├── skill/                    (logging.md, permission.md, analytics_events.md, crash_hardening.md)")
         add("└── workflow/")
         add("    └── ${"$version/".padEnd(22)}(overview.md, phase_1.md)")
     }.joinToString("\n")

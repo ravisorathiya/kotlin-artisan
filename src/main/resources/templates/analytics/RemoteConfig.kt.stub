@@ -56,6 +56,9 @@ object RemoteConfig {
         if (started) return
         started = true
         Timber.tag(TAG).d("holders: %s, %d keys", holders.joinToString { it::class.simpleName.orEmpty() }, RemoteRegistry.all.size)
+        RemoteRegistry.emptyLive.takeIf { it.isNotEmpty() }?.let {
+            Timber.tag(TAG).w("ENABLE_LIVE_AD is on but these have no live id, so they use the test one: %s", it.joinToString())
+        }
         val c = config ?: run { firstFetch.complete(false); return }
         firebaseEvent("remote_cfg_load_start")
         Analytics.scope.launch {

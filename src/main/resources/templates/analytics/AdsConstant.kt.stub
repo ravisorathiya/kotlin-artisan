@@ -1,10 +1,12 @@
 package {{PACKAGE}}.remote
 
+import {{PACKAGE}}.DebugConfig
+
 /**
  * Ad units and remote switches, one place. Add a line and it's live: the property name is the Remote Config key,
  * the value is the default until Firebase answers, and the debug audit shows it (logcat RemoteConfigAudit).
  *
- *     var homeNativeAd by remoteAdUnit("ca-app-pub-xxx/yyy")
+ *     var homeNativeAd by remoteAdUnit(test = "ca-app-pub-3940256099942544/2247696110", live = "ca-app-pub-xxx/yyy")
  *     var showHomeNativeAd by remoteString("yes")
  *
  * Group by screen, with a header naming the class that reads it. Switches are "yes" / "no".
@@ -13,37 +15,39 @@ package {{PACKAGE}}.remote
  *   showMoreApp...      "yes" = when the Google ad fails to load, show a More Apps ad there instead (fallback)
  *   onlyShowMoreApp...  "yes" = always show the More Apps ad there, never the Google one (forced)
  *
- * The ad unit ids below are Google's test ids: replace them before a release (or set them in the Firebase console).
+ * Ad units have a test and a live id: DebugConfig.ENABLE_LIVE_AD picks one (QA builds: test, and Firebase can't change
+ * them). Put your live ids in `live = ""` before a release, or set them in the Firebase console.
  * See README.md in this module.
  */
 object AdsConstant {
 
     /*============================================================*/
     // APP: static ids and links (not remote)
-    const val APP_ID = "ca-app-pub-3940256099942544~3347511713"
+    /** The AdMob app id of this build: DebugConfig.ADMOB_APP_ID (test or live by DebugConfig.ENABLE_LIVE_AD). */
+    val APP_ID: String get() = DebugConfig.ADMOB_APP_ID
     const val PRIVACY_POLICY = "https://www.google.com/"
 
     /*============================================================*/
     // SPLASH: SplashActivity / SplashOpenAd
-    var splashAppOpenAd by remoteAdUnit("ca-app-pub-3940256099942544/9257395921")
+    var splashAppOpenAd by remoteAdUnit(test = "ca-app-pub-3940256099942544/9257395921", live = "")
     var showSplashAppOpenAd by remoteString("yes")
     var onlineSplashAppOpen by remoteString("no")
 
     /*============================================================*/
     // APP OPEN (on resume): AppOpenManager
-    var googleAppOpen by remoteAdUnit("ca-app-pub-3940256099942544/9257395921")
+    var googleAppOpen by remoteAdUnit(test = "ca-app-pub-3940256099942544/9257395921", live = "")
 
     /*============================================================*/
     // INTERSTITIAL: GoogleInterAd
-    var interstitialAds by remoteAdUnit("/21775744923/example/interstitial")
+    var interstitialAds by remoteAdUnit(test = "/21775744923/example/interstitial", live = "")
     var googleInterMaxInterAdsShow by remoteInt(defaultValue = 1, invalidFallback = 3)
     var googleInterGapBetweenTwoInter by remoteInt(defaultValue = 2, invalidFallback = 2)
     var googleInterCountDownTimer by remoteLong(defaultValue = 3000L, invalidFallback = 10_000L)
 
     /*============================================================*/
     // LANGUAGE SCREEN: LanguageNativeAd / LangAdLoader / PreviewLangAdsLoad
-    var langBigNativeBanner by remoteAdUnit("/21775744923/example/native")
-    var languageSmallNativeAd by remoteAdUnit("/21775744923/example/native")
+    var langBigNativeBanner by remoteAdUnit(test = "/21775744923/example/native", live = "")
+    var languageSmallNativeAd by remoteAdUnit(test = "/21775744923/example/native", live = "")
     var showBigNativeLanguage by remoteString("yes")
     var showLanguageNativeAd by remoteString("yes")
     var showMoreAppLanguage by remoteString("yes")
@@ -51,14 +55,14 @@ object AdsConstant {
 
     /*============================================================*/
     // EXIT DIALOG: ExitAppDialog / MainActivity
-    var nativeExitDialogAds by remoteAdUnit("/21775744923/example/native")
+    var nativeExitDialogAds by remoteAdUnit(test = "/21775744923/example/native", live = "")
     var showAdsExitDialog by remoteString("yes")
     var showMoreAppNative by remoteString("yes")
     var onlyShowMoreAppNative by remoteString("no")
 
     /*============================================================*/
     // BANNER: MainActivity bottom banner (sample; copy per screen: <screen>BannerAd + show<Screen>BannerAd)
-    var mainBannerAd by remoteAdUnit("/21775744923/example/adaptive-banner")
+    var mainBannerAd by remoteAdUnit(test = "/21775744923/example/adaptive-banner", live = "")
     var showMainBannerAd by remoteString("yes")
 
     /*============================================================*/

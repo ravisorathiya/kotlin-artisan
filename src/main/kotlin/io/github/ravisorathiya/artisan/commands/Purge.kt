@@ -269,6 +269,37 @@ private fun planFirebaseWiring(run: PurgeRun, plan: PurgePlan, pkg: String) {
     }
 }
 
+/** The app's side of debug_config.gradle: the apply line goes, `${admobAppId}` becomes the app id the build was using. */
+private fun planDebugConfigUnwiring(run: PurgeRun, plan: PurgePlan, module: Module) {
+    val p = run.p
+    val app = p.appModule ?: return
+    val build = app.buildFile ?: return
+    removeDebugConfigApply(run.text(build))?.let {
+        run.edit(plan, build, it)
+        plan.kept += "${p.rel(build)}: the $DEBUG_CONFIG_SCRIPT line (removed)"
+    }
+    val manifest = File(app.dir, "src/main/AndroidManifest.xml").takeIf { it.isFile } ?: return
+    val config = sourceFiles(module, listOf(Regex("""^DebugConfig\.kt$"""))).firstOrNull()?.readText().orEmpty()
+    val id = admobAppIdOf(config)
+    removeAddedAdmobMeta(run.text(manifest))?.let {
+        run.edit(plan, manifest, it)
+        plan.kept += "${p.rel(manifest)}: the AdMob app id meta-data make:ads added (removed)"
+    }
+    restoreAdmobLiteral(run.text(manifest), id)?.let {
+        run.edit(plan, manifest, it)
+        plan.kept += "${p.rel(manifest)}: the AdMob app id is the literal $id again"
+    }
+}
+
+/** make:ads added the AdMob app id meta-data: purge ads takes it out again. */
+private fun planAdsManifest(run: PurgeRun, plan: PurgePlan) {
+    val manifest = run.p.appModule?.let { File(it.dir, "src/main/AndroidManifest.xml") }?.takeIf { it.isFile } ?: return
+    removeAddedAdmobMeta(run.text(manifest))?.let {
+        run.edit(plan, manifest, it)
+        plan.kept += "${run.p.rel(manifest)}: the AdMob app id meta-data make:ads added (removed)"
+    }
+}
+
 internal fun planPurge(run: PurgeRun, kind: String): PurgePlan {
     val p = run.p
     val title = PURGE_KINDS.firstOrNull { it.first == kind }?.second
@@ -285,6 +316,7 @@ internal fun planPurge(run: PurgeRun, kind: String): PurgePlan {
             val (m, pkg) = adsModule(p) ?: throw CliError("No module made by make:ads here.")
             block(codeLines(p, usesPackage(pkg), run.deleting + m.dir))
             planModule(run, plan, m, ADS_LIBS, ADS_EVENTS.flatMap { s -> s.third.map { it.first } }.toSet())
+            planAdsManifest(run, plan)
             plan.kept += "AdsConstant keeps its ad keys (it belongs to the Firebase module)"
         }
         "firebase" -> {
@@ -298,6 +330,7 @@ internal fun planPurge(run: PurgeRun, kind: String): PurgePlan {
             planFirebaseWiring(run, plan, pkg)
             if (ads != null) run.deleting -= ads.first.dir
             planModule(run, plan, m, FIREBASE_LIBS, MODULE_EVENTS.map { it.first }.toSet())
+            planDebugConfigUnwiring(run, plan, m)
             plan.kept += "Left as is: the google-services / Crashlytics plugins, google-services.json and JitPack (remove them by hand if nothing needs them)"
         }
         "permission" -> {

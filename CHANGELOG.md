@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.19.0: make:firebase: one QA/release switch, live and test ads, logging you can tune
+
+- **`DebugConfig.QA_BUILD`** is the one switch: `true` (the default) is a QA build with the event box and Google's
+  test ads; `false` is the Play Store release. `ENABLE_EVENT_BOX` and `ENABLE_LIVE_AD` follow it unless you set them.
+- **Live and test ads.** Ad units are `remoteAdUnit(test = "...", live = "...")` in `AdsConstant`. In test mode
+  Firebase can't change them, so a QA build never shows a live ad; an empty live id falls back to the test one.
+  - The AdMob app id comes from `DebugConfig.ADMOB_APP_ID_LIVE` / `_TEST`: the manifest reads `${admobAppId}`.
+    A real id already in your manifest moves into `ADMOB_APP_ID_LIVE`. `make:ads` adds the meta-data if it's missing.
+- **Logging you can tune.** `logDebug` / `logInfo` / `logWarn` / `logError` tag each line with the calling class and a
+  clickable `File.kt:line`. `logFlow("Name")` follows a flow across steps, and `AppLog` gives Timber-style calls.
+  - `DebugConfig.LOGGING_VOLUME`: `FULL`, `MEDIUM`, `LOW` (full until a screen opens) or `NONE`.
+  - Release builds: R8 strips the log calls (`consumer-rules.pro`). `logging(...)` and flows become Crashlytics
+    breadcrumbs, non-fatals are capped per tag, and the Crashlytics key `screen` follows the Activity.
+  - At start-up a debug build logs its mode in one line, e.g. `QA build · ads TEST · logging FULL`.
+- **Release guards** (`debug_config.gradle`, applied from the app's build file):
+  - `checkReleaseSwitches` warns before a release build when DebugConfig isn't ready.
+  - `checkLogging` fails a release build on `android.util.Log`, `printStackTrace()` or `println()` in app code.
+    Debug builds only warn, and `FAIL_RELEASE_ON_RAW_LOGS = false` makes it a warning everywhere. `make:firebase`
+    says how many such lines your code has.
+- **For agents:** `make:ai` and `make:firebase` add `skill/logging.md`: which call to use, where to log, and what
+  never goes in a log.
+- **Upgrading.** Running `make:firebase` again on an older module adds the new files and the DebugConfig keys. Your
+  values stay, and `QA_BUILD` starts as your `ENABLE_EVENT_BOX`.
+  - `purge firebase` / `purge ads` undo the build line and the manifest change.
+- New modules start as a QA build (event box on). Before a release, set `QA_BUILD = false`.
+
 ## 0.18.0: purge, to take out what artisan made
 
 - **`artisan purge [ai|ads|firebase|permission|notes|hooks|config|all]`** removes what artisan generated. With no

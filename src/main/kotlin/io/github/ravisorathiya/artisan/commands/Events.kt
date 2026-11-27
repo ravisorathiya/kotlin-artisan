@@ -372,7 +372,7 @@ internal fun makeAds(ctx: Ctx) {
     Ui.say("Still to do (once):", Tone.WARN)
     Ui.say("  1. In Application.onCreate(), after Analytics.init(this):  Ads.init(this, excluded = listOf(SplashActivity::class.java))   (import ${plan.pkg}.Ads)")
     Ui.say("  2. Splash: SplashAd.show(this) { goNext() }.  Each placement: BannerAds.show(...) / NativeAds.show(...) / Interstitial.show(...) { }")
-    Ui.say("  3. AdsConstant.APP_ID and the ad units are Google's test ids: set the real ones before a release.")
+    Ui.say("  3. Before a release: your ids in DebugConfig.ADMOB_APP_ID_LIVE and each live = \"\" in AdsConstant, then DebugConfig.QA_BUILD = false.")
     Ui.say("  How to use it all: ${plan.module.trimStart(':').replace(':', '/')}/README.md", Tone.DIM)
 
     if (!ctx.has("--no-verify") && p2.gradlew.isFile) {
@@ -395,7 +395,7 @@ internal fun makeAnalytics(ctx: Ctx) {
     plan.changed.putAll(wiring.changed)
     applyAnalyticsModule(p, plan)
     p.notes?.dir?.takeIf { File(it, "skill").isDirectory || File(it, "event").isDirectory }?.let { ws ->
-        val r = refreshAiTemplates(ws, listOf("skill/firebase_module.md", "skill/README.md"))
+        val r = refreshAiTemplates(ws, listOf("skill/firebase_module.md", "skill/logging.md", "skill/README.md"))
         (r.added + r.updated).forEach { Ui.say("  ${p.rel(it)}: ${if (it in r.added) "added" else "updated"} (the Firebase skill for agents)", Tone.DIM) }
         r.newCopies.forEach { Ui.say("  ${p.rel(it)}: the skill list has a new row for firebase_module.md; merge it into your skill/README.md", Tone.WARN) }
     }
@@ -417,7 +417,12 @@ internal fun makeAnalytics(ctx: Ctx) {
     wiring.todo?.let { Ui.say("  - $it") }
     Ui.say("  - Sync Gradle in Android Studio.")
     Ui.say("  Bubble look: the setBubble... lines before .init(this) in your Application (defaults shown).", Tone.DIM)
-    Ui.say("  Event box on: ENABLE_EVENT_BOX = true in DebugConfig.kt while testing; false before release.", Tone.DIM)
+    Ui.say("  One switch: DebugConfig.QA_BUILD (true = event box + test ads; false = the Play Store release). Release builds warn when it isn't ready.", Tone.DIM)
+    Ui.say("  Logging: logDebug(\"...\") / logError(\"...\", e) / logging(\"Tag\", e) / logFlow(\"Name\"). How much: DebugConfig.LOGGING_VOLUME.", Tone.DIM)
+    val moduleDir = File(p.root, plan.created.keys.first().substringBeforeLast('/'))
+    countRawLogs(p, moduleDir).takeIf { it > 0 }?.let {
+        Ui.say("  $it line(s) of app code log around ${plan.module} (android.util.Log, printStackTrace, println): release builds fail until they use logDebug / logging(tag, e). ./gradlew checkLogging lists them; DebugConfig.FAIL_RELEASE_ON_RAW_LOGS = false only warns.", Tone.WARN)
+    }
     Ui.say("  What the box shows: the Bypass section of DebugConfig (lifecycle hidden by default; add suffixes, prefixes, names, or always-show names).", Tone.DIM)
     Ui.say("  How to use it all (events, Crash, RemoteConfig, Messaging, logging): ${plan.module.trimStart(':').replace(':', '/')}/README.md", Tone.DIM)
     Ui.say("  Then each event: artisan make:event <Screen> <name>  ->  firebaseEvent(\"<name>\")", Tone.DIM)

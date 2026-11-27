@@ -9,7 +9,10 @@ One file per feature. The roadmap and the order are in [workflow/v_0_17/overview
 | [repo_workspace.md](repo_workspace.md) | (internal) | `[x]` |
 | [make_lang.md](make_lang.md) | 0.17.0 | `[x]` |
 | [purge.md](purge.md) | 0.18.0 | `[x]` |
-| [check_release.md](check_release.md) | 0.19.0 | `[ ]` |
-| [make_update.md](make_update.md) | 0.20.0 | `[ ]` |
-| [deps.md](deps.md) | 0.21.0 | `[ ]` |
-| [make_billing.md](make_billing.md) | 0.22.0 | `[ ]` |
+| [debug_config.md](debug_config.md) | 0.19.0 | `[x]` |
+| [check_release.md](check_release.md) | 0.20.0 | `[ ]` |
+| [make_update.md](make_update.md) | 0.21.0 | `[ ]` |
+| [deps.md](deps.md) | 0.22.0 | `[ ]` |
+| [make_billing.md](make_billing.md) | 0.23.0 | `[ ]` |
+| [make_notify.md](make_notify.md) | 0.24.0 | `[ ]` |
+| [make_worker.md](make_worker.md) | 0.25.0 | `[ ]` |

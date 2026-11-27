@@ -235,7 +235,7 @@ internal val ANALYTICS_SOURCES = listOf(
     "remote/AdsConstant.kt", "remote/RemoteValue.kt", "remote/RemoteConfig.kt",
     "crash/Crash.kt",
     "messaging/Messaging.kt",
-    "log/Logging.kt",
+    "log/Logging.kt", "log/AppLogger.kt", "log/AppLog.kt", "log/LogFlow.kt",
 )
 
 /** The feature modules artisan builds: same Gradle handling, their own code, dependencies and extras. */
@@ -506,7 +506,10 @@ internal fun planAnalyticsModule(
         append("android {\n")
         append("    namespace ${if (kts) "= " else ""}${q(ns)}\n")
         append(block(compileSdk)).append("\n\n")
-        append("    defaultConfig {\n").append(minSdk.prependIndent("        ")).append("\n    }\n")
+        append("    defaultConfig {\n").append(minSdk.prependIndent("        ")).append("\n")
+        // R8 strips logDebug / Timber calls from the app's release build (consumer-rules.pro)
+        if (kind == ModuleKind.FIREBASE) append("        consumerProguardFiles(${q("consumer-rules.pro")})\n")
+        append("    }\n")
         compileOptions?.let { append("\n").append(block(it)).append("\n") }
         kotlinOptions?.let { append("\n").append(block(it)).append("\n") }
         if (compose) {
@@ -534,6 +537,15 @@ internal fun planAnalyticsModule(
     // Firebase code carries the managed marker, so a later make:firebase can update what nobody changed
     for (f in if (kind == ModuleKind.FIREBASE) ANALYTICS_SOURCES else adsSources(compose)) created["$src/$f"] = stubText(f.substringAfterLast('/'))
         .let { if (kind == ModuleKind.FIREBASE && f !in FIREBASE_SETTINGS) managedSource(f, it) else it }
+    if (kind == ModuleKind.FIREBASE) {
+        for (f in FIREBASE_MODULE_FILES) created["$dir/$f"] = managedSource(f, stubText(f))
+        // the app's real AdMob app id (its manifest) becomes DebugConfig's live id, so live builds keep it
+        val appManifest = File(app.dir, "src/main/AndroidManifest.xml").takeIf { it.isFile }?.readText()
+        liveAppIdOrEmpty(appManifest?.let { manifestAdmobAppId(it) }).takeIf { it.isNotEmpty() }?.let { id ->
+            created["$src/DebugConfig.kt"] = created.getValue("$src/DebugConfig.kt").replace("const val ADMOB_APP_ID_LIVE = \"\"", "const val ADMOB_APP_ID_LIVE = \"$id\"")
+            notes += "DebugConfig.ADMOB_APP_ID_LIVE = $id (from the app manifest)."
+        }
+    }
 
     // settings: include + JitPack; root / catalog edits from above
     val changed = linkedMapOf<String, String>()
@@ -587,6 +599,16 @@ internal fun planAnalyticsModule(
         notes += "Added the $id plugin to ${app.name}."
     }
     if (appText != appBuildFile.readText()) changed[p.rel(appBuildFile)] = appText
+    // DebugConfig in the build: debug_config.gradle applied from the app, the AdMob app id through ${admobAppId}
+    val debugDir = when (kind) {
+        ModuleKind.FIREBASE -> File(p.root, dir)
+        ModuleKind.ADS -> firebase?.let { fm -> p.modules.firstOrNull { it.name == fm.name }?.dir }
+    }
+    if (debugDir != null && (kind == ModuleKind.FIREBASE || File(debugDir, DEBUG_CONFIG_SCRIPT).isFile)) {
+        val w = planDebugConfigWiring(p, debugDir, changed, addMeta = kind == ModuleKind.ADS)
+        changed.putAll(w.changed)
+        notes += w.notes
+    }
     if (firebase != null) addAdsKeys(firebase.adsConstant.readText())?.let {
         changed[p.rel(firebase.adsConstant)] = it
         notes += "Added the ad keys this module reads to ${p.rel(firebase.adsConstant)} (an AdsConstant from an older make:firebase)."

@@ -1,19 +1,26 @@
 package {{PACKAGE}}
 
+import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.content.pm.ApplicationInfo
+import android.os.Bundle
 import android.widget.ImageView
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.ogmediaapps.eventbox.OGEventBoxLog
+import com.ogmediaapps.eventbox.model.OGEventBoxBackgroundMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import timber.log.Timber
+import {{PACKAGE}}.crash.Crash
+import {{PACKAGE}}.log.breadcrumbsOn
 import {{PACKAGE}}.log.logging
+import {{PACKAGE}}.log.pastOnboarding
 import {{PACKAGE}}.remote.AdsConstant
 import {{PACKAGE}}.remote.RemoteConfig
+import {{PACKAGE}}.log.isLoggable as passesVolume
 
 /** Sets up Firebase for the app: call [init] once from Application.onCreate(). See README.md in this module. */
 object Analytics {
@@ -59,6 +66,16 @@ object Analytics {
     @Volatile
     private var holders: Array<out Any> = arrayOf(AdsConstant)
 
+    @Volatile
+    private var eventBoxBackgroundMode: EventBoxBackgroundMode? = null
+
+    /** What the event box does while the app is in the background. The library's modes, so app modules need no event-box dependency. */
+    enum class EventBoxBackgroundMode(internal val lib: OGEventBoxBackgroundMode) {
+        OFF(OGEventBoxBackgroundMode.OFF),
+        AUTO(OGEventBoxBackgroundMode.AUTO),
+        OVERLAY_ONLY(OGEventBoxBackgroundMode.OVERLAY_ONLY),
+    }
+
     /** The event box bubble icon, e.g. R.mipmap.ic_launcher. 0 keeps the library's icon. */
     fun setIcon(resId: Int): Analytics = apply { bubbleIcon = resId }
 
@@ -80,6 +97,9 @@ object Analytics {
     /** The objects with `by remote...` properties that Remote Config fetches and applies (AdsConstant by default). */
     fun setRemoteHolders(vararg remoteHolders: Any): Analytics = apply { holders = remoteHolders }
 
+    /** The event box in the background: OFF, AUTO or OVERLAY_ONLY. Unset keeps the library's default. */
+    fun setBackgroundMode(mode: EventBoxBackgroundMode): Analytics = apply { eventBoxBackgroundMode = mode }
+
     // ---------- End of builder ----------
 
     /**
@@ -90,13 +110,23 @@ object Analytics {
         if (appContext != null) return
         appContext = app.applicationContext
         debuggable = (app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-        if (debuggable && Timber.treeCount == 0) Timber.plant(Timber.DebugTree())
+        val loggingOn = DebugConfig.LOGGING_VOLUME != DebugConfig.AppLoggingVolumeEnum.NONE
+        if (debuggable && DebugConfig.ENABLE_TIMBER && loggingOn && Timber.treeCount == 0) {
+            // Backstop for Timber calls inside this module; the log functions already skip lines below LOGGING_VOLUME.
+            Timber.plant(object : Timber.DebugTree() {
+                override fun isLoggable(tag: String?, priority: Int) = passesVolume(priority)
+            })
+            if (DebugConfig.LOGGING_VOLUME == DebugConfig.AppLoggingVolumeEnum.LOW) watchOnboarding(app)
+        }
+        if (debuggable && DebugConfig.PRINT_CONFIG_ON_START) Timber.tag(DebugConfig.TAG_DEBUG).i(buildMode())
         try {
             FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(!debuggable || DebugConfig.CRASHLYTICS_IN_DEBUG)
         } catch (e: Exception) {
             Timber.w(e, "Crashlytics unavailable (google-services.json?)")
         }
+        if (DebugConfig.TRACK_SCREENS) trackScreens(app)
         try {
+            eventBoxBackgroundMode?.let { OGEventBoxLog.setBackgroundMode(it.lib) }
             OGEventBoxLog.setDebugModeEnabled(DebugConfig.ENABLE_EVENT_BOX)
                 .setDebugModeDurationHours(DebugConfig.EVENT_BOX_SESSION_HOURS)
                 .apply { if (bubbleIcon != 0) setBubbleIconResId(bubbleIcon) }
@@ -111,6 +141,50 @@ object Analytics {
             logging("Analytics.init", e)
         }
         RemoteConfig.start(*(if (remoteHolders.isNotEmpty()) remoteHolders else holders))
+    }
+
+    /** This build's mode in one line, e.g. "QA build · ads TEST · logging FULL · event box ON · crashlytics OFF". */
+    fun buildMode(): String = listOf(
+        if (DebugConfig.QA_BUILD) "QA build" else "RELEASE build",
+        "ads " + if (DebugConfig.ENABLE_LIVE_AD) "LIVE" else "TEST",
+        "app id " + if (DebugConfig.ADMOB_APP_ID == DebugConfig.ADMOB_APP_ID_TEST) "test" else "live",
+        "logging " + DebugConfig.LOGGING_VOLUME.name,
+        "event box " + if (DebugConfig.ENABLE_EVENT_BOX) "ON" else "OFF",
+        "crashlytics " + if (!debuggable || DebugConfig.CRASHLYTICS_IN_DEBUG) "ON" else "OFF",
+        "remote config " + if (DebugConfig.REMOTE_CONFIG_LIVE_UPDATES) "live" else "fetch only",
+    ).joinToString(" · ")
+
+    /** LOW volume: everything until DebugConfig.LOW_FULL_UNTIL_SCREEN opens, then warnings and errors only. */
+    private fun watchOnboarding(app: Application) {
+        app.registerActivityLifecycleCallbacks(object : ActivityCallbacks() {
+            override fun onActivityResumed(activity: Activity) {
+                if (pastOnboarding || activity.javaClass.simpleName != DebugConfig.LOW_FULL_UNTIL_SCREEN) return
+                Timber.tag(DebugConfig.TAG_DEBUG).i("LOW: %s reached, only warnings and errors from now on", DebugConfig.LOW_FULL_UNTIL_SCREEN)
+                pastOnboarding = true
+                app.unregisterActivityLifecycleCallbacks(this)
+            }
+        })
+    }
+
+    /** The Crashlytics key "screen" follows the Activity on screen; in release each one is a breadcrumb too. */
+    private fun trackScreens(app: Application) {
+        app.registerActivityLifecycleCallbacks(object : ActivityCallbacks() {
+            override fun onActivityResumed(activity: Activity) {
+                val screen = activity.javaClass.simpleName
+                Crash.setKey("screen", screen)
+                if (breadcrumbsOn) Crash.log("screen: $screen")
+            }
+        })
+    }
+
+    private abstract class ActivityCallbacks : Application.ActivityLifecycleCallbacks {
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Unit
+        override fun onActivityStarted(activity: Activity) = Unit
+        override fun onActivityResumed(activity: Activity) = Unit
+        override fun onActivityPaused(activity: Activity) = Unit
+        override fun onActivityStopped(activity: Activity) = Unit
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+        override fun onActivityDestroyed(activity: Activity) = Unit
     }
 
     /** A session ends after its duration, and an SDK sharing the box may switch it off: turn it back on while testing. */

@@ -30,7 +30,7 @@ The rule lives in `Ads.decide` and every format uses it. Never re-implement it i
 1. **Keys, in `AdsConstant`** (the Firebase module), under the screen's section:
    ```kotlin
    // HOME: HomeActivity
-   var homeNativeAd by remoteAdUnit("/21775744923/example/native")   // Google test id until release
+   var homeNativeAd by remoteAdUnit(test = "/21775744923/example/native", live = "")   // live id: ASK DEV
    var showHomeNativeAd by remoteString("yes")
    // optional: this placement's own More Apps pair (else the app-wide showMoreAppNBanner / onlyShowMoreAppNBanner)
    var showMoreAppHome by remoteString("yes")
@@ -88,7 +88,8 @@ Interstitial.show(this, from = "home_to_detail") { startActivity(detailIntent) }
 
 1. Keys are in `AdsConstant` with their switch, and the screen makes one `show` call. No ad SDK calls in screens.
 2. The placement's events are in event.md (`artisan check:events`).
-3. The ad ids in code are Google's test ids. Real ids come from the console or the developer (`ASK DEV`).
+3. Each ad unit has `test =` (Google's test id) and `live =` (the real one, from the developer: `ASK DEV`).
+   `DebugConfig.ENABLE_LIVE_AD` picks one; QA builds use `test` and ignore the console.
 4. Build: `gradlew :core:ads:compileDebugKotlin`, then the app.
 5. **VERIFY ON DEVICE** with the event box or `artisan app:logcat GlobalFirebaseEventNameTag`. Check four cases:
    - Google shown;
@@ -98,7 +99,9 @@ Interstitial.show(this, from = "home_to_detail") { startActivity(detailIntent) }
 
 ## 7. Gotchas
 
-- **`AdsConstant.APP_ID`** is Google's test app id until release. The SDK won't serve real ads with a wrong pairing.
+- **`AdsConstant.APP_ID`** is `DebugConfig.ADMOB_APP_ID`: the test app id until `ENABLE_LIVE_AD` is on and
+  `ADMOB_APP_ID_LIVE` is set. The manifest gets the same id through `${admobAppId}`. The SDK won't serve real ads with a
+  wrong pairing of app id and units.
 - **Classic and next-gen SDKs clash.** Other SDKs can pull in `com.google.android.gms:play-services-ads`, the classic
   SDK, which conflicts with the next-gen one. If a build reports duplicate ad classes, exclude it in the app:
   `configurations.all { exclude(group = "com.google.android.gms", module = "play-services-ads") }`, and

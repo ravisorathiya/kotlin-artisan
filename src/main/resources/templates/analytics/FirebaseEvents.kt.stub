@@ -2,12 +2,14 @@ package {{PACKAGE}}.events
 
 import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import com.ogmediaapps.eventbox.OGEventBoxLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import {{PACKAGE}}.Analytics
 import {{PACKAGE}}.DebugConfig
+import {{PACKAGE}}.log.isLoggable
 import {{PACKAGE}}.log.logging
 
 /*
@@ -30,7 +32,9 @@ private fun logEvent(name: String, bundle: Bundle) {
     try {
         Analytics.firebaseAnalytics?.logEvent(name, bundle)
         if (Analytics.debuggable) {
-            Timber.tag(DebugConfig.TAG_EVENT).i(name)
+            // MEDIUM leaves lifecycle events (the bypass suffixes) out of logcat; LOW and NONE follow isLoggable
+            val lifecycle = DebugConfig.LOGGING_VOLUME == DebugConfig.AppLoggingVolumeEnum.MEDIUM && isLifecycle(name)
+            if (isLoggable(Log.INFO) && !lifecycle) Timber.tag(DebugConfig.TAG_EVENT).i(name)
             if (!EVENT_NAME.matches(name) || name.length >= 30) {
                 Timber.tag(DebugConfig.TAG_EVENT).w("'%s' breaks the naming rule: snake_case, under 30 characters", name)
             }
@@ -49,9 +53,15 @@ internal fun isBypassed(name: String): Boolean = with(DebugConfig) {
     if (!EVENT_BOX_BYPASS || name in ALWAYS_SHOW) return false
     if (name in BYPASS_NAMES) return true
     // splash_on_create, and older SplashAct_OnCreate / splash_onCreate names, all end in "_on_create"
-    val plain = name.replace(Regex("([a-z0-9])([A-Z])"), "$1_$2").lowercase()
+    val plain = plain(name)
     BYPASS_PREFIXES.any { plain.startsWith(it.lowercase()) } || BYPASS_SUFFIXES.any { plain.endsWith(it.lowercase()) }
 }
+
+/** A lifecycle event: its name ends in one of DebugConfig.BYPASS_SUFFIXES. */
+private fun isLifecycle(name: String): Boolean = plain(name).let { p -> DebugConfig.BYPASS_SUFFIXES.any { p.endsWith(it.lowercase()) } }
+
+/** splash_on_create, and older SplashAct_OnCreate / splash_onCreate names, all become "..._on_create". */
+private fun plain(name: String) = name.replace(Regex("([a-z0-9])([A-Z])"), "$1_$2").lowercase()
 
 /** The box is a view: post to the main thread (ad SDK callbacks arrive on background threads). */
 private fun showInEventBox(name: String, bundle: Bundle) {

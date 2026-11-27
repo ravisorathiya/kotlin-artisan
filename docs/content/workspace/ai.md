@@ -17,7 +17,7 @@ artisan make:ai --refresh-skills
 | `plan/` | Plans (`make:plan <name>`: one `.md` file) and re-apply bundles (`make:bundle`), indexed in `plan/MASTER_OVERVIEW.md` |
 | `event/event.md` | Every `firebaseEvent(...)` call, pre-filled from the app, one table per screen |
 | `event/event_sheet.xlsx` | The same events as a sheet for product and QA. Generated, never edited by hand |
-| `skill/` | Reusable how-tos: `firebase_module.md`, `ads.md`, `permission.md`, `analytics_events.md`, `crash_hardening.md` |
+| `skill/` | Reusable how-tos: `firebase_module.md`, `ads.md`, `logging.md` (how and where to log), `permission.md`, `analytics_events.md`, `crash_hardening.md` |
 | `scripts/` | Helper scripts agents run (rules in its README; `recolor.py` makes theme image variants) |
 | `assets/` | Screenshots and recordings (`app:shot`, `app:record`) |
 

@@ -242,7 +242,7 @@ Studio and never shipped. It's plain markdown, grouped by folder:
 | `plan/` | Plans (`make:plan <name>`: one `.md` file) and re-apply bundles (`make:bundle <feature> --since <tag>`), indexed in `plan/MASTER_OVERVIEW.md` |
 | `event/event.md` | Every `firebaseEvent(...)` call, pre-filled from the app, one table per screen |
 | `event/event_sheet.xlsx` | The same events as a simple sheet for product and QA (Event Name, Description). Generated, never edited by hand |
-| `skill/` | Reusable how-tos every project gets: `firebase_module.md`, `permission.md`, `analytics_events.md`, `crash_hardening.md` |
+| `skill/` | Reusable how-tos every project gets: `firebase_module.md`, `logging.md`, `permission.md`, `analytics_events.md`, `crash_hardening.md` |
 | `scripts/` | Helper scripts agents run (rules in its README; `recolor.py` makes theme image variants) |
 | `assets/` | Screenshots and recordings |
 
@@ -254,14 +254,18 @@ new version goes next to it as `.new`.
 - `make:firebase` creates a `:core:firebase` module, the app's **central place for Firebase**. Every Android module can use it.
   - **Contents:** one Firebase BOM for Analytics, Crashlytics, Messaging and Remote Config, plus Timber, coroutines and
     the [Event Box](https://github.com/JpOriginDev/event-box) library.
-  - **Helpers:** `firebaseEvent()`, `Crash`, `RemoteConfig`, `Messaging` and `logging()`, with a settings-only
-    `DebugConfig` and a `README.md`.
+  - **Helpers:** `firebaseEvent()`, `Crash`, `RemoteConfig`, `Messaging`, `logDebug()` / `logError()` / `logging()` /
+    `logFlow()`, with a settings-only `DebugConfig` and a `README.md`.
+  - **One switch:** `DebugConfig.QA_BUILD` (event box and test ads) or the Play Store release (live ads and app id).
+    `LOGGING_VOLUME` sets how much logcat gets. R8 strips the log calls in release, and Crashlytics gets breadcrumbs.
+  - **Release guards:** a release build warns when DebugConfig isn't ready, and fails on `android.util.Log`,
+    `printStackTrace()` or `println()` in app code.
   - **Wiring:** it's included in settings and added to the app and each Android library.
   - **Versions:** every one is the latest stable, fetched when you run it. If the latest Firebase needs a newer Kotlin
     than the project has, the BOM steps down to the newest one that builds.
   - **Resolved for you:** the plugins (in your style), the google-services and Crashlytics plugins when
     `google-services.json` is there, the app's compileSdk, minSdk and JVM target, and JitPack.
-  - **Remote Config needs one line per key.** `var homeNativeAd by remoteAdUnit("...")` in `AdsConstant` is fetched,
+  - **Remote Config needs one line per key.** `var homeNativeAd by remoteAdUnit(test = "...", live = "...")` in `AdsConstant` is fetched,
     applied, updated live, and listed in a debug audit table (MATCH / OVERRIDE / MISSING / LOCAL MISSING). Then add
     the same key in the Firebase console.
   - `event:box` updates Event Box later. `make:analytics` still works as an alias.

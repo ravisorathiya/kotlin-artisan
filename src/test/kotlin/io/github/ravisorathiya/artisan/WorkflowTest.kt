@@ -454,7 +454,7 @@ class WorkflowTest {
         // DebugConfig.kt: settings only (switches, bypass rules in snake_case); FirebaseEvents.kt: firebaseEvent; Analytics.kt: init
         fun stub(name: String) = assertNotNull(javaClass.getResource("/templates/analytics/$name.stub")).readText()
         val config = stub("DebugConfig.kt")
-        assertTrue("object DebugConfig" in config && "const val ENABLE_EVENT_BOX = false" in config && "const val EVENT_BOX_BYPASS = true" in config)
+        assertTrue("object DebugConfig" in config && "const val ENABLE_EVENT_BOX = QA_BUILD" in config && "const val QA_BUILD = true" in config && "const val EVENT_BOX_BYPASS = true" in config)
         assertTrue(listOf("BYPASS_SUFFIXES", "BYPASS_PREFIXES", "BYPASS_NAMES", "ALWAYS_SHOW", "\"_on_create\"").all { it in config })
         val events = stub("FirebaseEvents.kt")
         assertTrue("fun firebaseEvent(name: String" in events && "fun Context.firebaseEvent(" in events && "androidx" !in events, "no androidx: the module has no dependency on it")

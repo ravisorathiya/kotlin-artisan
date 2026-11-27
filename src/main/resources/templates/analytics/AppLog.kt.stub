@@ -1,0 +1,80 @@
+package {{PACKAGE}}.log
+
+import timber.log.Timber
+
+/**
+ * Timber, through this module. Same calls as Timber, so other modules never depend on Timber themselves:
+ *
+ *   AppLog.d("loaded %d items", count)
+ *   AppLog.tag("HomeScreen").e(e, "load failed")
+ *   AppLog.e(e)
+ *
+ * Analytics.init plants the debug tree in debug builds only; release builds print nothing (and R8 strips the
+ * calls, see consumer-rules.pro). Untagged calls are tagged with the calling class, as Timber's DebugTree does.
+ */
+object AppLog {
+
+    /** A tagged logger. Unlike Timber.tag(), the tag stays for every call on it, so it can be kept in a val. */
+    fun tag(tag: String): Tagged = Tagged(tag)
+
+    fun v(message: String?, vararg args: Any?) = Timber.tag(callerTag()).v(message, *args)
+    fun v(t: Throwable?, message: String?, vararg args: Any?) = Timber.tag(callerTag()).v(t, message, *args)
+    fun v(t: Throwable?) = Timber.tag(callerTag()).v(t)
+
+    fun d(message: String?, vararg args: Any?) = Timber.tag(callerTag()).d(message, *args)
+    fun d(t: Throwable?, message: String?, vararg args: Any?) = Timber.tag(callerTag()).d(t, message, *args)
+    fun d(t: Throwable?) = Timber.tag(callerTag()).d(t)
+
+    fun i(message: String?, vararg args: Any?) = Timber.tag(callerTag()).i(message, *args)
+    fun i(t: Throwable?, message: String?, vararg args: Any?) = Timber.tag(callerTag()).i(t, message, *args)
+    fun i(t: Throwable?) = Timber.tag(callerTag()).i(t)
+
+    fun w(message: String?, vararg args: Any?) = Timber.tag(callerTag()).w(message, *args)
+    fun w(t: Throwable?, message: String?, vararg args: Any?) = Timber.tag(callerTag()).w(t, message, *args)
+    fun w(t: Throwable?) = Timber.tag(callerTag()).w(t)
+
+    fun e(message: String?, vararg args: Any?) = Timber.tag(callerTag()).e(message, *args)
+    fun e(t: Throwable?, message: String?, vararg args: Any?) = Timber.tag(callerTag()).e(t, message, *args)
+    fun e(t: Throwable?) = Timber.tag(callerTag()).e(t)
+
+    fun wtf(message: String?, vararg args: Any?) = Timber.tag(callerTag()).wtf(message, *args)
+    fun wtf(t: Throwable?, message: String?, vararg args: Any?) = Timber.tag(callerTag()).wtf(t, message, *args)
+    fun wtf(t: Throwable?) = Timber.tag(callerTag()).wtf(t)
+
+    /** The same calls with a fixed tag: `AppLog.tag(TAG).e(...)`, like `Timber.tag(TAG).e(...)`. */
+    class Tagged internal constructor(private val tag: String) {
+        fun v(message: String?, vararg args: Any?) = Timber.tag(tag).v(message, *args)
+        fun v(t: Throwable?, message: String?, vararg args: Any?) = Timber.tag(tag).v(t, message, *args)
+        fun v(t: Throwable?) = Timber.tag(tag).v(t)
+
+        fun d(message: String?, vararg args: Any?) = Timber.tag(tag).d(message, *args)
+        fun d(t: Throwable?, message: String?, vararg args: Any?) = Timber.tag(tag).d(t, message, *args)
+        fun d(t: Throwable?) = Timber.tag(tag).d(t)
+
+        fun i(message: String?, vararg args: Any?) = Timber.tag(tag).i(message, *args)
+        fun i(t: Throwable?, message: String?, vararg args: Any?) = Timber.tag(tag).i(t, message, *args)
+        fun i(t: Throwable?) = Timber.tag(tag).i(t)
+
+        fun w(message: String?, vararg args: Any?) = Timber.tag(tag).w(message, *args)
+        fun w(t: Throwable?, message: String?, vararg args: Any?) = Timber.tag(tag).w(t, message, *args)
+        fun w(t: Throwable?) = Timber.tag(tag).w(t)
+
+        fun e(message: String?, vararg args: Any?) = Timber.tag(tag).e(message, *args)
+        fun e(t: Throwable?, message: String?, vararg args: Any?) = Timber.tag(tag).e(t, message, *args)
+        fun e(t: Throwable?) = Timber.tag(tag).e(t)
+
+        fun wtf(message: String?, vararg args: Any?) = Timber.tag(tag).wtf(message, *args)
+        fun wtf(t: Throwable?, message: String?, vararg args: Any?) = Timber.tag(tag).wtf(t, message, *args)
+        fun wtf(t: Throwable?) = Timber.tag(tag).wtf(t)
+    }
+
+    private val ANONYMOUS_CLASS = Regex("(\\$\\d+)+$")
+    private val SELF = AppLog::class.java.name
+
+    /** The calling class's simple name, the tag Timber's DebugTree would have given. Skipped in release (no tree). */
+    private fun callerTag(): String {
+        if (Timber.treeCount == 0) return "App"
+        val caller = Throwable().stackTrace.firstOrNull { !it.className.startsWith(SELF) } ?: return "App"
+        return caller.className.replace(ANONYMOUS_CLASS, "").substringAfterLast('.')
+    }
+}

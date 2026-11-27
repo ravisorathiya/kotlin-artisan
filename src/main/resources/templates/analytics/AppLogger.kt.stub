@@ -1,0 +1,73 @@
+@file:JvmName("AppLogger")
+
+package {{PACKAGE}}.log
+
+import android.os.Looper
+import android.util.Log
+import timber.log.Timber
+import {{PACKAGE}}.DebugConfig
+
+/*
+ * App logging. Just pass the message; the caller's context is added for you:
+ *
+ *   logDebug("banner loaded")
+ *   logError("load failed", e)
+ *
+ * Logcat:  D/GlobTag MainActivity: banner loaded  ·  onAdLoaded(MainActivity.kt:104)
+ *
+ * The tag is the calling class, "(File.kt:line)" is clickable in Android Studio (DebugConfig.LOG_CALLER_LOCATION),
+ * and the thread is shown when it is not the main thread. For Timber-style calls with your own tag, use
+ * AppLog.tag(TAG).e(...).
+ *
+ * Everything goes through Timber, which Analytics.init plants for debug builds only. Release builds print nothing,
+ * and R8 strips these calls there too (consumer-rules.pro). Caught errors that should also reach Crashlytics in
+ * release go through logging(tag, throwable) in Logging.kt.
+ */
+
+fun logVerbose(message: String?) = write(Log.VERBOSE, message, null)
+fun logVerbose(message: String?, throwable: Throwable?) = write(Log.VERBOSE, message, throwable)
+
+fun logDebug(message: String?) = write(Log.DEBUG, message, null)
+fun logDebug(message: String?, throwable: Throwable?) = write(Log.DEBUG, message, throwable)
+
+fun logInfo(message: String?) = write(Log.INFO, message, null)
+fun logInfo(message: String?, throwable: Throwable?) = write(Log.INFO, message, throwable)
+
+fun logWarn(message: String?) = write(Log.WARN, message, null)
+fun logWarn(message: String?, throwable: Throwable?) = write(Log.WARN, message, throwable)
+
+fun logError(message: String?) = write(Log.ERROR, message, null)
+fun logError(message: String?, throwable: Throwable?) = write(Log.ERROR, message, throwable)
+
+fun logWtf(message: String?) = write(Log.ASSERT, message, null)
+fun logWtf(message: String?, throwable: Throwable?) = write(Log.ASSERT, message, throwable)
+
+/** This file's JVM class: frames from it are skipped to find the real caller. */
+private const val SELF = "{{PACKAGE}}.log.AppLogger"
+
+private fun write(priority: Int, message: String?, throwable: Throwable?) {
+    if (Timber.treeCount == 0) return // release: no tree planted, so skip the stack walk
+    if (!isLoggable(priority)) return // below DebugConfig.LOGGING_VOLUME: skip the stack walk too
+
+    val caller = callerFrame()
+    val tag = caller?.className?.substringAfterLast('.')?.substringBefore('$') ?: "App"
+
+    // No format args are passed, so a '%' inside the message is printed as it is.
+    Timber.tag("GlobTag $tag").log(priority, throwable, withContext(message ?: "", caller))
+}
+
+/** The first stack frame outside the logging classes [skip] (exact class names or prefixes like "Foo$"). */
+internal fun callerFrame(vararg skip: String): StackTraceElement? =
+    Throwable().stackTrace.firstOrNull { frame ->
+        frame.className != SELF && skip.none { frame.className == it || frame.className.startsWith("$it$") }
+    }
+
+/** "message  ·  method(File.kt:12) [thread]": file:line is clickable in Android Studio; the thread only off main. */
+internal fun withContext(message: String, caller: StackTraceElement?): String = buildString {
+    append(message)
+    if (caller != null && DebugConfig.LOG_CALLER_LOCATION) {
+        append("  ·  ").append(caller.methodName.substringBefore('$'))
+            .append('(').append(caller.fileName ?: "?").append(':').append(caller.lineNumber).append(')')
+    }
+    if (Looper.myLooper() != Looper.getMainLooper()) append(" [").append(Thread.currentThread().name).append(']')
+}

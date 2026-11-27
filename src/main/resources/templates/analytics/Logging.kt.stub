@@ -1,22 +1,63 @@
 package {{PACKAGE}}.log
 
+import android.util.Log
 import timber.log.Timber
 import {{PACKAGE}}.Analytics
 import {{PACKAGE}}.DebugConfig
+import {{PACKAGE}}.DebugConfig.AppLoggingVolumeEnum
 import {{PACKAGE}}.crash.Crash
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 /*
  * logging: debug logs that are not analytics events (use firebaseEvent for those). Goes through Timber, which
- * Analytics.init plants for debug builds only, so release builds print nothing.
+ * Analytics.init plants for debug builds only, so release builds print nothing to logcat.
+ *
+ *   logging("Splash_AdShown")              a line; in release also a Crashlytics breadcrumb
+ *   logging("Splash_AdLoad_Error", e)      a caught error; in release also a Crashlytics non-fatal
+ *
+ * Never build the stack trace yourself (e.stackTraceToString()): pass the throwable.
+ * More: logDebug / logError (AppLogger.kt), AppLog (Timber calls), logFlow (LogFlow.kt). See README.md in this module.
  */
 
-/** A debug log line. */
-fun logging(message: String) {
-    Timber.tag(DebugConfig.TAG_DEBUG).d(message)
+/** LOW only: true once DebugConfig.LOW_FULL_UNTIL_SCREEN has opened (set by Analytics). */
+@Volatile
+internal var pastOnboarding = false
+
+/** True when a line of [priority] (Log.DEBUG, Log.WARN, ...) passes DebugConfig.LOGGING_VOLUME. Every log function checks it. */
+internal fun isLoggable(priority: Int): Boolean = when (DebugConfig.LOGGING_VOLUME) {
+    AppLoggingVolumeEnum.FULL -> true
+    AppLoggingVolumeEnum.MEDIUM -> priority >= Log.INFO
+    AppLoggingVolumeEnum.LOW -> !pastOnboarding || priority >= Log.WARN
+    AppLoggingVolumeEnum.NONE -> false
 }
 
-/** A caught error: logged, and in release builds sent to Crashlytics as a non-fatal (DebugConfig.RECORD_CAUGHT_ERRORS). */
+/** Release build with Crashlytics breadcrumbs on (DebugConfig.CRASHLYTICS_BREADCRUMBS). */
+internal val breadcrumbsOn: Boolean
+    get() = DebugConfig.CRASHLYTICS_BREADCRUMBS && !Analytics.debuggable
+
+/** A debug log line (logcat tag DebugConfig.TAG_DEBUG). In release builds a Crashlytics breadcrumb. */
+fun logging(message: String) {
+    if (isLoggable(Log.DEBUG)) Timber.tag(DebugConfig.TAG_DEBUG).d(message)
+    if (breadcrumbsOn) Crash.log(message)
+}
+
+private val recordedPerTag = ConcurrentHashMap<String, AtomicInteger>()
+
+/**
+ * A caught error: logged, and in release builds sent to Crashlytics as a non-fatal (DebugConfig.RECORD_CAUGHT_ERRORS),
+ * at most DebugConfig.CRASH_RECORD_MAX_PER_TAG times per [tag] per app start. The active logFlow steps go with it.
+ */
 fun logging(tag: String, throwable: Throwable) {
-    Timber.tag(DebugConfig.TAG_DEBUG).e(throwable, "[%s]", tag)
-    if (DebugConfig.RECORD_CAUGHT_ERRORS && !Analytics.debuggable) Crash.record(throwable, tag)
+    // The volume only quiets logcat: Crashlytics still gets the error below.
+    if (isLoggable(Log.ERROR)) {
+        val flows = LogFlow.activeSummary()
+        if (flows == null) Timber.tag(DebugConfig.TAG_DEBUG).e(throwable, "[%s]", tag)
+        else Timber.tag(DebugConfig.TAG_DEBUG).e(throwable, "[%s] in %s", tag, flows)
+    }
+    if (!DebugConfig.RECORD_CAUGHT_ERRORS || Analytics.debuggable) return
+    val count = recordedPerTag.getOrPut(tag) { AtomicInteger() }.incrementAndGet()
+    if (count > DebugConfig.CRASH_RECORD_MAX_PER_TAG) return
+    LogFlow.activeSummary()?.let { Crash.log("active flows: $it") }
+    Crash.record(throwable, tag)
 }

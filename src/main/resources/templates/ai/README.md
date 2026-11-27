@@ -18,7 +18,7 @@ Written by agents for agents: it doesn't need polish, but it must be accurate, s
 | [`event/`](#event) | `event.md`: every active `firebaseEvent`, one table per screen · `event_sheet.xlsx`: the same as a sheet (generated) | `make:event`, `make:permission`, `check:events`, `event:sheet` |
 | `core/firebase/` (a Gradle module) | All of Firebase: `firebaseEvent`, remote keys in `AdsConstant`, Crashlytics, push, Timber. Not part of `:ai` | `make:firebase`, `event:box`, `app:logcat RemoteConfigAudit` |
 | `core/ads/` (a Gradle module) | Every ad: banner, native, interstitial, app open, splash, More Apps fallback. Not part of `:ai` | `make:ads` |
-| [`skill/`](#skill) | Reusable how-tos: permission flow, analytics events, crash hardening | `make:permission`, `make:firebase` |
+| [`skill/`](#skill) | Reusable how-tos: logging, permission flow, analytics events, crash hardening | `make:permission`, `make:firebase` |
 | [`scripts/`](#scripts) | Helper scripts agents run (resource variants, bulk edits, checks) | |
 | [`assets/`](#assets) | Screenshots, mockups, screen recordings | `app:shot`, `app:record`, `make:bug --shot` |
 | `README.md` | These rules | `check:links` |
@@ -36,6 +36,7 @@ Before changing production code:
    If the task is a kind `skill/` covers, read that skill too:
    - Firebase, a remote key, push: `skill/firebase_module.md`;
    - an ad (placement, More Apps fallback, interstitial, app open, splash): `skill/ads.md`;
+   - any code you write or change (how and where to log): `skill/logging.md`;
    - analytics events: `skill/analytics_events.md`;
    - permissions: `skill/permission.md`;
    - a crash: `skill/crash_hardening.md`.

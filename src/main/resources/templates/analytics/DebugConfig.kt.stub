@@ -1,20 +1,107 @@
 package {{PACKAGE}}
 
 /**
- * Debug switches for the whole app. Settings only: the code that uses them is in FirebaseEvents.kt and Analytics.kt.
- * See README.md in this module.
+ * Debug switches for the whole app, in one file. Settings only: the code that uses them is in this module.
+ * Keep each switch a one-line `const val`: the app's build reads this file as text (debug_config.gradle in this
+ * module) for the AdMob app id and the release guards. See README.md in this module.
  */
 object DebugConfig {
 
+    // ---------- Build mode: the one switch ----------
+
+    /**
+     * true = a QA build: event box on, Google's test ads. false = the Play Store release: event box off, live ads.
+     * Every switch below set to `QA_BUILD` or `!QA_BUILD` follows it; give one its own value to break away.
+     * Release builds print a warning when this file isn't release-ready (Gradle task checkReleaseSwitches).
+     */
+    const val QA_BUILD = true
+
     // ---------- Event box (https://github.com/JpOriginDev/event-box) ----------
 
-    /** Shows the floating event box on every screen, for testers. **Keep false in release builds.** */
-    const val ENABLE_EVENT_BOX = false
+    /** Shows the floating event box on every screen, for testers. **false in a Play Store release.** */
+    const val ENABLE_EVENT_BOX = QA_BUILD
 
     /** How long one event box session lasts before it switches itself off. */
     const val EVENT_BOX_SESSION_HOURS = 0.5
 
-    // ---------- Bypass: what the box leaves out ----------
+    // ---------- Ads: live or test ----------
+
+    /**
+     * true = the live ad units (AdsConstant `live = ...`) and app id, and Firebase may change them.
+     * false = Google's test units and app id, and Firebase values for ad units are ignored (no live ad by mistake).
+     */
+    const val ENABLE_LIVE_AD = !QA_BUILD
+
+    /** Google's test AdMob app id. */
+    const val ADMOB_APP_ID_TEST = "ca-app-pub-3940256099942544~3347511713"
+
+    /** Your AdMob app id (AdMob > Apps > App settings). Empty = the test id is used, and release builds warn. */
+    const val ADMOB_APP_ID_LIVE = ""
+
+    /** The app id this build uses. The manifest gets the same one through `${admobAppId}`. */
+    val ADMOB_APP_ID: String get() = if (ENABLE_LIVE_AD && ADMOB_APP_ID_LIVE.isNotEmpty()) ADMOB_APP_ID_LIVE else ADMOB_APP_ID_TEST
+
+    // ---------- Logging (logcat: debug builds only) ----------
+
+    /** Plants Timber in debug builds. false = a quiet debug build. Release builds never print. */
+    const val ENABLE_TIMBER = true
+
+    /** How much reaches logcat: FULL, MEDIUM, LOW or NONE (see AppLoggingVolumeEnum at the end of this file). */
+    val LOGGING_VOLUME = AppLoggingVolumeEnum.FULL
+
+    /** LOW only: everything until this Activity (simple class name) opens, then warnings and errors only. */
+    const val LOW_FULL_UNTIL_SCREEN = "MainActivity"
+
+    /** Adds `· method(File.kt:12)` to logDebug / logError lines: clickable in Android Studio's logcat. */
+    const val LOG_CALLER_LOCATION = true
+
+    /** At start-up, one line with this build's mode (tag TAG_DEBUG): `QA build · ads TEST · logging FULL · ...`. */
+    const val PRINT_CONFIG_ON_START = true
+
+    /** Logcat tag of every event (`artisan app:logcat GlobalFirebaseEventNameTag`). */
+    const val TAG_EVENT = "GlobalFirebaseEventNameTag"
+
+    /** Logcat tag of logging(...). */
+    const val TAG_DEBUG = "GlobalAppDebugLogger"
+
+    /**
+     * App code that logs around this module (android.util.Log, printStackTrace(), println()) fails a release build
+     * (Gradle task checkLogging). false = a warning only. Debug builds always only warn.
+     */
+    const val FAIL_RELEASE_ON_RAW_LOGS = true
+
+    // ---------- Crashlytics ----------
+
+    /** Sends caught errors from logging(tag, throwable) to Crashlytics as non-fatals (release builds only). */
+    const val RECORD_CAUGHT_ERRORS = true
+
+    /** At most this many non-fatals per logging tag per app start, so one loop can't flood the dashboard. */
+    const val CRASH_RECORD_MAX_PER_TAG = 3
+
+    /** Release builds: logging(message) lines and logFlow steps become Crashlytics breadcrumbs. */
+    const val CRASHLYTICS_BREADCRUMBS = true
+
+    /** Sets the Crashlytics key "screen" to the Activity on screen, so every report says where it happened. */
+    const val TRACK_SCREENS = true
+
+    /** Collects Crashlytics reports from debug builds too. Off, so test crashes don't fill the dashboard. */
+    const val CRASHLYTICS_IN_DEBUG = false
+
+    // ---------- Remote Config ----------
+
+    /** Minimum time between Remote Config fetches in release builds. Debug builds always fetch. */
+    const val REMOTE_CONFIG_FETCH_INTERVAL_SECONDS = 3600L
+
+    /** How long RemoteConfig.awaitFetch() (e.g. the splash) waits for the first fetch before going on with the defaults. */
+    const val REMOTE_CONFIG_TIMEOUT_MILLIS = 3000L
+
+    /** Applies changes published in the console while the app runs (real-time Remote Config). */
+    const val REMOTE_CONFIG_LIVE_UPDATES = true
+
+    /** Logs the audit table (every key: MATCH / OVERRIDE / MISSING / LOCAL MISSING) in release builds too. */
+    const val REMOTE_CONFIG_AUDIT_IN_RELEASE = false
+
+    // ---------- Event box bypass: what the box leaves out ----------
     // Left-out events still go to Firebase and logcat. Names are snake_case (<screen>_<thing>_<action>), and so are
     // these rules.
 
@@ -45,31 +132,18 @@ object DebugConfig {
     /** Exact names always shown, even when a rule above leaves them out, e.g. "permi_on_create". */
     val ALWAYS_SHOW = setOf<String>()
 
-    // ---------- Logging and Crashlytics ----------
+    /** How much logcat gets (LOGGING_VOLUME). Crashlytics gets caught errors whatever the volume. */
+    enum class AppLoggingVolumeEnum {
+        /** Everything: every event, screen and lifecycle line. */
+        FULL,
 
-    /** Logcat tag of every event (`artisan app:logcat GlobalFirebaseEventNameTag`). */
-    const val TAG_EVENT = "GlobalFirebaseEventNameTag"
+        /** Feature events, info, warnings and errors: no lifecycle events, no debug lines. */
+        MEDIUM,
 
-    /** Logcat tag of logging(...). */
-    const val TAG_DEBUG = "GlobalAppDebugLogger"
+        /** FULL until LOW_FULL_UNTIL_SCREEN opens, then warnings and errors only. */
+        LOW,
 
-    /** Sends caught errors from logging(tag, throwable) to Crashlytics as non-fatals (release builds only). */
-    const val RECORD_CAUGHT_ERRORS = true
-
-    /** Collects Crashlytics reports from debug builds too. Off, so test crashes don't fill the dashboard. */
-    const val CRASHLYTICS_IN_DEBUG = false
-
-    // ---------- Remote Config ----------
-
-    /** Minimum time between Remote Config fetches in release builds. Debug builds always fetch. */
-    const val REMOTE_CONFIG_FETCH_INTERVAL_SECONDS = 3600L
-
-    /** How long RemoteConfig.awaitFetch() (e.g. the splash) waits for the first fetch before going on with the defaults. */
-    const val REMOTE_CONFIG_TIMEOUT_MILLIS = 3000L
-
-    /** Applies changes published in the console while the app runs (real-time Remote Config). */
-    const val REMOTE_CONFIG_LIVE_UPDATES = true
-
-    /** Logs the audit table (every key: MATCH / OVERRIDE / MISSING / LOCAL MISSING) in release builds too. */
-    const val REMOTE_CONFIG_AUDIT_IN_RELEASE = false
+        /** Nothing. */
+        NONE,
+    }
 }

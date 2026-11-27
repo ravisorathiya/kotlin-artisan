@@ -116,7 +116,7 @@ class AnalyticsModuleTest {
         assertTrue("    alias(libs.plugins.android.library)\n    alias(libs.plugins.kotlin.android)\n}" in build, build)
         assertTrue("ksp" !in build, "app-only plugins stay in the app")
         assertTrue("namespace = \"com.demo.fx.core.firebase\"" in build)
-        assertTrue("    compileSdk {\n        version = release(36)\n    }" in build && "    defaultConfig {\n        minSdk = 26\n    }" in build, build)
+        assertTrue("    compileSdk {\n        version = release(36)\n    }" in build && "    defaultConfig {\n        minSdk = 26\n        consumerProguardFiles(\"consumer-rules.pro\")\n    }" in build, build)
         assertTrue("sourceCompatibility = JavaVersion.VERSION_21" in build && "configure<KotlinAndroidProjectExtension> {" in build && "import org.jetbrains.kotlin.gradle.dsl.JvmTarget" in build)
         for (line in listOf(
             "api(platform(libs.firebase.bom))", "api(libs.firebase.analytics)", "api(libs.firebase.crashlytics)", "api(libs.firebase.messaging)",
@@ -156,7 +156,8 @@ class AnalyticsModuleTest {
             val pkg = "com.demo.fx.firebase" + f.substringBeforeLast('/', "").let { if (it.isEmpty()) "" else ".$it" }
             // module code (not the settings files) starts with the managed marker, so a later make:firebase can update it
             val (body, unedited) = managedCodeState(read("$base/$f"))
-            assertTrue(body.startsWith("package $pkg\n"), "$f: package $pkg")
+            // a file annotation (@file:JvmName) may come first
+            assertTrue(body.removePrefix("@file:JvmName(\"AppLogger\")\n\n").startsWith("package $pkg\n"), "$f: package $pkg")
             assertEquals(f !in FIREBASE_SETTINGS, unedited && read("$base/$f").startsWith("// artisan:managed "), f)
         }
         assertEquals("com.demo.fx.firebase", plan.pkg)
@@ -165,7 +166,7 @@ class AnalyticsModuleTest {
         assertTrue("object DebugConfig" in config && "fun " !in config && "import" !in config, "settings only")
         val events = read("$base/events/FirebaseEvents.kt")
         assertTrue("Dispatchers.Main" in events && "Handler" !in events && "Timber" in events)
-        assertTrue("Timber.plant(Timber.DebugTree())" in read("$base/Analytics.kt"))
+        assertTrue("Timber.plant(object : Timber.DebugTree()" in read("$base/Analytics.kt"), "a volume-aware debug tree")
         val readme = read("core/firebase/README.md")
         assertTrue("# `:core:firebase`" in readme && "35.1.0" in readme && "AdsConstant" in readme && "{{" !in readme, readme.take(300))
 

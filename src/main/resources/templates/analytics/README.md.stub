@@ -12,7 +12,7 @@ Created by `artisan make:firebase`. The code is under package `{{PACKAGE}}`, one
 ```text
 {{PACKAGE}}
 ├── Analytics.kt          Analytics.init(app), setIcon, setRemoteHolders, setUserId, setUserProperty
-├── DebugConfig.kt        settings only: event box, bypass rules, log tags, Crashlytics and Remote Config switches
+├── DebugConfig.kt        settings only: QA_BUILD, live/test ads and app id, logging volume, Crashlytics, Remote Config, bypass
 ├── events/
 │   └── FirebaseEvents.kt firebaseEvent(name, bundle)
 ├── remote/
@@ -24,8 +24,14 @@ Created by `artisan make:firebase`. The code is under package `{{PACKAGE}}`, one
 ├── messaging/
 │   └── Messaging.kt      Messaging.token, subscribe, unsubscribe, setAutoInit
 └── log/
-    └── Logging.kt        logging(message), logging(tag, throwable)
+    ├── Logging.kt        logging(message), logging(tag, throwable): breadcrumbs and non-fatals in release
+    ├── AppLogger.kt      logDebug / logInfo / logWarn / logError, with the caller's class and File.kt:line
+    ├── AppLog.kt         AppLog.d(...) / AppLog.tag(T).e(...): Timber calls
+    └── LogFlow.kt        logFlow("Name").step() / .fail() / .end(), maskNumber()
 ```
+
+Next to the code: `consumer-rules.pro` (R8 strips logDebug / Timber from release builds) and `debug_config.gradle`
+(applied by the app: the AdMob app id from DebugConfig, the release guards). See [Debug config and release](#debug-config-and-release).
 
 Imports (Android Studio adds them on its own):
 
@@ -106,7 +112,7 @@ firebaseEvent("home_contact_click", bundleOf("source" to "list"))
   - the event sheet is generated from event.md.
 - It works from any thread. The event box part runs on the main thread by itself, through a coroutine.
 - To watch events:
-  - the event box: set `DebugConfig.ENABLE_EVENT_BOX = true`, and back to `false` before a release;
+  - the event box: on while `DebugConfig.QA_BUILD = true` (the default), off when it is `false` for the release;
   - or logcat: `artisan app:logcat GlobalFirebaseEventNameTag`.
 
 ### What the event box shows (bypass)
@@ -140,7 +146,7 @@ Analytics.setUserId(user.id)                 // your own id, never an email or p
 ```kotlin
 object AdsConstant {
     // HOME: HomeActivity
-    var homeNativeAd by remoteAdUnit("ca-app-pub-xxx/yyy")       // Firebase key: "homeNativeAd"
+    var homeNativeAd by remoteAdUnit(test = "ca-app-pub-3940256099942544/2247696110", live = "ca-app-pub-xxx/yyy")   // key: "homeNativeAd"
     var showHomeNativeAd by remoteString("yes")
     var interGapSeconds by remoteLong(30L)
 }
@@ -259,16 +265,59 @@ Android 13+ needs `POST_NOTIFICATIONS`: `artisan make:permission <Screen> noti` 
 
 ## Logging
 
+Agents: `ai/.../skill/logging.md` has the rules (which call, where, what never goes in a log).
+
 ```kotlin
-logging("cache cleared")                     // debug log (Timber, debug builds only)
-logging("SyncWorker", e)                     // error: logcat, plus a Crashlytics non-fatal in release
-Timber.d("anything else")                    // Timber is available in every module too
+logDebug("banner loaded")                    // D/GlobTag HomeActivity: banner loaded  ·  onLoaded(HomeActivity.kt:88)
+logWarn("cache empty, using defaults")       // also logVerbose / logInfo / logError / logWtf
+logging("Checkout_PaymentStarted")           // a line; in release a Crashlytics breadcrumb
+logging("SyncWorker.run", e)                 // a caught error: logcat, plus a Crashlytics non-fatal in release
+AppLog.tag("Player").d("seek %d", ms)        // Timber-style calls, without depending on Timber
+
+val flow = logFlow("Upload")                 // one id on every line: filter logcat by "Upload#3fa1"
+flow.step("picked 3 files"); flow.end("ok")  // flow.fail("api", e) on errors; release: breadcrumbs + key flow_Upload
 ```
 
+- Debug builds print, release builds don't: R8 strips `logDebug` and Timber there (`consumer-rules.pro`). Only
+  `logging(...)` and `logFlow` reach release, as Crashlytics breadcrumbs and non-fatals (at most
+  `CRASH_RECORD_MAX_PER_TAG` per tag).
+- How much prints: `DebugConfig.LOGGING_VOLUME`, which is `FULL`, `MEDIUM` (info and up, no lifecycle events), `LOW` (full
+  until `LOW_FULL_UNTIL_SCREEN` opens, then warnings and errors) or `NONE`.
+- Logcat tags: `GlobTag <Class>` (logDebug ...), `GlobalAppDebugLogger` (logging), `Flow`, `GlobalFirebaseEventNameTag`
+  (events), `RemoteConfigAudit`. `artisan app:logcat <tag>`.
+- Never in a log: phone numbers, emails, names, tokens. Use ids, counts, `maskNumber(n)`.
+
 Not for analytics: use `firebaseEvent` for events.
+
+## Debug config and release
+
+`DebugConfig.kt` holds every switch. **`QA_BUILD` is the one to flip:**
+
+| | `QA_BUILD = true` (QA) | `QA_BUILD = false` (Play Store) |
+|---|---|---|
+| Event box | on | off |
+| Ads (`ENABLE_LIVE_AD`) | Google's test units and app id; the console can't change them | the `live =` units and `ADMOB_APP_ID_LIVE`; the console can |
+
+Each switch set to `QA_BUILD` / `!QA_BUILD` follows it; give one its own value to break away. At start-up a debug
+build logs its mode in one line (`PRINT_CONFIG_ON_START`), e.g. `QA build · ads TEST · logging FULL · event box ON`.
+
+`debug_config.gradle` (in this folder) is applied by the app's build file. It reads `DebugConfig.kt` as text, so keep
+each switch a one-line `const val`:
+
+- **The AdMob app id:** the manifest's `com.google.android.gms.ads.APPLICATION_ID` reads `${admobAppId}`, which
+  is the test or live id from DebugConfig. Don't put a literal id back in the manifest.
+- **`checkReleaseSwitches`** runs before every release build and warns when DebugConfig isn't ready: QA build, event
+  box on, test ads, an empty `ADMOB_APP_ID_LIVE`, or the audit on in release. It never fails the build.
+- **`checkLogging`** finds app code that logs around this module: `android.util.Log`, `printStackTrace()`,
+  `println()`, or `stackTraceToString()` in a log call. Release builds fail on it, debug builds warn.
+  `DebugConfig.FAIL_RELEASE_ON_RAW_LOGS = false` makes it a warning everywhere. Run it any time: `./gradlew checkLogging`.
+
+Before a release: your ids in `ADMOB_APP_ID_LIVE` and each `live = ""` in `AdsConstant` (or the console), then
+`QA_BUILD = false`, then build. The `Release guard:` line says when it's ready.
 
 ## Rules
 
 - Keep app logic out of this module: it's Firebase and logging only.
 - Only one place calls `Analytics.init`: `Application.onCreate()`.
-- `DebugConfig.ENABLE_EVENT_BOX` is `false` in every release build.
+- `DebugConfig.QA_BUILD = false` (event box off, live ads) in every Play Store build.
+- App code logs through this module only (`checkLogging`).

@@ -9,6 +9,7 @@ import io.github.ravisorathiya.artisan.commands.manifestIconRef
 import io.github.ravisorathiya.artisan.commands.planAppWiring
 import io.github.ravisorathiya.artisan.commands.refreshFirebaseModule
 import io.github.ravisorathiya.artisan.commands.upgradeAnalyticsSource
+import io.github.ravisorathiya.artisan.commands.upgradeDebugConfig
 import io.github.ravisorathiya.artisan.commands.wireAnalytics
 import io.github.ravisorathiya.artisan.project.Project
 import java.io.File
@@ -136,6 +137,27 @@ class FirebaseUpdateTest {
         val app = assertNotNull(w.created["app/src/main/java/com/demo/App.kt"])
         assertTrue("class App : Application() {" in app && "            .setIcon(R.mipmap.my_logo)\n" in app && "import com.demo.firebase.Analytics\n" in app, app)
         assertEquals(".App", manifestAppName(assertNotNull(w.changed["app/src/main/AndroidManifest.xml"])))
+    }
+
+    @Test
+    fun `make firebase on a pre-0_19 module adds the log files, DebugConfig keys and the build wiring`() {
+        val p = oldProject()
+        val fm = assertNotNull(findFirebaseModule(p))
+        val src = "core/firebase/src/main/java/com/demo/firebase"
+        write("$src/DebugConfig.kt", "package com.demo.firebase\n\nobject DebugConfig {\n    const val ENABLE_EVENT_BOX = true\n    const val TAG_DEBUG = \"Mine\"\n}\n")
+        val r = refreshFirebaseModule(p, fm)
+        for (f in listOf("$src/log/AppLogger.kt", "$src/log/AppLog.kt", "$src/log/LogFlow.kt", "core/firebase/consumer-rules.pro", "core/firebase/debug_config.gradle")) {
+            assertTrue(f in r.added, "$f in ${r.added}")
+        }
+        assertTrue("com.demo.firebase.log.AppLogger" in read("core/firebase/consumer-rules.pro"))
+        assertTrue("rootProject.findProject(\":core:firebase\")" in read("core/firebase/debug_config.gradle") && "{{" !in read("core/firebase/debug_config.gradle"))
+
+        val up = upgradeDebugConfig(p, fm)
+        val config = assertNotNull(up.changed["$src/DebugConfig.kt"])
+        assertTrue("const val QA_BUILD = true" in config && "const val TAG_DEBUG = \"Mine\"" in config && "enum class AppLoggingVolumeEnum" in config, config)
+        val appBuild = up.changed.entries.firstOrNull { it.key.startsWith("app/build.gradle") }?.value
+        assertTrue(appBuild != null && "core/firebase/debug_config.gradle" in appBuild, "${up.changed.keys}")
+        assertTrue(up.changed.keys.none { it.endsWith("AndroidManifest.xml") }, "no AdMob meta-data: make:firebase doesn't add one")
     }
 
     @Test

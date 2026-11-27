@@ -83,7 +83,7 @@ Every placement follows one rule:
 :::
 
 ::: warning Test ids until release
-`AdsConstant.APP_ID` and every ad unit start as Google's test ids. Set the real ones, in the code or in the console, before a release. Never click your own live ads.
+A QA build (`DebugConfig.QA_BUILD = true`, the default) uses Google's test app id and test units, and Firebase can't change them. Before a release: your app id in `ADMOB_APP_ID_LIVE`, each `live = ""` in `AdsConstant` (or set it in the console), then `QA_BUILD = false`. The release build prints `Release guard:` with what isn't ready. Never click your own live ads.
 :::
 
 ## Next

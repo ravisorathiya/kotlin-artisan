@@ -74,10 +74,10 @@ artisan make:event HomeActivity home_search_click "Search tapped"
 
 ### Watch events while you test
 
-Open `DebugConfig.kt` and set:
+A new module starts as a QA build: `DebugConfig.kt` has
 
 ```kotlin
-const val ENABLE_EVENT_BOX = true
+const val QA_BUILD = true          // event box on, Google's test ads
 ```
 
 Run the app. A floating bubble shows every event as it fires. Or follow them in logcat:
@@ -87,7 +87,7 @@ artisan app:logcat GlobalFirebaseEventNameTag
 ```
 
 ::: danger Before a release
-Set `ENABLE_EVENT_BOX = false` again. Testers see the box, users must not.
+Set `QA_BUILD = false`: the event box goes off and the live ads and app id come on. Testers see the box, users must not. A release build warns (`Release guard:`) while DebugConfig isn't ready, and fails when app code logs with `android.util.Log`, `printStackTrace()` or `println()` (use `logDebug` / `logging("Tag", e)`).
 :::
 
 ### Add a Remote Config key
@@ -97,7 +97,7 @@ One line in `AdsConstant` (or an object of your own):
 ```kotlin
 object AdsConstant {
     var showHomeBanner by remoteString("yes")       // Firebase key: "showHomeBanner"
-    var homeBannerAd by remoteAdUnit("ca-app-pub-xxx/yyy")
+    var homeBannerAd by remoteAdUnit(test = "ca-app-pub-3940256099942544/6300978111", live = "ca-app-pub-xxx/yyy")
 }
 ```
 

@@ -265,7 +265,8 @@ internal fun refreshFirebaseModule(p: Project, fm: FirebaseModule): ModuleRefres
     val updated = mutableListOf<String>(); val added = mutableListOf<String>(); val patched = mutableListOf<String>()
     val newCopies = mutableListOf<String>(); val same = mutableListOf<String>(); val kept = mutableListOf<String>()
     val files = ANALYTICS_SOURCES.filter { it !in FIREBASE_SETTINGS }.map { File(src, it) to template(it.substringAfterLast('/')) } +
-        (File(moduleDir, "README.md") to template("README.md"))
+        (File(moduleDir, "README.md") to template("README.md")) +
+        FIREBASE_MODULE_FILES.map { File(moduleDir, it) to template(it) }
     for ((f, tpl) in files) {
         val rel = p.rel(f)
         val written = managedSource(f.name, tpl)
@@ -295,8 +296,10 @@ internal fun updateFirebaseModule(ctx: Ctx, p: Project, fm: FirebaseModule) {
     val wiring = planAppWiring(p, fm.pkg)
     for ((path, text) in wiring.created) File(p.root, path).apply { parentFile.mkdirs(); writeText(text) }
     for ((path, text) in wiring.changed) File(p.root, path).writeText(text)
+    val dc = upgradeDebugConfig(p, fm)
+    for ((path, text) in dc.changed) File(p.root, path).writeText(text)
     p.notes?.dir?.takeIf { File(it, "skill").isDirectory }?.let { ws ->
-        val a = refreshAiTemplates(ws, listOf("skill/firebase_module.md", "skill/analytics_events.md"))
+        val a = refreshAiTemplates(ws, listOf("skill/firebase_module.md", "skill/analytics_events.md", "skill/logging.md", "skill/README.md"))
         (a.added + a.updated).forEach { Ui.say("  ${p.rel(it)}: ${if (it in a.added) "added" else "updated"} (the Firebase skill for agents)", Tone.DIM) }
     }
     Ui.table(
@@ -306,6 +309,7 @@ internal fun updateFirebaseModule(ctx: Ctx, p: Project, fm: FirebaseModule) {
             r.patched.map { Row(listOf(it, "builder added (setIcon, bubble style, setRemoteHolders); the rest kept"), colors = listOf(null, Tone.OK)) } +
             wiring.created.keys.map { Row(listOf(it, "created"), colors = listOf(null, Tone.OK)) } +
             wiring.changed.keys.map { Row(listOf(it, "changed"), colors = listOf(null, Tone.WARN)) } +
+            dc.changed.keys.map { Row(listOf(it, dc.what[it] ?: "changed"), colors = listOf(null, Tone.WARN)) } +
             r.newCopies.map { Row(listOf(it, "you changed this file: the new version is next to it, merge then delete the .new"), colors = listOf(null, Tone.WARN)) } +
             r.kept.map { Row(listOf(it, "has the builder (your version, left as is)"), colors = listOf(Tone.DIM, Tone.DIM)) } +
             r.same.map { Row(listOf(it, "already current"), colors = listOf(Tone.DIM, Tone.DIM)) },
@@ -313,16 +317,20 @@ internal fun updateFirebaseModule(ctx: Ctx, p: Project, fm: FirebaseModule) {
     )
     wiring.done?.let { Ui.say("  $it", Tone.OK) }
     wiring.todo?.let { Ui.say("Still to do: $it", Tone.WARN) }
+    dc.notes.forEach { Ui.say("  $it", Tone.WARN) }
     Ui.say("  Bubble look: change the setBubble... lines before .init(this) in your Application. See ${fm.name.trimStart(':').replace(':', '/')}/README.md", Tone.DIM)
 }
 
 // ---------- the managed marker for module code ----------
 
-private val KT_MANAGED = Regex("""^// artisan:managed ([0-9a-f]{12})\r?\n""")
+private val KT_MANAGED = Regex("""^(?://|#) artisan:managed ([0-9a-f]{12})\r?\n""")
 
-/** [text] with the managed marker: `<!-- ... -->` for Markdown, `// ...` for Kotlin. */
-internal fun managedSource(name: String, text: String): String =
-    if (name.endsWith(".kt")) "// artisan:managed ${hash12(text)}\n$text" else managed(name, text)
+/** [text] with the managed marker: `<!-- ... -->` for Markdown, `// ...` for Kotlin and Gradle, `# ...` for R8 rules. */
+internal fun managedSource(name: String, text: String): String = when {
+    name.endsWith(".kt") || name.endsWith(".gradle") -> "// artisan:managed ${hash12(text)}\n$text"
+    name.endsWith(".pro") -> "# artisan:managed ${hash12(text)}\n$text"
+    else -> managed(name, text)
+}
 
 /** Like managedState, for both marker styles. */
 internal fun managedCodeState(text: String): Pair<String, Boolean> {
