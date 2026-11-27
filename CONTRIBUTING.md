@@ -12,6 +12,9 @@ build/install/kotlin-artisan/bin/artisan list      # Windows: build\install\kotl
 
 Run it inside any Android project to try a change.
 
+To use your build as the `artisan` on your PATH, copy its `bin/` and `lib/` over the installed ones
+(`%LOCALAPPDATA%\kotlin-artisan` on Windows, `~/.kotlin-artisan` elsewhere). `artisan self:update` puts a release back.
+
 ## Docs
 
 The docs are `README.md`, `CHANGELOG.md` and the site in `docs/`. A user-facing change (command, flag,

@@ -41,5 +41,22 @@ stale; never change working code just to match one.
 
 Checklist states: `[ ]` not done · `[~]` in progress · `[x]` done · `[-]` blocked / needs the user.
 
+## Stages of a feature
+
+Every version goes through four stages. The plan file, its overview row and `MASTER_OVERVIEW.md` show the stage.
+
+| Stage | Marker | What happens | Who moves it on |
+|---|---|---|---|
+| 1. Planned | `[ ]` | The plan file has the decisions and steps | the user says "go ahead" |
+| 2. Building | `[~]` | Code, tests, docs, CHANGELOG, version bump | the agent, when `./gradlew test` passes |
+| 3. Installed locally | `[~] INSTALLED LOCALLY` | The build replaces the user's installed artisan ([release.md](skill/release.md)); the user tries it on their own projects | the user says "publish" |
+| 4. Published | `[x]` | Commit, push, tag; the Release workflow is green | done |
+
+- Stage 3 is the end of a "go ahead". Stop there and say what to try. Nothing is committed or pushed yet.
+- Feedback from the user's test goes into the plan's **Done** (`still open: ...`) and gets fixed in stage 3: rebuild,
+  install again.
+- "Publish" (or "push", "release") is the only thing that moves a feature to stage 4.
+- `[~] INSTALLED LOCALLY` still counts as open in `artisan status`, on purpose: it isn't out yet.
+
 A plan file has: the command and its flags, **Decisions** (with the date the user made them), **Steps**, **Done**
 (files changed, what was verified, what's still open). Say what changed and why, not a log of commands.

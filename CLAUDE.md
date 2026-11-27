@@ -12,6 +12,10 @@ build/install/kotlin-artisan/bin/artisan list     # Windows: build\install\kotli
 
 Try a change inside a real Android project (a copy, not the original).
 
+A feature ends **installed locally**: the build replaces the user's installed artisan (`ai/.../skill/release.md`) and
+the user tests it on their own projects. Commit, push and tag only when the user says "publish". The stages are in
+`ai/src/main/java/ai/README.md`.
+
 ## Where the work stands
 
 `ai/src/main/java/ai/` is this repo's agent workspace, the same `:ai` module `artisan make:ai` gives an Android
