@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.19.1: make:firebase on Event Box 1.5.0
+
+- `Analytics.kt` uses Event Box 1.5.0's calls: `setBubbleStyle { ... }` for the bubble and `setAvailability(...)`
+  instead of `setDebugModeEnabled`. `DebugConfig.ENABLE_EVENT_BOX` is still the switch: `true` shows the box in debug
+  and release builds, `false` never.
+- Two new builder calls before `init`: `setDeltaTime(buttonVisible, shown)` for the clock button and the `+1.2s` times
+  (off by default since 1.5.0), and `setStartState(expanded, pinned)`.
+- `make:firebase` on a project that has the module moves Event Box up to 1.5.0 or later (never down). An edited
+  `Analytics.kt` on the old calls is moved to the new ones in place, and your changes stay.
+- `event:box` does the same for `Analytics.kt` when it moves to 1.5.0 or later.
+- Offline, an app's Event Box older than 1.5.0 goes up to 1.5.0, with a note.
+
 ## 0.19.0: make:firebase: one QA/release switch, live and test ads, logging you can tune
 
 - **`DebugConfig.QA_BUILD`** is the one switch: `true` (the default) is a QA build with the event box and Google's

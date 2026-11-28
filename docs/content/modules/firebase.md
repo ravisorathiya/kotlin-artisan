@@ -64,7 +64,8 @@ depends on this one gets the same versions:
 | `com.github.JpOriginDev:event-box` | the floating event box (JitPack) |
 
 - **Update Firebase:** change the BOM version in one place. All four libraries follow.
-- **Update Event Box:** `artisan event:box` moves it to the latest version.
+- **Update Event Box:** `artisan event:box` moves it to the latest version. On 1.5.0 or later it also moves
+  `Analytics.kt` to the new calls (`setAvailability`, `setBubbleStyle`). `Analytics.kt` needs 1.5.0 or later.
 - **Gradle plugins in the app module:**
   - `com.google.gms.google-services` and `google-services.json` are required;
   - `com.google.firebase.crashlytics` is needed for crash reports with readable stack traces.
@@ -91,10 +92,14 @@ class App : Application() {
 
 - The builder calls go before `init`. Each one is optional: one left out keeps the default shown above (the icon:
   the library's own).
+- `setDeltaTime(buttonVisible = true, shown = true)`: the clock button and the `+1.2s` times between events (off by
+  default since Event Box 1.5.0). `setStartState(expanded = true, pinned = true)`: how the box opens.
 - `setRemoteHolders(AdsConstant, FeatureFlags)` does the same as `Analytics.init(this, AdsConstant, FeatureFlags)`.
 - The switches (event box on/off, session hours, Crashlytics in debug) stay in `DebugConfig`.
 - After `artisan self:update`, run `artisan make:firebase` again: files you haven't changed move to the new version, an
   edited one gets the new version next to it as `.new`, and `DebugConfig` / `AdsConstant` are never touched.
+  - An edited `Analytics.kt` on the old Event Box calls is moved to `setAvailability` / `setBubbleStyle` in place,
+    and Event Box goes up to 1.5.0 or later.
 
 A new module that should log events or use Firebase: `implementation(project(":core:firebase"))`.
 

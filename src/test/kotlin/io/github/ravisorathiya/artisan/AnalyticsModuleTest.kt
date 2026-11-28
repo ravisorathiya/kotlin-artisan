@@ -42,7 +42,7 @@ class AnalyticsModuleTest {
     /** No network in tests: what each registry "says" is the latest. */
     private val latest: (String) -> String? = { url ->
         when {
-            "jitpack" in url -> "1.4.0"
+            "jitpack" in url -> "1.5.2"
             "firebase-bom" in url -> "35.1.0"
             "timber" in url -> "5.0.1"
             "coroutines" in url -> "1.11.0"
@@ -129,7 +129,7 @@ class AnalyticsModuleTest {
         assertTrue("firebase = \"35.1.0\"" in toml, "the BOM moved to the latest:\n$toml")
         assertTrue("firebase-crashlytics = { module = \"com.google.firebase:firebase-crashlytics\" }" in toml, "BOM-managed: no version")
         assertTrue("timber = { module = \"com.jakewharton.timber:timber\", version = \"5.0.1\" }" in toml)
-        assertTrue("event-box = { module = \"com.github.JpOriginDev:event-box\", version = \"1.4.0\" }" in toml)
+        assertTrue("event-box = { module = \"com.github.JpOriginDev:event-box\", version = \"1.5.2\" }" in toml)
         assertTrue("android-library = { id = \"com.android.library\", version.ref = \"agp\" }" in toml)
         assertTrue("    alias(libs.plugins.android.application) apply false\n    alias(libs.plugins.android.library) apply false\n" in read("build.gradle.kts"))
         assertEquals("35.1.0", plan.bom)
@@ -209,7 +209,8 @@ class AnalyticsModuleTest {
         assertTrue("    kotlinOptions {\n        jvmTarget = \"11\"\n    }" in build, build)
         assertTrue("    api(platform('com.google.firebase:firebase-bom:34.17.0'))\n" in build, "offline, no BOM in the app: the pinned one")
         assertTrue("    api('com.google.firebase:firebase-messaging')\n" in build && "    api('com.jakewharton.timber:timber:5.0.1')\n" in build)
-        assertTrue("    implementation('com.github.JpOriginDev:event-box:1.2.0')\n" in build, "offline: the app's own Event Box version")
+        assertTrue("    implementation('com.github.JpOriginDev:event-box:1.5.0')\n" in build, "offline: the app's Event Box 1.2.0 is too old for Analytics.kt")
+        assertTrue(plan.notes.any { "Event Box 1.2.0 is older than Analytics.kt needs" in it }, plan.notes.toString())
         assertTrue(plan.notes.any { "Offline" in it })
         assertTrue("    id 'com.android.application' version '9.4.1' apply false\n    id 'com.android.library' version '9.4.1' apply false\n" in read("build.gradle"))
         assertTrue("include ':app'\ninclude ':core:firebase'" in read("settings.gradle") && "        maven { url 'https://jitpack.io' }\n" in read("settings.gradle"))
@@ -227,7 +228,7 @@ class AnalyticsModuleTest {
         val p = assertNotNull(Project.find(tmp))
         val plan = planAnalyticsModule(p, latest = latest)
         val build = plan.created.getValue("core/firebase/build.gradle.kts")
-        assertTrue("api(platform(\"com.google.firebase:firebase-bom:35.1.0\"))" in build && "implementation(\"com.github.JpOriginDev:event-box:1.4.0\")" in build, build)
+        assertTrue("api(platform(\"com.google.firebase:firebase-bom:35.1.0\"))" in build && "implementation(\"com.github.JpOriginDev:event-box:1.5.2\")" in build, build)
         assertTrue("api(\"org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0\")" in build && "implementation(\"org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.11.0\")" in build)
         assertTrue(plan.appBom == null && plan.notes.any { "JitPack" in it }, "no repositories block to put JitPack in: say so")
     }
@@ -257,6 +258,10 @@ class AnalyticsModuleTest {
         val (gradle, was) = bumpEventBoxCoordinate("implementation 'com.github.JpOriginDev:event-box:1.3.1'\n", "1.4.0")
         assertEquals("implementation 'com.github.JpOriginDev:event-box:1.4.0'\n", gradle)
         assertEquals(setOf("1.3.1"), was)
+        val mixed = "implementation 'com.github.JpOriginDev:event-box:1.3.1'\nimplementation 'com.github.JpOriginDev:event-box:1.6.0'\n"
+        val (up, upWas) = bumpEventBoxCoordinate(mixed, "1.5.0", onlyUp = true)
+        assertEquals("implementation 'com.github.JpOriginDev:event-box:1.5.0'\nimplementation 'com.github.JpOriginDev:event-box:1.6.0'\n", up, "onlyUp: never down")
+        assertEquals(setOf("1.3.1"), upWas)
     }
 
     @Test

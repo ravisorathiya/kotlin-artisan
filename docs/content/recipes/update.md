@@ -52,7 +52,7 @@ A skill you edited is kept, with the new version next to it as `.new`.
 ### Update libraries
 
 ```sh
-artisan event:box                   # Event Box to the latest JitPack version
+artisan event:box                   # Event Box to the latest JitPack version (and Analytics.kt to its calls)
 ```
 
 Firebase follows its BOM. Change the version in one place and all four libraries move together.

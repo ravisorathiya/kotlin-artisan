@@ -263,7 +263,10 @@ internal fun firebaseEventDefinition(p: Project): String? =
 
 /** The Event Box library (https://github.com/JpOriginDev/event-box), the floating list of events for testers. */
 internal const val EVENT_BOX_GROUP = "com.github.JpOriginDev:event-box"
-internal const val EVENT_BOX_VERSION = "1.3.1"
+internal const val EVENT_BOX_VERSION = "1.5.0"
+
+/** The oldest Event Box the Analytics.kt template compiles against (setAvailability, setBubbleStyle). */
+internal const val EVENT_BOX_MIN = "1.5.0"
 
 /** Where the event box comes from: the Event Box dependency, or an older in-app EventLogBox class. Null when none. */
 internal fun eventBoxDefinition(p: Project): String? {
@@ -416,7 +419,7 @@ internal fun makeAnalytics(ctx: Ctx) {
     Ui.say("Still to do (once):", Tone.WARN)
     wiring.todo?.let { Ui.say("  - $it") }
     Ui.say("  - Sync Gradle in Android Studio.")
-    Ui.say("  Bubble look: the setBubble... lines before .init(this) in your Application (defaults shown).", Tone.DIM)
+    Ui.say("  Bubble look: the setBubble... lines before .init(this) in your Application (defaults shown). Clock and start state: .setDeltaTime(...) / .setStartState(...).", Tone.DIM)
     Ui.say("  One switch: DebugConfig.QA_BUILD (true = event box + test ads; false = the Play Store release). Release builds warn when it isn't ready.", Tone.DIM)
     Ui.say("  Logging: logDebug(\"...\") / logError(\"...\", e) / logging(\"Tag\", e) / logFlow(\"Name\"). How much: DebugConfig.LOGGING_VOLUME.", Tone.DIM)
     val moduleDir = File(p.root, plan.created.keys.first().substringBeforeLast('/'))

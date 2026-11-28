@@ -9,6 +9,7 @@ import android.widget.ImageView
 import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.ogmediaapps.eventbox.OGEventBoxLog
+import com.ogmediaapps.eventbox.model.OGEventBoxAvailability
 import com.ogmediaapps.eventbox.model.OGEventBoxBackgroundMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -64,6 +65,18 @@ object Analytics {
     private var bubbleCornerRadiusDp = -1f
 
     @Volatile
+    private var deltaTimeButton = false
+
+    @Volatile
+    private var deltaTimeShown = false
+
+    @Volatile
+    private var startExpanded = false
+
+    @Volatile
+    private var startPinned = false
+
+    @Volatile
     private var holders: Array<out Any> = arrayOf(AdsConstant)
 
     @Volatile
@@ -93,6 +106,18 @@ object Analytics {
 
     /** The bubble's corner radius in dp. Default -1 = fully round. */
     fun setBubbleCornerRadiusDp(radiusDp: Float): Analytics = apply { bubbleCornerRadiusDp = radiusDp }
+
+    /** The clock button in the box's header, and the `+1.2s` times between events. Default both off (Event Box 1.5.0). */
+    fun setDeltaTime(buttonVisible: Boolean = false, shown: Boolean = false): Analytics = apply {
+        deltaTimeButton = buttonVisible
+        deltaTimeShown = shown
+    }
+
+    /** How the box opens: expanded (the list, not the bubble) and pinned. Default both false. */
+    fun setStartState(expanded: Boolean = false, pinned: Boolean = false): Analytics = apply {
+        startExpanded = expanded
+        startPinned = pinned
+    }
 
     /** The objects with `by remote...` properties that Remote Config fetches and applies (AdsConstant by default). */
     fun setRemoteHolders(vararg remoteHolders: Any): Analytics = apply { holders = remoteHolders }
@@ -127,14 +152,18 @@ object Analytics {
         if (DebugConfig.TRACK_SCREENS) trackScreens(app)
         try {
             eventBoxBackgroundMode?.let { OGEventBoxLog.setBackgroundMode(it.lib) }
-            OGEventBoxLog.setDebugModeEnabled(DebugConfig.ENABLE_EVENT_BOX)
+            OGEventBoxLog.setBubbleStyle {
+                if (bubbleIcon != 0) iconRes(bubbleIcon)
+                iconScaleType(bubbleIconScaleType)
+                backgroundColor(bubbleBackgroundColor)
+                borderColor(bubbleBorderColor)
+                borderWidthDp(bubbleBorderWidthDp)
+                cornerRadiusDp(bubbleCornerRadiusDp)
+            }
+                .setAvailability(eventBoxAvailability())
                 .setDebugModeDurationHours(DebugConfig.EVENT_BOX_SESSION_HOURS)
-                .apply { if (bubbleIcon != 0) setBubbleIconResId(bubbleIcon) }
-                .setBubbleIconScaleType(bubbleIconScaleType)
-                .setBubbleBackgroundColor(bubbleBackgroundColor)
-                .setBubbleBorderColor(bubbleBorderColor)
-                .setBubbleBorderWidthDp(bubbleBorderWidthDp)
-                .setBubbleCornerRadiusDp(bubbleCornerRadiusDp)
+                .setDeltaTimeButtonVisible(deltaTimeButton)
+                .setStartState(startExpanded, startPinned, deltaTimeShown)
                 .install(app)
             OGEventBoxLog.setEnabled(app, DebugConfig.ENABLE_EVENT_BOX)
         } catch (e: Exception) {
@@ -191,9 +220,13 @@ object Analytics {
     internal fun ensureEventBox() {
         if (!DebugConfig.ENABLE_EVENT_BOX || OGEventBoxLog.isActive) return
         val context = appContext ?: return
-        OGEventBoxLog.setDebugModeEnabled(true).setDebugModeDurationHours(DebugConfig.EVENT_BOX_SESSION_HOURS)
+        OGEventBoxLog.setAvailability(OGEventBoxAvailability.DEBUG_AND_RELEASE).setDebugModeDurationHours(DebugConfig.EVENT_BOX_SESSION_HOURS)
         OGEventBoxLog.setEnabled(context, true)
     }
+
+    /** ENABLE_EVENT_BOX turns the box on in debug and release builds alike (QA builds can be release builds). */
+    private fun eventBoxAvailability(): OGEventBoxAvailability =
+        if (DebugConfig.ENABLE_EVENT_BOX) OGEventBoxAvailability.DEBUG_AND_RELEASE else OGEventBoxAvailability.NEVER
 
     /** Ties events and crashes to a user (an id of your own, never an email or phone number). null clears it. */
     fun setUserId(id: String?) {

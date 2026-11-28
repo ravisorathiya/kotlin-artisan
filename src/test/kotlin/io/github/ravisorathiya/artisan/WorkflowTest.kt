@@ -462,8 +462,10 @@ class WorkflowTest {
         val init = stub("Analytics.kt")
         assertTrue("object Analytics" in init && "fun init(app: Application" in init && ".install(app)" in init)
         // builder: optional settings before init; the DebugConfig consts stay the switches
-        assertTrue(listOf("fun setIcon(resId: Int): Analytics", "setBubbleIconResId(bubbleIcon)", "fun setRemoteHolders(").all { it in init })
-        assertTrue("setEventBox(" !in init && "OGEventBoxLog.setDebugModeEnabled(DebugConfig.ENABLE_EVENT_BOX)" in init)
+        assertTrue(listOf("fun setIcon(resId: Int): Analytics", "iconRes(bubbleIcon)", "fun setRemoteHolders(", "fun setDeltaTime(", "fun setStartState(").all { it in init })
+        // Event Box 1.5.0: setBubbleStyle and setAvailability, none of the deprecated calls
+        assertTrue("setEventBox(" !in init && "OGEventBoxLog.setBubbleStyle {" in init && ".setAvailability(eventBoxAvailability())" in init)
+        assertTrue(listOf("setDebugModeEnabled", "setBubbleIconResId", ".setBubbleBackgroundColor(bubble").none { it in init }, init)
         assertNull(javaClass.getResource("/templates/analytics/EventLogBox.kt.stub"))
 
         val p = project()

@@ -13,7 +13,7 @@ skill that apply.
 
 ```text
 core/firebase/src/main/java/<app>/firebase/
-├── Analytics.kt          Analytics[.setIcon/.setBubble.../.setRemoteHolders].init(app[, holders]): Firebase, Timber, Crashlytics, event box, Remote Config
+├── Analytics.kt          Analytics[.setIcon/.setBubble.../.setDeltaTime/.setStartState/.setRemoteHolders].init(app[, holders]): Firebase, Timber, Crashlytics, event box, Remote Config
 ├── DebugConfig.kt        settings only: QA_BUILD (the one switch), live/test ads and the AdMob app id, logging volume, Crashlytics, Remote Config, bypass rules
 ├── events/FirebaseEvents.kt   firebaseEvent(name, bundle)
 ├── remote/AdsConstant.kt      ad units and remote switches, one line per key

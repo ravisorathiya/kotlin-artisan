@@ -3,9 +3,10 @@
 The user points an agent at this file and says go ahead. Do the **first open item** below, end to end, in this
 repository only. Then update this file for the one after it.
 
-## Where things stand (2026-11-27)
+## Where things stand (2026-11-28)
 
-- Released: **v0.19.0** (tagged, pushed). It has `make:lang` (0.17.0), `purge` (0.18.0) and the make:firebase debug
+- Released: **v0.19.1** (tagged, pushed): make:firebase / event:box on Event Box 1.5.0
+  ([event_box_1_5.md](event_box_1_5.md)). Before it, **v0.19.0**. It has `make:lang` (0.17.0), `purge` (0.18.0) and the make:firebase debug
   config + logging (0.19.0, [debug_config.md](debug_config.md)).
 - Roadmap: [workflow/v_0_17/overview.md](../workflow/v_0_17/overview.md). Plans: [MASTER_OVERVIEW.md](MASTER_OVERVIEW.md).
 - Still open from earlier work: `VERIFY ON DEVICE` for make:lang (pick the app language in Android 13+ Settings),
@@ -13,6 +14,7 @@ repository only. Then update this file for the one after it.
 - `gradle/gradle-daemon-jvm.properties` is untracked from before; leave it unless the user says otherwise.
 - 0.19.0's open items: VERIFY ON DEVICE (start-up mode line, LOW volume, Crashlytics breadcrumbs); make:ads on a real
   build. Only the user can do the device checks.
+- 0.19.1's open item: VERIFY IN STUDIO, a Gradle build of `:core:firebase` against event-box 1.5.0.
 
 ## Up next: 0.20.0 `check:release`
 

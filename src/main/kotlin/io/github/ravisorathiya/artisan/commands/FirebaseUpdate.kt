@@ -205,33 +205,94 @@ internal fun planAppWiring(p: Project, analyticsPkg: String, pending: Map<String
 /** Settings people edit: never replaced by an update. */
 internal val FIREBASE_SETTINGS = setOf("DebugConfig.kt", "remote/AdsConstant.kt")
 
-/** The builder block and the event box chain lines of Analytics.kt, from the template (one source of truth). */
-private fun analyticsTemplateParts(template: String): Pair<String, String>? {
-    val start = template.indexOf("    // ---------- Builder")
+/** The parts of Analytics.kt the update patches in, from the template (one source of truth). */
+internal class AnalyticsParts(
+    /** The whole builder block, from `// ---------- Builder` to the end marker. */
+    val builder: String,
+    /** The event box statement, from `OGEventBoxLog.setBubbleStyle {` to `.install(app)`, whole lines. */
+    val setup: String,
+    /** The builder fields and methods added with Event Box 1.5.0 (clock, start state). */
+    val newFields: String,
+    val newMethods: String,
+    /** `eventBoxAvailability()`, with its KDoc. */
+    val availability: String,
+)
+
+private fun between(t: String, from: String, to: String): String? {
+    val a = t.indexOf(from).takeIf { it >= 0 } ?: return null
+    val b = t.indexOf(to, a).takeIf { it >= 0 } ?: return null
+    return t.substring(a, b)
+}
+
+internal fun analyticsTemplateParts(template: String): AnalyticsParts? {
     val endMark = "    // ---------- End of builder ----------\n\n"
-    val end = template.indexOf(endMark)
-    if (start < 0 || end < 0) return null
-    val duration = ".setDebugModeDurationHours(DebugConfig.EVENT_BOX_SESSION_HOURS)\n"
-    val d = template.indexOf(duration)
-    val install = template.indexOf("                .install(app)", d)
-    if (d < 0 || install < 0) return null
-    return template.substring(start, end + endMark.length) to template.substring(d + duration.length, install)
+    val builder = between(template, "    // ---------- Builder", endMark)?.plus(endMark) ?: return null
+    val style = template.indexOf("OGEventBoxLog.setBubbleStyle {").takeIf { it >= 0 } ?: return null
+    val s = template.lastIndexOf('\n', style) + 1
+    val install = template.indexOf(".install(app)\n", s).takeIf { it >= 0 } ?: return null
+    val setup = template.substring(s, install + ".install(app)\n".length)
+    val fields = between(template, "    @Volatile\n    private var deltaTimeButton", "    @Volatile\n    private var holders") ?: return null
+    val methods = between(template, "    /** The clock button", "    /** The objects with") ?: return null
+    val availability = between(template, "    /** ENABLE_EVENT_BOX turns", "    /** Ties events")
+        ?.let { it.substring(0, it.indexOf("NEVER\n") + "NEVER\n".length) } ?: return null
+    return AnalyticsParts(builder, setup, fields, methods, availability)
+}
+
+/** The event box statement of an Analytics.kt from before Event Box 1.5.0: `OGEventBoxLog.setDebugModeEnabled(...)` to `.install(app)`. */
+private val OLD_EVENT_BOX_SETUP = Regex("""(?m)^[ \t]*OGEventBoxLog\.setDebugModeEnabled\(DebugConfig\.ENABLE_EVENT_BOX\)[\s\S]*?\.install\(app\)[^\n]*\n""")
+
+/**
+ * An Analytics.kt (made with the builder) moved to Event Box 1.5.0: the event box statement becomes the template's
+ * (setBubbleStyle, setAvailability, clock and start state), ensureEventBox uses setAvailability, and the builder gets
+ * setDeltaTime / setStartState. Everything else is kept. Null when it's already moved or its shape is too different.
+ */
+internal fun migrateEventBoxSetup(src: String, template: String): String? {
+    val parts = analyticsTemplateParts(template) ?: return null
+    val nl = if ("\r\n" in src) "\r\n" else "\n"
+    var s = src.replace("\r\n", "\n")
+    if ("fun setIcon(" !in s) return null
+    val old = OLD_EVENT_BOX_SETUP.find(s) ?: return null
+    s = s.replaceRange(old.range, parts.setup)
+    s = s.replace("OGEventBoxLog.setDebugModeEnabled(true)", "OGEventBoxLog.setAvailability(OGEventBoxAvailability.DEBUG_AND_RELEASE)")
+    if ("private var deltaTimeButton" !in s) {
+        val at = s.indexOf("    @Volatile\n    private var holders").takeIf { it >= 0 }
+            ?: s.indexOf("    // ---------- End of builder").takeIf { it >= 0 } ?: return null
+        s = s.substring(0, at) + parts.newFields + s.substring(at)
+    }
+    if ("fun setDeltaTime(" !in s) {
+        val at = s.indexOf("    /** The objects with").takeIf { it >= 0 }
+            ?: s.indexOf("    // ---------- End of builder").takeIf { it >= 0 } ?: return null
+        s = s.substring(0, at) + parts.newMethods + s.substring(at)
+    }
+    if ("fun eventBoxAvailability(" !in s) {
+        // where the template has it (after ensureEventBox), else the last member of the object
+        val at = s.indexOf("    /** Ties events").takeIf { it >= 0 }
+        s = if (at != null) s.substring(0, at) + parts.availability + "\n" + s.substring(at) else {
+            val close = s.trimEnd().lastIndexOf('}').takeIf { it > 0 } ?: return null
+            s.substring(0, close).trimEnd('\n') + "\n\n" + parts.availability + s.substring(close)
+        }
+    }
+    val imp = "import com.ogmediaapps.eventbox.model.OGEventBoxAvailability\n"
+    val logImport = "import com.ogmediaapps.eventbox.OGEventBoxLog\n"
+    s = if (imp !in s && logImport in s) s.replaceFirst(logImport, logImport + imp)
+    else addImports(s, listOf("com.ogmediaapps.eventbox.model.OGEventBoxAvailability"), java = false)
+    return s.replace("\n", nl)
 }
 
 /**
- * An older Analytics.kt (made before the builder) with the builder added: setIcon, the bubble style, setRemoteHolders.
- * Keeps everything else as it is. Null when it already has them or its shape is too different to patch.
+ * An older Analytics.kt (made before the builder) with the builder added: setIcon, the bubble style, setRemoteHolders,
+ * then moved to Event Box 1.5.0 ([migrateEventBoxSetup]). Keeps everything else as it is. Null when it already has
+ * the builder or its shape is too different to patch.
  */
 internal fun upgradeAnalyticsSource(old: String, template: String): String? {
     if ("fun setIcon(" in old) return null
-    val (builder, chain) = analyticsTemplateParts(template) ?: return null
+    val builder = analyticsTemplateParts(template)?.builder ?: return null
     val nl = if ("\r\n" in old) "\r\n" else "\n"
     var s = old.replace("\r\n", "\n")
     val sig = Regex("""fun init\(app: Application, vararg remoteHolders: Any(?: = arrayOf\(AdsConstant\))?\)""")
     val initAt = sig.find(s)?.range?.first ?: return null
-    val install = Regex("""(?m)^[ \t]*\.install\(app\)""").find(s) ?: return null
+    if (OLD_EVENT_BOX_SETUP.find(s) == null) return null
     if ("RemoteConfig.start(*remoteHolders)" !in s) return null
-    s = s.substring(0, install.range.first) + chain + s.substring(install.range.first)
     s = s.replace(sig, "fun init(app: Application, vararg remoteHolders: Any)")
         .replace("RemoteConfig.start(*remoteHolders)", "RemoteConfig.start(*(if (remoteHolders.isNotEmpty()) remoteHolders else holders))")
     // the builder goes before init's KDoc
@@ -239,13 +300,30 @@ internal fun upgradeAnalyticsSource(old: String, template: String): String? {
     val at = kdoc ?: s.lastIndexOf('\n', initAt) + 1
     s = s.substring(0, at) + builder + s.substring(at)
     s = addImports(s, listOf("android.widget.ImageView"), java = false)
-    return s.replace("\n", nl)
+    return migrateEventBoxSetup(s, template)?.replace("\n", nl)
+}
+
+/** The Firebase module's Analytics.kt template for [fm] (package and module filled in). */
+internal fun analyticsTemplateFor(fm: FirebaseModule): String =
+    (object {}.javaClass.getResource("/templates/analytics/Analytics.kt.stub")?.readText()?.replace("\r\n", "\n") ?: "")
+        .replace("{{PACKAGE}}", fm.pkg).replace("{{MODULE}}", fm.name)
+
+/** Moves the module's Analytics.kt to Event Box 1.5.0 in place, when it's on the old calls. Its path, or null. */
+internal fun migrateAnalyticsFile(p: Project, fm: FirebaseModule): String? {
+    val f = File(fm.adsConstant.parentFile.parentFile, "Analytics.kt").takeIf { it.isFile } ?: return null
+    val (body, _) = managedCodeState(f.readText())
+    val tpl = analyticsTemplateFor(fm)
+    val up = migrateEventBoxSetup(body, tpl) ?: return null
+    f.writeText(if (up.replace("\r\n", "\n") == tpl) managedSource(f.name, tpl) else up)
+    return p.rel(f)
 }
 
 internal class ModuleRefresh(
     val updated: List<String>, val added: List<String>, val patched: List<String>, val newCopies: List<String>, val same: List<String>,
     /** Not written by this artisan but already has what it needs (an Analytics.kt patched earlier): left as is. */
     val kept: List<String> = emptyList(),
+    /** An edited Analytics.kt moved to Event Box 1.5.0 in place (setAvailability, setBubbleStyle); the rest kept. */
+    val migrated: List<String> = emptyList(),
 )
 
 /**
@@ -263,7 +341,7 @@ internal fun refreshFirebaseModule(p: Project, fm: FirebaseModule): ModuleRefres
     fun template(name: String) = (object {}.javaClass.getResource("/templates/analytics/$name.stub")?.readText()?.replace("\r\n", "\n") ?: "")
         .replace("{{PACKAGE}}", fm.pkg).replace("{{MODULE}}", fm.name).replace("{{BOM}}", bom)
     val updated = mutableListOf<String>(); val added = mutableListOf<String>(); val patched = mutableListOf<String>()
-    val newCopies = mutableListOf<String>(); val same = mutableListOf<String>(); val kept = mutableListOf<String>()
+    val newCopies = mutableListOf<String>(); val same = mutableListOf<String>(); val kept = mutableListOf<String>(); val migrated = mutableListOf<String>()
     val files = ANALYTICS_SOURCES.filter { it !in FIREBASE_SETTINGS }.map { File(src, it) to template(it.substringAfterLast('/')) } +
         (File(moduleDir, "README.md") to template("README.md")) +
         FIREBASE_MODULE_FILES.map { File(moduleDir, it) to template(it) }
@@ -276,7 +354,11 @@ internal fun refreshFirebaseModule(p: Project, fm: FirebaseModule): ModuleRefres
         when {
             text == tpl -> { if (!unedited) f.writeText(written); same += rel }
             unedited -> { f.writeText(written); updated += rel }
-            // patched on an earlier run (no marker): it has the builder, keep it rather than leave a .new every time
+            // has the builder: move it to Event Box 1.5.0 in place, else keep one patched earlier (no marker) rather than leave a .new every time
+            f.name == "Analytics.kt" && "fun setIcon(" in body && migrateEventBoxSetup(body, tpl) != null -> {
+                val up = migrateEventBoxSetup(body, tpl)!!
+                if (up.replace("\r\n", "\n") == tpl) { f.writeText(written); updated += rel } else { f.writeText(up); migrated += rel }
+            }
             f.name == "Analytics.kt" && "fun setIcon(" in body && KT_MANAGED.find(f.readText()) == null -> kept += rel
             f.name == "Analytics.kt" && upgradeAnalyticsSource(body, tpl) != null -> {
                 val up = upgradeAnalyticsSource(body, tpl)!!
@@ -286,13 +368,16 @@ internal fun refreshFirebaseModule(p: Project, fm: FirebaseModule): ModuleRefres
             else -> { File(f.parentFile, f.name + ".new").writeText(tpl); newCopies += "$rel.new" }
         }
     }
-    return ModuleRefresh(updated, added, patched, newCopies, same, kept)
+    return ModuleRefresh(updated, added, patched, newCopies, same, kept, migrated)
 }
 
 /** make:firebase when the module is already there: refresh its code, wire the Application, report. */
 internal fun updateFirebaseModule(ctx: Ctx, p: Project, fm: FirebaseModule) {
     Ui.say("${fm.name} is already here: bringing it up to this artisan (your DebugConfig and AdsConstant stay as they are).", Tone.DIM)
     val r = refreshFirebaseModule(p, fm)
+    // Analytics.kt needs Event Box 1.5.0 or later: move the library up (never down)
+    val boxVersion = fetchLatestVersion(JITPACK_EVENT_BOX)?.takeIf { compareVersions(it, EVENT_BOX_MIN) >= 0 } ?: EVENT_BOX_VERSION
+    val box = bumpEventBox(p, boxVersion, onlyUp = true)
     val wiring = planAppWiring(p, fm.pkg)
     for ((path, text) in wiring.created) File(p.root, path).apply { parentFile.mkdirs(); writeText(text) }
     for ((path, text) in wiring.changed) File(p.root, path).writeText(text)
@@ -306,7 +391,9 @@ internal fun updateFirebaseModule(ctx: Ctx, p: Project, fm: FirebaseModule) {
         "make:firebase: update ${fm.name}", listOf("File", "What"),
         r.updated.map { Row(listOf(it, "updated (you hadn't changed it)"), colors = listOf(null, Tone.OK)) } +
             r.added.map { Row(listOf(it, "added"), colors = listOf(null, Tone.OK)) } +
-            r.patched.map { Row(listOf(it, "builder added (setIcon, bubble style, setRemoteHolders); the rest kept"), colors = listOf(null, Tone.OK)) } +
+            r.patched.map { Row(listOf(it, "builder added (setIcon, bubble style, setRemoteHolders), on Event Box 1.5.0; the rest kept"), colors = listOf(null, Tone.OK)) } +
+            r.migrated.map { Row(listOf(it, "moved to Event Box 1.5.0 (setAvailability, setBubbleStyle); your changes kept"), colors = listOf(null, Tone.OK)) } +
+            box.map { Row(listOf(it.cells[0], "Event Box ${it.cells[1]} -> ${it.cells[2]}"), colors = listOf(null, Tone.OK)) } +
             wiring.created.keys.map { Row(listOf(it, "created"), colors = listOf(null, Tone.OK)) } +
             wiring.changed.keys.map { Row(listOf(it, "changed"), colors = listOf(null, Tone.WARN)) } +
             dc.changed.keys.map { Row(listOf(it, dc.what[it] ?: "changed"), colors = listOf(null, Tone.WARN)) } +
@@ -318,7 +405,8 @@ internal fun updateFirebaseModule(ctx: Ctx, p: Project, fm: FirebaseModule) {
     wiring.done?.let { Ui.say("  $it", Tone.OK) }
     wiring.todo?.let { Ui.say("Still to do: $it", Tone.WARN) }
     dc.notes.forEach { Ui.say("  $it", Tone.WARN) }
-    Ui.say("  Bubble look: change the setBubble... lines before .init(this) in your Application. See ${fm.name.trimStart(':').replace(':', '/')}/README.md", Tone.DIM)
+    if (box.isNotEmpty()) Ui.say("  Sync Gradle. What's new: https://github.com/JpOriginDev/event-box/releases", Tone.DIM)
+    Ui.say("  Bubble look: change the setBubble... lines before .init(this) in your Application. Clock and start state: .setDeltaTime(...) / .setStartState(...). See ${fm.name.trimStart(':').replace(':', '/')}/README.md", Tone.DIM)
 }
 
 // ---------- the managed marker for module code ----------

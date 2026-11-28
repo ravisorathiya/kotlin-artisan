@@ -473,7 +473,7 @@ internal fun planAnalyticsModule(
                 dep("implementation", "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", "kotlinx-coroutines-play-services", coroutines),
                 "",
                 "// the floating event box for testers (https://github.com/JpOriginDev/event-box)",
-                dep("implementation", EVENT_BOX_GROUP, "event-box", resolve(EVENT_BOX_GROUP, JITPACK_EVENT_BOX, EVENT_BOX_VERSION)),
+                dep("implementation", EVENT_BOX_GROUP, "event-box", atLeastEventBoxMin(resolve(EVENT_BOX_GROUP, JITPACK_EVENT_BOX, EVENT_BOX_VERSION), notes)),
             )
         }
         ModuleKind.ADS -> listOf(
@@ -629,11 +629,39 @@ internal fun applyAnalyticsModule(p: Project, plan: AnalyticsModulePlan) {
 
 // ---------- event:box: keep the Event Box library current ----------
 
-/** Every place [text] pins Event Box: a `group:name:x.y.z` coordinate. Returns (new text, old versions). */
-internal fun bumpEventBoxCoordinate(text: String, version: String): Pair<String, Set<String>> {
+/** [version], or [EVENT_BOX_MIN] (with a note) when it's older than the Analytics.kt template needs. */
+internal fun atLeastEventBoxMin(version: String, notes: MutableList<String>): String =
+    if (compareVersions(version, EVENT_BOX_MIN) >= 0) version
+    else EVENT_BOX_MIN.also { notes += "Event Box $version is older than Analytics.kt needs: moved to $it." }
+
+/**
+ * Every place [text] pins Event Box: a `group:name:x.y.z` coordinate. Returns (new text, old versions).
+ * [onlyUp] leaves a newer version alone.
+ */
+internal fun bumpEventBoxCoordinate(text: String, version: String, onlyUp: Boolean = false): Pair<String, Set<String>> {
     val re = Regex(Regex.escape(EVENT_BOX_GROUP) + """:([\w.\-]+)""")
-    val old = re.findAll(text).map { it.groupValues[1] }.filter { it != version }.toSet()
-    return re.replace(text, "$EVENT_BOX_GROUP:$version") to old
+    fun moves(v: String) = v != version && (!onlyUp || compareVersions(v, version) < 0)
+    val old = re.findAll(text).map { it.groupValues[1] }.filter { moves(it) }.toSet()
+    return re.replace(text) { if (moves(it.groupValues[1])) "$EVENT_BOX_GROUP:$version" else it.value } to old
+}
+
+/**
+ * Moves Event Box to [version] in the catalog (never down) and in every build file's coordinate ([onlyUp]: never
+ * down there either). Returns a row per changed file: file, old version(s), new version.
+ */
+internal fun bumpEventBox(p: Project, version: String, onlyUp: Boolean = false): List<Row> {
+    val changes = mutableListOf<Row>()
+    val toml = File(p.root, "gradle/libs.versions.toml")
+    if (toml.isFile) {
+        val (text, old) = bumpCatalogVersion(toml.readText(), EVENT_BOX_GROUP, version)
+        if (old != null) { toml.writeText(text); changes += Row(p.rel(toml), old, version) }
+    }
+    for (m in p.codeModules) {
+        val f = m.buildFile ?: continue
+        val (text, old) = bumpEventBoxCoordinate(f.readText(), version, onlyUp)
+        if (old.isNotEmpty()) { f.writeText(text); changes += Row(p.rel(f), old.joinToString(", "), version) }
+    }
+    return changes
 }
 
 internal fun registerEventBox() {
@@ -643,18 +671,11 @@ internal fun registerEventBox() {
 private fun eventBoxCmd(ctx: Ctx) {
     val p = ctx.project
     val version = ctx.arg(0) ?: fetchLatestVersion(JITPACK_EVENT_BOX)
-        ?: throw CliError("Can't reach JitPack. Pass the version: artisan event:box 1.3.1")
-    val changes = mutableListOf<Row>()
+        ?: throw CliError("Can't reach JitPack. Pass the version: artisan event:box 1.5.0")
+    val changes = bumpEventBox(p, version)
     val toml = File(p.root, "gradle/libs.versions.toml")
-    if (toml.isFile) {
-        val (text, old) = bumpCatalogVersion(toml.readText(), EVENT_BOX_GROUP, version)
-        if (old != null) { toml.writeText(text); changes += Row(p.rel(toml), old, version) }
-    }
-    for (m in p.codeModules) {
-        val f = m.buildFile ?: continue
-        val (text, old) = bumpEventBoxCoordinate(f.readText(), version)
-        if (old.isNotEmpty()) { f.writeText(text); changes += Row(p.rel(f), old.joinToString(", "), version) }
-    }
+    // 1.5.0 has setAvailability / setBubbleStyle: the Firebase module's Analytics.kt moves to them
+    val migrated = if (compareVersions(version, EVENT_BOX_MIN) >= 0) findFirebaseModule(p)?.let { migrateAnalyticsFile(p, it) } else null
     val uses = eventBoxDefinition(p) != null || (toml.isFile && libraryKey(toml.readText(), EVENT_BOX_GROUP) != null)
     when {
         changes.isNotEmpty() -> {
@@ -664,6 +685,7 @@ private fun eventBoxCmd(ctx: Ctx) {
         uses -> Ui.say("Event Box is already on $version (the latest).", Tone.OK)
         else -> Ui.say("This project doesn't use Event Box yet: artisan make:firebase adds it (latest version).", Tone.WARN)
     }
+    migrated?.let { Ui.say("  $it: moved to Event Box $EVENT_BOX_MIN (setAvailability, setBubbleStyle).", Tone.OK) }
 }
 
 // ---------- verify: the latest Firebase may need a newer Kotlin than the project has ----------

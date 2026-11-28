@@ -1,6 +1,9 @@
 package io.github.ravisorathiya.artisan
 
 import io.github.ravisorathiya.artisan.commands.addManifestAppName
+import io.github.ravisorathiya.artisan.commands.bumpEventBox
+import io.github.ravisorathiya.artisan.commands.migrateAnalyticsFile
+import io.github.ravisorathiya.artisan.commands.migrateEventBoxSetup
 import io.github.ravisorathiya.artisan.commands.findFirebaseModule
 import io.github.ravisorathiya.artisan.commands.managedCodeState
 import io.github.ravisorathiya.artisan.commands.managedSource
@@ -109,8 +112,10 @@ class FirebaseUpdateTest {
         val analytics = read("$src/Analytics.kt")
         assertEquals(listOf("$src/Analytics.kt"), r.patched)
         assertTrue(listOf("fun setIcon(resId: Int): Analytics", "fun setBubbleBackgroundColor(color: Int): Analytics", "fun setRemoteHolders(", "import android.widget.ImageView").all { it in analytics }, analytics)
-        assertTrue(".setDebugModeDurationHours(DebugConfig.EVENT_BOX_SESSION_HOURS)\n                .apply { if (bubbleIcon != 0) setBubbleIconResId(bubbleIcon) }\n" in analytics, analytics)
-        assertTrue(".setBubbleCornerRadiusDp(bubbleCornerRadiusDp)\n                .install(app)" in analytics && "fun init(app: Application, vararg remoteHolders: Any) {" in analytics, analytics)
+        assertTrue("            OGEventBoxLog.setBubbleStyle {\n                if (bubbleIcon != 0) iconRes(bubbleIcon)\n" in analytics, analytics)
+        assertTrue(".setStartState(startExpanded, startPinned, deltaTimeShown)\n                .install(app)" in analytics && "fun init(app: Application, vararg remoteHolders: Any) {" in analytics, analytics)
+        assertTrue("setDebugModeEnabled" !in analytics && "import com.ogmediaapps.eventbox.model.OGEventBoxAvailability" in analytics, "on Event Box 1.5.0")
+        assertTrue("OGEventBoxLog.setAvailability(OGEventBoxAvailability.DEBUG_AND_RELEASE)" in analytics && "private fun eventBoxAvailability()" in analytics, analytics)
         assertTrue("RemoteConfig.start(*(if (remoteHolders.isNotEmpty()) remoteHolders else holders))" in analytics)
         assertTrue(analytics.indexOf("// ---------- Builder") < analytics.indexOf("     * Once, from Application.onCreate()"))
         assertNull(upgradeAnalyticsSource(analytics, ""), "patched once")
@@ -168,5 +173,49 @@ class FirebaseUpdateTest {
         val w = planAppWiring(assertNotNull(Project.find(tmp)), "com.demo.firebase")
         val out = assertNotNull(w.changed["app/src/main/java/com/demo/core/MyApp.kt"], "${w.todo}")
         assertTrue("import com.demo.R\n" in out && "            .setIcon(R.mipmap.my_logo)\n" in out && w.created.isEmpty(), out)
+    }
+
+    private val template get() = resource("/templates/analytics/Analytics.kt.stub").replace("{{PACKAGE}}", "com.demo.firebase")
+
+    @Test
+    fun `an edited 0_19 Analytics kt moves to Event Box 1_5 and keeps the edits`() {
+        val old = resource("/old/Analytics-0.19.0.kt.stub").replace("{{PACKAGE}}", "com.demo.firebase")
+            .replace("private var bubbleBackgroundColor = 0xFF0D9379.toInt()", "private var bubbleBackgroundColor = 0xFF112233.toInt()")
+            .replace("    fun setUserId(", "    // my helper\n    fun hello() = 1\n\n    fun setUserId(")
+            .replace("\n", "\r\n")
+        val up = assertNotNull(migrateEventBoxSetup(old, template))
+        assertTrue("\r\n" in up && "\n" !in up.replace("\r\n", ""), "line endings kept")
+        val s = up.replace("\r\n", "\n")
+        assertTrue("0xFF112233" in s && "fun hello() = 1" in s, "the edits stay")
+        assertTrue(listOf("setDebugModeEnabled", "setBubbleIconResId(", ".setBubbleCornerRadiusDp(bubble").none { it in s }, s)
+        assertTrue("OGEventBoxLog.setBubbleStyle {" in s && ".setAvailability(eventBoxAvailability())" in s && "fun setDeltaTime(" in s && "fun setStartState(" in s, s)
+        assertEquals(1, Regex("""private fun eventBoxAvailability""").findAll(s).count())
+        assertEquals(1, Regex("""import com.ogmediaapps.eventbox.model.OGEventBoxAvailability""").findAll(s).count())
+        // unedited, it becomes the template exactly
+        assertEquals(template, migrateEventBoxSetup(resource("/old/Analytics-0.19.0.kt.stub").replace("{{PACKAGE}}", "com.demo.firebase"), template))
+        assertNull(migrateEventBoxSetup(s, template), "already on 1.5.0")
+        assertNull(migrateEventBoxSetup(template, template))
+    }
+
+    @Test
+    fun `make firebase on a 0_19 module moves an edited Analytics kt in place and Event Box up to 1_5`() {
+        oldProject()
+        val src = "core/firebase/src/main/java/com/demo/firebase"
+        val edited = resource("/old/Analytics-0.19.0.kt.stub").replace("{{PACKAGE}}", "com.demo.firebase").replace("    fun setUserId(", "    // mine\n    fun setUserId(")
+        // the marker of the unedited file, so the body counts as edited
+        write("$src/Analytics.kt", managedSource("Analytics.kt", resource("/old/Analytics-0.19.0.kt.stub").replace("{{PACKAGE}}", "com.demo.firebase")).lineSequence().first() + "\n" + edited)
+        write("gradle/libs.versions.toml", "[libraries]\nevent-box = { module = \"com.github.JpOriginDev:event-box\", version = \"1.4.0\" }\n")
+        write("app/build.gradle.kts", read("app/build.gradle.kts") + "dependencies {\n    implementation(\"com.github.JpOriginDev:event-box:1.4.2\")\n}\n")
+        val p = assertNotNull(Project.find(tmp))
+        val r = refreshFirebaseModule(p, assertNotNull(findFirebaseModule(p)))
+        assertEquals(listOf("$src/Analytics.kt"), r.migrated)
+        assertTrue("// mine" in read("$src/Analytics.kt") && "setDebugModeEnabled" !in read("$src/Analytics.kt"))
+        assertTrue(!File(tmp, "$src/Analytics.kt.new").exists(), "moved in place, no .new")
+
+        val rows = bumpEventBox(p, "1.5.0", onlyUp = true)
+        assertEquals(setOf("gradle/libs.versions.toml", "app/build.gradle.kts"), rows.map { it.cells[0] }.toSet())
+        assertTrue("version = \"1.5.0\"" in read("gradle/libs.versions.toml") && "event-box:1.5.0" in read("app/build.gradle.kts"))
+        assertTrue(bumpEventBox(p, "1.5.0", onlyUp = true).isEmpty(), "once")
+        assertNull(migrateAnalyticsFile(p, assertNotNull(findFirebaseModule(p))), "nothing left to move")
     }
 }

@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "io.github.ravisorathiya"
-version = "0.19.0"
+version = "0.19.1"
 
 repositories {
     mavenCentral()
