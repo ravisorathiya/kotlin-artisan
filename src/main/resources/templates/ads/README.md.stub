@@ -33,7 +33,7 @@ class App : Application() {
 }
 ```
 
-`AdsConstant.APP_ID` is `DebugConfig.ADMOB_APP_ID`: the test id in a QA build, `ADMOB_APP_ID_LIVE` when `QA_BUILD = false`. The manifest gets the same id through `${admobAppId}`. Each ad unit has a `test =` and a `live =` id.
+`AdsConstant.APP_ID` is `DebugConfig.ADMOB_APP_ID`: the test id in a QA build, `ADMOB_APP_ID_LIVE` when `ENABLE_LIVE_AD = true`. The manifest gets the same id through `${admobAppId}`. Each ad unit has a `test =` and a `live =` id.
 
 ## Every placement follows one rule
 

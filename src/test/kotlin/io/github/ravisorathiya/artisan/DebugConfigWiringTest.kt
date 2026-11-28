@@ -38,12 +38,16 @@ class DebugConfigWiringTest {
         |""".trimMargin()
 
     @Test
-    fun `the template resolves QA_BUILD like the Gradle script does`() {
+    fun `the template's two switches resolve like the Gradle script does`() {
         val config = stub("DebugConfig.kt")
         assertEquals("true", resolveDebugConfig(config, "ENABLE_EVENT_BOX"))
         assertEquals("false", resolveDebugConfig(config, "ENABLE_LIVE_AD"))
+        assertEquals("true", resolveDebugConfig(config, "ENABLE_TIMBER"), "auto: follows ENABLE_EVENT_BOX")
+        assertTrue("QA_BUILD" !in config)
         assertEquals(ADMOB_TEST_APP_ID, admobAppIdOf(config), "QA build: the test app id")
-        val release = config.replace("const val QA_BUILD = true", "const val QA_BUILD = false")
+        val release = config.replace("const val ENABLE_EVENT_BOX = true", "const val ENABLE_EVENT_BOX = false")
+            .replace("const val ENABLE_LIVE_AD = false", "const val ENABLE_LIVE_AD = true")
+        assertEquals("false", resolveDebugConfig(release, "ENABLE_TIMBER"))
         assertEquals(ADMOB_TEST_APP_ID, admobAppIdOf(release), "live, but no live id yet: still the test one")
         val live = release.replace("const val ADMOB_APP_ID_LIVE = \"\"", "const val ADMOB_APP_ID_LIVE = \"ca-app-pub-1~2\"")
         assertEquals("ca-app-pub-1~2", admobAppIdOf(live))
@@ -54,8 +58,9 @@ class DebugConfigWiringTest {
     fun `an older DebugConfig gets the new keys and keeps its values`() {
         val up = assertNotNull(addDebugConfigKeys(oldConfig, liveAppId = "ca-app-pub-9~9"))
         assertTrue("const val ENABLE_EVENT_BOX = false" in up, "the person's value stays")
-        assertTrue("const val QA_BUILD = false" in up, "QA_BUILD follows the old ENABLE_EVENT_BOX: the build keeps its mode")
-        for (key in listOf("ENABLE_LIVE_AD = !QA_BUILD", "ADMOB_APP_ID_LIVE = \"ca-app-pub-9~9\"", "val LOGGING_VOLUME = AppLoggingVolumeEnum.FULL",
+        assertTrue("QA_BUILD" !in up, "no QA_BUILD any more")
+        assertTrue("// region ➕ Added by make:firebase" in up && up.trimEnd().removeSuffix("}").trimEnd().endsWith("// endregion"), up)
+        for (key in listOf("const val ENABLE_LIVE_AD = true", /* the opposite of the old ENABLE_EVENT_BOX = false: the build keeps its mode */ "ADMOB_APP_ID_LIVE = \"ca-app-pub-9~9\"", "val LOGGING_VOLUME = AppLoggingVolumeEnum.FULL",
             "CRASH_RECORD_MAX_PER_TAG = 3", "CRASHLYTICS_BREADCRUMBS = true", "TRACK_SCREENS = true", "FAIL_RELEASE_ON_RAW_LOGS = true",
             "LOG_CALLER_LOCATION = true", "PRINT_CONFIG_ON_START = true", "enum class AppLoggingVolumeEnum")) assertTrue(key in up, "$key in\n$up")
         assertTrue(up.trimEnd().endsWith("}"), up)

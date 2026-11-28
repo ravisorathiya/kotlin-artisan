@@ -4,15 +4,15 @@ import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.tasks.await
 import {{PACKAGE}}.log.logging
 
-/**
- * Firebase Cloud Messaging (push). See README.md in this module.
- *
- *     val token = Messaging.token()          // in a coroutine: send it to your server
- *     Messaging.subscribe("news")            // topic pushes from the Firebase console
- *
- * Showing a push while the app is open needs a FirebaseMessagingService of your own in the app (see the README).
- * Android 13+ also needs the POST_NOTIFICATIONS permission (artisan make:permission <Screen> noti).
- */
+// ╔═════════════════════════════════════════════════════════════════════════════╗
+// ║ 🔔 MESSAGING · Firebase Cloud Messaging (push)                              ║
+// ║ 🔑 val token = Messaging.token() → in a coroutine, send it to your server   ║
+// ║ 📰 Messaging.subscribe("news") → topic pushes from the console              ║
+// ╟─────────────────────────────────────────────────────────────────────────────╢
+// ║ 📱 Push while the app is open → your own FirebaseMessagingService           ║
+// ║ 🔐 Android 13+ → POST_NOTIFICATIONS (artisan make:permission <Screen> noti) ║
+// ║ 📚 More → README.md in this module                                          ║
+// ╚═════════════════════════════════════════════════════════════════════════════╝
 object Messaging {
 
     /** This install's push token, or null (no Google Play services, offline). */

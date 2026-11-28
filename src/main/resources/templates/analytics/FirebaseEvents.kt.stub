@@ -12,12 +12,21 @@ import {{PACKAGE}}.DebugConfig
 import {{PACKAGE}}.log.isLoggable
 import {{PACKAGE}}.log.logging
 
-/*
- * firebaseEvent: every analytics event of the app goes through here (added by `artisan make:firebase`).
- * Every event is listed in ai/.../event/event.md (`artisan make:event` adds the row, `artisan check:events` compares).
- * Names: snake_case, under 30 characters, `<screen>_<thing>_<action>`. Switches and bypass rules: DebugConfig.
- */
+// ╔═════════════════════════════════════════════════════════════════════╗
+// ║ 📊 FIREBASE EVENTS · every analytics event of the app               ║
+// ║ 🎯 firebaseEvent("splash_ad_shown") → Firebase + logcat + event box ║
+// ║ 🧵 Callable from any thread (ad SDK callbacks too)                  ║
+// ║ 🐍 Names: snake_case, under 30 chars, <screen>_<thing>_<action>     ║
+// ║ 📝 Listed in ai/.../event/event.md (make:event · check:events)      ║
+// ╟─────────────────────────────────────────────────────────────────────╢
+// ║ 📊 Logcat tag → DebugConfig.TAG_EVENT                               ║
+// ║ 🙈 Left out of the box → DebugConfig (Event box region)             ║
+// ╚═════════════════════════════════════════════════════════════════════╝
 
+// region 🎯 Log an event
+// ┌────────────────────────────┐
+// │ 🎯 Log an event            │
+// └────────────────────────────┘
 /**
  * Logs [name] to Firebase Analytics, logcat (debug builds) and, when it's on, the event box.
  * Callable from anywhere: an Activity, a Fragment, a ViewModel, an ad SDK callback on a background thread.
@@ -45,6 +54,13 @@ private fun logEvent(name: String, bundle: Bundle) {
     }
 }
 
+// endregion
+
+// region 🙈 Bypass & event box
+// ┌────────────────────────────┐
+// │ 🙈 Bypass & event box      │
+// └────────────────────────────┘
+// 🔧 internals: the naming rule, the bypass rules, the box
 /** The naming rule: snake_case, starting with a letter. */
 private val EVENT_NAME = Regex("^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
 
@@ -74,3 +90,4 @@ private fun showInEventBox(name: String, bundle: Bundle) {
         }
     }
 }
+// endregion

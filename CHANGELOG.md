@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.20.0: make:firebase files in the boxed region style, two switches instead of QA_BUILD
+
+- Every file `make:firebase` writes opens with a box: what it is, how to use it, the release rule, and where to look
+  in logcat. Then `// region` blocks (Android Studio folds them), each with a title box and one short line.
+- `DebugConfig.kt` and `AdsConstant.kt` are one line per value with a short comment. `AdsConstant` is grouped by
+  kind: ad units, placement switches, interstitial pacing, update and splash, More Apps, local state, links.
+- **Two switches instead of `QA_BUILD`:** `ENABLE_EVENT_BOX` and `ENABLE_LIVE_AD`. A QA build is `true` / `false`
+  (the default), the Play Store release `false` / `true`. `ENABLE_TIMBER` and `LOGGING_VOLUME` follow the event box.
+- A module from 0.19.x keeps its DebugConfig, `QA_BUILD` and all: the build still reads it. Keys `make:firebase` and
+  `make:ads` add to an older file go in a `// region ➕ Added by ...` block.
+
 ## 0.19.1: make:firebase on Event Box 1.5.0
 
 - `Analytics.kt` uses Event Box 1.5.0's calls: `setBubbleStyle { ... }` for the bubble and `setAvailability(...)`

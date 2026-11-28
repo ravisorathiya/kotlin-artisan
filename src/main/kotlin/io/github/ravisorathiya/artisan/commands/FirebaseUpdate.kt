@@ -207,7 +207,7 @@ internal val FIREBASE_SETTINGS = setOf("DebugConfig.kt", "remote/AdsConstant.kt"
 
 /** The parts of Analytics.kt the update patches in, from the template (one source of truth). */
 internal class AnalyticsParts(
-    /** The whole builder block, from `// ---------- Builder` to the end marker. */
+    /** The whole builder region, from `// region 🎨 Builder` to its `// endregion` and the blank line after it. */
     val builder: String,
     /** The event box statement, from `OGEventBoxLog.setBubbleStyle {` to `.install(app)`, whole lines. */
     val setup: String,
@@ -218,6 +218,15 @@ internal class AnalyticsParts(
     val availability: String,
 )
 
+/** Where the template's builder region starts, and the region after it (init). */
+private const val BUILDER_REGION = "    // region 🎨 Builder"
+private const val INIT_REGION = "    // region 🚀 Init"
+
+/** Where a module's Analytics.kt ends its builder: an older one's divider, or today's init region. */
+private fun builderEnd(s: String): Int? =
+    s.indexOf("    // ---------- End of builder").takeIf { it >= 0 }
+        ?: s.indexOf(INIT_REGION).takeIf { it >= 0 }?.let { s.lastIndexOf("    // endregion", it).takeIf { e -> e >= 0 } }
+
 private fun between(t: String, from: String, to: String): String? {
     val a = t.indexOf(from).takeIf { it >= 0 } ?: return null
     val b = t.indexOf(to, a).takeIf { it >= 0 } ?: return null
@@ -225,8 +234,7 @@ private fun between(t: String, from: String, to: String): String? {
 }
 
 internal fun analyticsTemplateParts(template: String): AnalyticsParts? {
-    val endMark = "    // ---------- End of builder ----------\n\n"
-    val builder = between(template, "    // ---------- Builder", endMark)?.plus(endMark) ?: return null
+    val builder = between(template, BUILDER_REGION, INIT_REGION) ?: return null
     val style = template.indexOf("OGEventBoxLog.setBubbleStyle {").takeIf { it >= 0 } ?: return null
     val s = template.lastIndexOf('\n', style) + 1
     val install = template.indexOf(".install(app)\n", s).takeIf { it >= 0 } ?: return null
@@ -255,13 +263,11 @@ internal fun migrateEventBoxSetup(src: String, template: String): String? {
     s = s.replaceRange(old.range, parts.setup)
     s = s.replace("OGEventBoxLog.setDebugModeEnabled(true)", "OGEventBoxLog.setAvailability(OGEventBoxAvailability.DEBUG_AND_RELEASE)")
     if ("private var deltaTimeButton" !in s) {
-        val at = s.indexOf("    @Volatile\n    private var holders").takeIf { it >= 0 }
-            ?: s.indexOf("    // ---------- End of builder").takeIf { it >= 0 } ?: return null
+        val at = s.indexOf("    @Volatile\n    private var holders").takeIf { it >= 0 } ?: builderEnd(s) ?: return null
         s = s.substring(0, at) + parts.newFields + s.substring(at)
     }
     if ("fun setDeltaTime(" !in s) {
-        val at = s.indexOf("    /** The objects with").takeIf { it >= 0 }
-            ?: s.indexOf("    // ---------- End of builder").takeIf { it >= 0 } ?: return null
+        val at = s.indexOf("    /** The objects with").takeIf { it >= 0 } ?: builderEnd(s) ?: return null
         s = s.substring(0, at) + parts.newMethods + s.substring(at)
     }
     if ("fun eventBoxAvailability(" !in s) {

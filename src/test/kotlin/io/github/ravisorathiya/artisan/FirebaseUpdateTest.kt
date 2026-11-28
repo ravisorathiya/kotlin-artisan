@@ -159,7 +159,7 @@ class FirebaseUpdateTest {
 
         val up = upgradeDebugConfig(p, fm)
         val config = assertNotNull(up.changed["$src/DebugConfig.kt"])
-        assertTrue("const val QA_BUILD = true" in config && "const val TAG_DEBUG = \"Mine\"" in config && "enum class AppLoggingVolumeEnum" in config, config)
+        assertTrue("const val ENABLE_LIVE_AD = false" in config && "QA_BUILD" !in config && "const val TAG_DEBUG = \"Mine\"" in config && "enum class AppLoggingVolumeEnum" in config, config)
         val appBuild = up.changed.entries.firstOrNull { it.key.startsWith("app/build.gradle") }?.value
         assertTrue(appBuild != null && "core/firebase/debug_config.gradle" in appBuild, "${up.changed.keys}")
         assertTrue(up.changed.keys.none { it.endsWith("AndroidManifest.xml") }, "no AdMob meta-data: make:firebase doesn't add one")
@@ -191,8 +191,9 @@ class FirebaseUpdateTest {
         assertTrue("OGEventBoxLog.setBubbleStyle {" in s && ".setAvailability(eventBoxAvailability())" in s && "fun setDeltaTime(" in s && "fun setStartState(" in s, s)
         assertEquals(1, Regex("""private fun eventBoxAvailability""").findAll(s).count())
         assertEquals(1, Regex("""import com.ogmediaapps.eventbox.model.OGEventBoxAvailability""").findAll(s).count())
-        // unedited, it becomes the template exactly
-        assertEquals(template, migrateEventBoxSetup(resource("/old/Analytics-0.19.0.kt.stub").replace("{{PACKAGE}}", "com.demo.firebase"), template))
+        // unedited, it gets the 1.5.0 calls (a managed, unedited file is replaced by the template whole, region layout and all)
+        val unedited = assertNotNull(migrateEventBoxSetup(resource("/old/Analytics-0.19.0.kt.stub").replace("{{PACKAGE}}", "com.demo.firebase"), template))
+        assertTrue("OGEventBoxLog.setBubbleStyle {" in unedited && "fun setDeltaTime(" in unedited && "DebugConfig.QA_BUILD" in unedited, "its own DebugConfig still has QA_BUILD")
         assertNull(migrateEventBoxSetup(s, template), "already on 1.5.0")
         assertNull(migrateEventBoxSetup(template, template))
     }

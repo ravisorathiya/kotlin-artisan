@@ -39,7 +39,7 @@ A new module that should use it: `implementation(project(":core:firebase"))`.
   - put `Analytics.init(this)` in `Application.onCreate()`.
 - If the app already has its own `firebaseEvent` (top-level or an extension), keep it. The top of event.md says where it lives.
 - **Every project needs this setup.** `artisan make:ai` offers `make:firebase` when the app has no `firebaseEvent` yet.
-- **Bypass** (the Bypass section of `DebugConfig`, fully customisable, snake_case like the names): events kept out of
+- **Bypass** (the `📦 Event box` region of `DebugConfig`, fully customisable, snake_case like the names): events kept out of
   the box so it shows what you're testing. They still go to Firebase and logcat.
 
   | Constant | Default | Effect |

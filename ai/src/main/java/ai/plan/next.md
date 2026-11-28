@@ -5,8 +5,9 @@ repository only. Then update this file for the one after it.
 
 ## Where things stand (2026-11-28)
 
-- Released: **v0.19.1** (tagged, pushed): make:firebase / event:box on Event Box 1.5.0
-  ([event_box_1_5.md](event_box_1_5.md)). Before it, **v0.19.0**. It has `make:lang` (0.17.0), `purge` (0.18.0) and the make:firebase debug
+- Released: **v0.20.0** (tagged, pushed): the make:firebase files in the boxed region style, `ENABLE_EVENT_BOX` +
+  `ENABLE_LIVE_AD` instead of `QA_BUILD` ([firebase_style.md](firebase_style.md)). Before it, **v0.19.1**: Event Box
+  1.5.0 ([event_box_1_5.md](event_box_1_5.md)), and **v0.19.0**. It has `make:lang` (0.17.0), `purge` (0.18.0) and the make:firebase debug
   config + logging (0.19.0, [debug_config.md](debug_config.md)).
 - Roadmap: [workflow/v_0_17/overview.md](../workflow/v_0_17/overview.md). Plans: [MASTER_OVERVIEW.md](MASTER_OVERVIEW.md).
 - Still open from earlier work: `VERIFY ON DEVICE` for make:lang (pick the app language in Android 13+ Settings),
@@ -15,13 +16,15 @@ repository only. Then update this file for the one after it.
 - 0.19.0's open items: VERIFY ON DEVICE (start-up mode line, LOW volume, Crashlytics breadcrumbs); make:ads on a real
   build. Only the user can do the device checks.
 - 0.19.1's open item: VERIFY IN STUDIO, a Gradle build of `:core:firebase` against event-box 1.5.0.
+- 0.20.0's open item: VERIFY IN STUDIO on an AGP 8 project (only AGP 9.5.2 was built here), and a device run.
 
-## Up next: 0.20.0 `check:release`
+## Up next: 0.21.0 `check:release`
 
-Since 0.19.0, DebugConfig has `QA_BUILD`, `ENABLE_LIVE_AD` and `ADMOB_APP_ID_LIVE`. Read them with
+Since 0.20.0, DebugConfig has two release switches, `ENABLE_EVENT_BOX` and `ENABLE_LIVE_AD`, and `ADMOB_APP_ID_LIVE`
+(modules from 0.19.x may still have `QA_BUILD`, which the resolver follows). Read them with
 `resolveDebugConfig` / `admobAppIdOf` (`commands/DebugConfigWiring.kt`); don't re-parse them. The Gradle side
 (`checkReleaseSwitches` in `debug_config.gradle`) only warns, and check:release is where they FAIL:
-`QA_BUILD = true` or `ENABLE_EVENT_BOX = true` → FAIL; `ENABLE_LIVE_AD = true` with an empty `ADMOB_APP_ID_LIVE` → FAIL;
+`ENABLE_EVENT_BOX = true` or `ENABLE_LIVE_AD = false` → FAIL; `ENABLE_LIVE_AD = true` with an empty `ADMOB_APP_ID_LIVE` → FAIL;
 `live = ""` ad units in AdsConstant when `:core:ads` exists → WARN.
 
 Plan: [check_release.md](check_release.md). A PASS / WARN / FAIL table before a release; `build:release`
@@ -47,8 +50,8 @@ Steps:
 2. `build:release` calls it first; `--force` skips. Exit code 1 on FAIL (throw `CliError`).
 3. `ReleaseCheckTest.kt`: temp project per check (see `PurgeTest` / `MakeLangTest` for the setup).
 4. Docs: README Commands table + tour line, `docs/content/commands/checks.md` `## check:release`,
-   `commands/index.md` row, `docs/content/recipes/release.md` step. CHANGELOG `## 0.20.0: ...`, version 0.20.0.
-5. Workspace: `check_release.md` **Done**, overview row, MASTER_OVERVIEW row, then rewrite this file for 0.21.0.
+   `commands/index.md` row, `docs/content/recipes/release.md` step. CHANGELOG `## 0.21.0: ...`, version 0.21.0.
+5. Workspace: `check_release.md` **Done**, overview row, MASTER_OVERVIEW row, then rewrite this file for 0.22.0.
 6. `./gradlew test installDist`. Try it on a throwaway project in the scratch folder (never a user project; ask first
    before copying one of theirs).
 7. Install it locally ([../skill/release.md](../skill/release.md) step 2), mark it `[~] INSTALLED LOCALLY`, tell the
@@ -58,8 +61,8 @@ Before starting, ask the user only what the plan doesn't settle (e.g. should a W
 
 ## After that
 
-0.21.0 [make_update.md](make_update.md) → 0.22.0 [deps.md](deps.md) → 0.23.0 [make_billing.md](make_billing.md)
-→ 0.24.0 [make_notify.md](make_notify.md) → 0.25.0 [make_worker.md](make_worker.md).
+0.22.0 [make_update.md](make_update.md) → 0.23.0 [deps.md](deps.md) → 0.24.0 [make_billing.md](make_billing.md)
+→ 0.25.0 [make_notify.md](make_notify.md) → 0.26.0 [make_worker.md](make_worker.md).
 
 Each version: build → install locally → the user tests → publish only when the user says so
 ([../skill/release.md](../skill/release.md), stages in [../README.md](../README.md#stages-of-a-feature)).

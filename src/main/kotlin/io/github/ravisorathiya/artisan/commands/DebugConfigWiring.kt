@@ -71,22 +71,33 @@ internal fun restoreAdmobLiteral(manifest: String, appId: String): String? =
 
 // ---------- DebugConfig keys an older make:firebase didn't write ----------
 
-/** A const val of [config] as text (`QA_BUILD`, `true`, `"ca-app-pub-..."`), or null. */
+/** A const val of [config] as text (`ENABLE_EVENT_BOX`, `true`, `"ca-app-pub-..."`), or null. */
 internal fun debugConfigValue(config: String, name: String): String? =
     Regex("""(?m)^\s*(?:const\s+)?val\s+$name\s*(?::\s*[\w.]+\s*)?=\s*("[^"]*"|[^\s/]+)""").find(config)?.groupValues?.get(1)
 
+/**
+ * The opening of a `// region` block in the style of the module's files (DebugConfig, AdsConstant), indented 4.
+ * [title] must fit the 28-column box; [pad] is the spaces after it (emoji count as two columns).
+ */
+internal fun regionHeader(title: String, pad: Int, tagline: String, nl: String): String = listOf(
+    "    // region $title",
+    "    // ┌${"─".repeat(28)}┐",
+    "    // │ $title${" ".repeat(pad)} │",
+    "    // └${"─".repeat(28)}┘",
+    "    // $tagline",
+).joinToString(nl, postfix = nl)
+
 /** The DebugConfig keys the module's code reads, grouped as in the template, with the line that declares each. */
-private fun debugConfigKeys(qaBuild: String, liveAppId: String) = listOf(
-    "Build mode: QA_BUILD = true is a QA build (event box, test ads); false is the Play Store release" to listOf(
-        "QA_BUILD" to "const val QA_BUILD = $qaBuild",
+private fun debugConfigKeys(eventBox: String, liveAppId: String) = listOf(
+    "🚦 Main: ENABLE_EVENT_BOX = false + ENABLE_LIVE_AD = true for a Play Store release" to listOf(
+        "ENABLE_LIVE_AD" to "const val ENABLE_LIVE_AD = ${if (eventBox == "true") "false" else "true"}    // 💰 true = live ads · false = Google test ads",
     ),
-    "Ads: live or test (ENABLE_LIVE_AD), and the AdMob app id the manifest gets through \${admobAppId}" to listOf(
-        "ENABLE_LIVE_AD" to "const val ENABLE_LIVE_AD = !QA_BUILD",
-        "ADMOB_APP_ID_TEST" to "const val ADMOB_APP_ID_TEST = \"$ADMOB_TEST_APP_ID\"",
-        "ADMOB_APP_ID_LIVE" to "const val ADMOB_APP_ID_LIVE = \"$liveAppId\"",
-        "ADMOB_APP_ID" to "val ADMOB_APP_ID: String get() = if (ENABLE_LIVE_AD && ADMOB_APP_ID_LIVE.isNotEmpty()) ADMOB_APP_ID_LIVE else ADMOB_APP_ID_TEST",
+    "💰 Ads: the AdMob app id, the manifest gets it through \${admobAppId}" to listOf(
+        "ADMOB_APP_ID_TEST" to "const val ADMOB_APP_ID_TEST = \"$ADMOB_TEST_APP_ID\"    // 🧪 Google test app id",
+        "ADMOB_APP_ID_LIVE" to "const val ADMOB_APP_ID_LIVE = \"$liveAppId\"    // 🔑 AdMob > Apps > App settings",
+        "ADMOB_APP_ID" to "val ADMOB_APP_ID: String get() = if (ENABLE_LIVE_AD && ADMOB_APP_ID_LIVE.isNotEmpty()) ADMOB_APP_ID_LIVE else ADMOB_APP_ID_TEST    // 🔗 auto",
     ),
-    "Logging: FULL / MEDIUM / LOW / NONE, caller file:line, the start-up line, the release guard" to listOf(
+    "📝 Logcat: FULL / MEDIUM / LOW / NONE, caller file:line, the start-up line, the release guard" to listOf(
         "ENABLE_TIMBER" to "const val ENABLE_TIMBER = true",
         "LOGGING_VOLUME" to "val LOGGING_VOLUME = AppLoggingVolumeEnum.FULL",
         "LOW_FULL_UNTIL_SCREEN" to "const val LOW_FULL_UNTIL_SCREEN = \"MainActivity\"",
@@ -94,51 +105,39 @@ private fun debugConfigKeys(qaBuild: String, liveAppId: String) = listOf(
         "PRINT_CONFIG_ON_START" to "const val PRINT_CONFIG_ON_START = true",
         "FAIL_RELEASE_ON_RAW_LOGS" to "const val FAIL_RELEASE_ON_RAW_LOGS = true",
     ),
-    "Crashlytics: non-fatals per tag, release breadcrumbs, the \"screen\" key" to listOf(
+    "💥 Crashlytics: non-fatals per tag, release breadcrumbs, the \"screen\" key" to listOf(
         "CRASH_RECORD_MAX_PER_TAG" to "const val CRASH_RECORD_MAX_PER_TAG = 3",
         "CRASHLYTICS_BREADCRUMBS" to "const val CRASHLYTICS_BREADCRUMBS = true",
         "TRACK_SCREENS" to "const val TRACK_SCREENS = true",
     ),
 )
 
-private val VOLUME_ENUM = """
-    |    /** How much logcat gets (LOGGING_VOLUME). Crashlytics gets caught errors whatever the volume. */
-    |    enum class AppLoggingVolumeEnum {
-    |        /** Everything: every event, screen and lifecycle line. */
-    |        FULL,
-    |
-    |        /** Feature events, info, warnings and errors: no lifecycle events, no debug lines. */
-    |        MEDIUM,
-    |
-    |        /** FULL until LOW_FULL_UNTIL_SCREEN opens, then warnings and errors only. */
-    |        LOW,
-    |
-    |        /** Nothing. */
-    |        NONE,
-    |    }
-""".trimMargin()
+private const val VOLUME_ENUM = """    @Suppress("unused")
+    enum class AppLoggingVolumeEnum { FULL, MEDIUM, LOW, NONE }    // 🔉 see README.md: what each one prints"""
 
 /**
- * An older DebugConfig with the keys this module's code reads added, in one section before the object's closing
- * brace. The person's values stay. QA_BUILD starts as their ENABLE_EVENT_BOX, so the build keeps its mode;
- * [liveAppId] is the real app id they had (the manifest's), so live builds keep it. Null when nothing is missing.
+ * An older DebugConfig with the keys this module's code reads added, in one region before the object's closing
+ * brace. The person's values stay. ENABLE_LIVE_AD starts as the opposite of their ENABLE_EVENT_BOX, so the build
+ * keeps its mode; [liveAppId] is the real app id they had (the manifest's), so live builds keep it. Null when nothing
+ * is missing.
  */
 internal fun addDebugConfigKeys(config: String, liveAppId: String = ""): String? {
-    val qa = debugConfigValue(config, "ENABLE_EVENT_BOX")?.takeIf { it == "true" || it == "false" } ?: "true"
+    val eventBox = resolveDebugConfig(config, "ENABLE_EVENT_BOX")?.takeIf { it == "true" || it == "false" } ?: "true"
     val has = { key: String -> Regex("""\b(?:const\s+)?val\s+$key\b""").containsMatchIn(config) }
-    val groups = debugConfigKeys(qa, liveAppId).map { (title, keys) -> title to keys.filter { !has(it.first) } }.filter { it.second.isNotEmpty() }
+    val groups = debugConfigKeys(eventBox, liveAppId).map { (title, keys) -> title to keys.filter { !has(it.first) } }.filter { it.second.isNotEmpty() }
     val needsEnum = !Regex("""\benum\s+class\s+AppLoggingVolumeEnum\b""").containsMatchIn(config)
     if (groups.isEmpty() && !needsEnum) return null
     val close = config.trimEnd().lastIndexOf('}')
     if (close < 0) return null
     val nl = if ("\r\n" in config) "\r\n" else "\n"
     val block = buildString {
-        append(nl).append("    // ---------- Added by make:firebase: keys the module's code reads (defaults; change them freely) ----------").append(nl)
+        append(nl).append(regionHeader("➕ Added by make:firebase", 1, "🧩 keys the module's code reads · defaults, change them freely", nl))
         for ((title, keys) in groups) {
             append(nl).append("    // $title").append(nl)
             keys.forEach { append("    ").append(it.second).append(nl) }
         }
         if (needsEnum) append(nl).append(VOLUME_ENUM.replace("\n", nl)).append(nl)
+        append("    // endregion").append(nl)
     }
     return config.substring(0, close).trimEnd() + nl + block + "}" + config.substring(close + 1)
 }
@@ -227,7 +226,7 @@ internal fun upgradeDebugConfig(p: Project, fm: FirebaseModule): DebugConfigUpgr
     File(src, "DebugConfig.kt").takeIf { it.isFile }?.let { f ->
         addDebugConfigKeys(f.readText(), live)?.let {
             changed[p.rel(f)] = it
-            what[p.rel(f)] = "keys added (QA_BUILD, ENABLE_LIVE_AD, LOGGING_VOLUME, ...); your values kept"
+            what[p.rel(f)] = "keys added (ENABLE_LIVE_AD, LOGGING_VOLUME, ...); your values kept"
         }
     }
     module?.buildFile?.let { b ->
@@ -250,7 +249,7 @@ internal fun upgradeDebugConfig(p: Project, fm: FirebaseModule): DebugConfigUpgr
     return DebugConfigUpgrade(changed, what, notes)
 }
 
-/** A DebugConfig const resolved like debug_config.gradle does: `!QA_BUILD` and names of other consts followed. */
+/** A DebugConfig const resolved like debug_config.gradle does: `!NAME` and names of other consts followed (an older file's `!QA_BUILD` too). */
 internal fun resolveDebugConfig(config: String, name: String, depth: Int = 0): String? {
     val v = debugConfigValue(config, name) ?: return null
     return resolveValue(config, v, depth)

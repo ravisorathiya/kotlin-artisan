@@ -2,76 +2,108 @@ package {{PACKAGE}}.remote
 
 import {{PACKAGE}}.DebugConfig
 
-/**
- * Ad units and remote switches, one place. Add a line and it's live: the property name is the Remote Config key,
- * the value is the default until Firebase answers, and the debug audit shows it (logcat RemoteConfigAudit).
- *
- *     var homeNativeAd by remoteAdUnit(test = "ca-app-pub-3940256099942544/2247696110", live = "ca-app-pub-xxx/yyy")
- *     var showHomeNativeAd by remoteString("yes")
- *
- * Group by screen, with a header naming the class that reads it. Switches are "yes" / "no".
- *
- * More Apps (your own cross-promotion ad) per placement:
- *   showMoreApp...      "yes" = when the Google ad fails to load, show a More Apps ad there instead (fallback)
- *   onlyShowMoreApp...  "yes" = always show the More Apps ad there, never the Google one (forced)
- *
- * Ad units have a test and a live id: DebugConfig.ENABLE_LIVE_AD picks one (QA builds: test, and Firebase can't change
- * them). Put your live ids in `live = ""` before a release, or set them in the Firebase console.
- * See README.md in this module.
- */
+// ╔══════════════════════════════════════════════════════════════╗
+// ║ 📡 ADS CONSTANT · Remote Config keys                         ║
+// ║ 🔑 Property name = Firebase key · value = default            ║
+// ║ ➕ Add key → one line here + same key in Firebase console    ║
+// ║ 🎯 remoteAdUnit(test, live) → DebugConfig.ENABLE_LIVE_AD     ║
+// ║ ⛔ Never rename a live key (use legacyKeys)                  ║
+// ║ 📱 showMoreApp... = fallback · onlyShowMoreApp... = forced   ║
+// ╟──────────────────────────────────────────────────────────────╢
+// ║ 🔍 Check values → logcat tag RemoteConfigAudit (debug)       ║
+// ║ 🧾 LOCAL MISSING · OVERRIDE · MISSING · MATCH                ║
+// ║ 🚀 Release → DebugConfig.REMOTE_CONFIG_AUDIT_IN_RELEASE      ║
+// ╟──────────────────────────────────────────────────────────────╢
+// ║ 📊 Events → logcat tag GlobalFirebaseEventNameTag            ║
+// ║ 🐞 Debug → logcat tag GlobalAppDebugLogger                   ║
+// ║ 🔗 Tags → DebugConfig.TAG_EVENT · DebugConfig.TAG_DEBUG      ║
+// ║ 📚 More → README.md in this module                           ║
+// ╚══════════════════════════════════════════════════════════════╝
 object AdsConstant {
 
-    /*============================================================*/
-    // APP: static ids and links (not remote)
-    /** The AdMob app id of this build: DebugConfig.ADMOB_APP_ID (test or live by DebugConfig.ENABLE_LIVE_AD). */
-    val APP_ID: String get() = DebugConfig.ADMOB_APP_ID
-    const val PRIVACY_POLICY = "https://www.google.com/"
+    // region 💰 Ad Units
+    // ┌────────────────────────────┐
+    // │ 💰 Ad Units                │
+    // └────────────────────────────┘
+    // 🎯 one test + one live id per placement · Firebase can override the live id
+    // 🚀 put your live ids in live = "" before a release (or set them in the console)
+    var splashAppOpenAd by remoteAdUnit(
+        test = "ca-app-pub-3940256099942544/9257395921",
+        live = ""
+    )   // 🚀 SplashActivity / SplashOpenAd
+    var googleAppOpen by remoteAdUnit(
+        test = "ca-app-pub-3940256099942544/9257395921",
+        live = ""
+    )   // 🔁 AppOpenManager (on resume)
+    var interstitialAds by remoteAdUnit(
+        test = "/21775744923/example/interstitial",
+        live = ""
+    )   // 🪟 GoogleInterAd
+    var langBigNativeBanner by remoteAdUnit(
+        test = "/21775744923/example/native",
+        live = ""
+    )   // 🌍 LanguageNativeAd (big)
+    var languageSmallNativeAd by remoteAdUnit(
+        test = "/21775744923/example/native",
+        live = ""
+    )   // 🌍 LangAdLoader / PreviewLangAdsLoad
+    var nativeExitDialogAds by remoteAdUnit(
+        test = "/21775744923/example/native",
+        live = ""
+    )   // 🚪 ExitAppDialog
+    var mainBannerAd by remoteAdUnit(
+        test = "/21775744923/example/adaptive-banner",
+        live = ""
+    )   // 📌 MainActivity bottom banner · copy per screen: <screen>BannerAd + show<Screen>BannerAd
+    // endregion
 
-    /*============================================================*/
-    // SPLASH: SplashActivity / SplashOpenAd
-    var splashAppOpenAd by remoteAdUnit(test = "ca-app-pub-3940256099942544/9257395921", live = "")
+    // region 🚦 Placement Switches
+    // ┌────────────────────────────┐
+    // │ 🚦 Placement Switches      │
+    // └────────────────────────────┘
+    // 🔘 each placement on / off from the console: "yes" · "no"
     var showSplashAppOpenAd by remoteString("yes")
-    var onlineSplashAppOpen by remoteString("no")
+    var showBigNativeLanguage by remoteString("yes")
+    var showLanguageNativeAd by remoteString("yes")
+    var showAdsExitDialog by remoteString("yes")
+    var showMainBannerAd by remoteString("yes")
+    // endregion
 
-    /*============================================================*/
-    // APP OPEN (on resume): AppOpenManager
-    var googleAppOpen by remoteAdUnit(test = "ca-app-pub-3940256099942544/9257395921", live = "")
-
-    /*============================================================*/
-    // INTERSTITIAL: GoogleInterAd
-    var interstitialAds by remoteAdUnit(test = "/21775744923/example/interstitial", live = "")
+    // region ⏱️ Interstitial Pacing
+    // ┌────────────────────────────┐
+    // │ ⏱️ Interstitial Pacing     │
+    // └────────────────────────────┘
+    // 🔢 how often interstitials may show · non-number console value → invalidFallback
     var googleInterMaxInterAdsShow by remoteInt(defaultValue = 1, invalidFallback = 3)
     var googleInterGapBetweenTwoInter by remoteInt(defaultValue = 2, invalidFallback = 2)
     var googleInterCountDownTimer by remoteLong(defaultValue = 3000L, invalidFallback = 10_000L)
+    // endregion
 
-    /*============================================================*/
-    // LANGUAGE SCREEN: LanguageNativeAd / LangAdLoader / PreviewLangAdsLoad
-    var langBigNativeBanner by remoteAdUnit(test = "/21775744923/example/native", live = "")
-    var languageSmallNativeAd by remoteAdUnit(test = "/21775744923/example/native", live = "")
-    var showBigNativeLanguage by remoteString("yes")
-    var showLanguageNativeAd by remoteString("yes")
+    // region 🆙 Update Dialog & Splash
+    // ┌────────────────────────────┐
+    // │ 🆙 Update Dialog & Splash  │
+    // └────────────────────────────┘
+    // 🚀 force-update prompt + splash app-open ad behaviour
+    var updateNow by remoteString("no", keepCurrentWhenEmpty = false)
+    var onlineSplashAppOpen by remoteString("no")
+    // endregion
+
+    // region 📱 More Apps
+    // ┌────────────────────────────┐
+    // │ 📱 More Apps               │
+    // └────────────────────────────┘
+    // 🏠 in-house ads: where they show · "onlyShow..." = replace AdMob · feed source
     var showMoreAppLanguage by remoteString("yes")
     var onlyShowMoreAppLanguage by remoteString("no")
-
-    /*============================================================*/
-    // EXIT DIALOG: ExitAppDialog / MainActivity
-    var nativeExitDialogAds by remoteAdUnit(test = "/21775744923/example/native", live = "")
-    var showAdsExitDialog by remoteString("yes")
     var showMoreAppNative by remoteString("yes")
     var onlyShowMoreAppNative by remoteString("no")
-
-    /*============================================================*/
-    // BANNER: MainActivity bottom banner (sample; copy per screen: <screen>BannerAd + show<Screen>BannerAd)
-    var mainBannerAd by remoteAdUnit(test = "/21775744923/example/adaptive-banner", live = "")
-    var showMainBannerAd by remoteString("yes")
-
-    /*============================================================*/
-    // MORE APPS fallback for every banner / native banner above
-    var showMoreAppNBanner by remoteString("yes")
+    var showMoreAppNBanner by remoteString("yes")    // 📌 every banner / native banner above
     var onlyShowMoreAppNBanner by remoteString("no")
 
-    /*============================================================*/
-    // MORE APPS feed, UPDATE prompt, STORE link
+    // ── 🔗 store link ──
+    var playStoreLink by remoteString("https://play.google.com/store/apps/details?id=")
+
+    // ── 📡 feed (Firebase may change it in QA builds too) ──
     var moreAppUrl by remoteString(
         defaultValue = "http://68.183.94.44/moreapps/api/",
         keepCurrentWhenEmpty = false,
@@ -80,11 +112,23 @@ object AdsConstant {
         defaultValue = "xyz",
         keepCurrentWhenEmpty = false,
         legacyKeys = listOf("moreAppAccountName"),
-    )
-    var updateNow by remoteString("no", keepCurrentWhenEmpty = false)
-    var playStoreLink by remoteString("https://play.google.com/store/apps/details?id=")
+    )   // 🔑 your More Apps account
+    // endregion
 
-    /*============================================================*/
-    // FLAGS
+    // region 🧠 Local State
+    // ┌────────────────────────────┐
+    // │ 🧠 Local State             │
+    // └────────────────────────────┘
+    // 📌 flags · add in-memory session flags here (plain var = not a Remote Config key)
     var firstTime by remoteBoolean(false)
+    // endregion
+
+    // region 🔗 Links
+    // ┌────────────────────────────┐
+    // │ 🔗 Links                   │
+    // └────────────────────────────┘
+    // 🌐 fixed ids and links · not Remote Config keys
+    val APP_ID: String get() = DebugConfig.ADMOB_APP_ID    // 🆔 test or live by DebugConfig.ENABLE_LIVE_AD
+    const val PRIVACY_POLICY = "https://www.google.com/"
+    // endregion
 }

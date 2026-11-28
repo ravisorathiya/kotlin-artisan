@@ -79,7 +79,7 @@ artisan make:ads               # :core:ads: banner, native, interstitial, app op
 
 On a project that already has the Firebase module, `make:firebase` updates it instead. See [Keep a project up to date](#/recipes/update).
 
-`make:firebase` also adds one line to the app's build file, `apply(from = rootProject.file("core/firebase/debug_config.gradle"))`. Through it the AdMob app id comes from `DebugConfig` (the manifest reads `${admobAppId}`), and the release guards run: `checkReleaseSwitches` (warns) and `checkLogging` (fails a release on `android.util.Log`, `printStackTrace()` or `println()` in app code). `DebugConfig.QA_BUILD` switches between a QA build (event box, test ads) and the release.
+`make:firebase` also adds one line to the app's build file, `apply(from = rootProject.file("core/firebase/debug_config.gradle"))`. Through it the AdMob app id comes from `DebugConfig` (the manifest reads `${admobAppId}`), and the release guards run: `checkReleaseSwitches` (warns) and `checkLogging` (fails a release on `android.util.Log`, `printStackTrace()` or `println()` in app code). `DebugConfig.ENABLE_EVENT_BOX` and `ENABLE_LIVE_AD` switch between a QA build (event box, test ads) and the release.
 
 ## bump
 

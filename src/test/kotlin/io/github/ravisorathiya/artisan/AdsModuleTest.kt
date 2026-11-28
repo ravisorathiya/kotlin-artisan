@@ -148,7 +148,7 @@ class AdsModuleTest {
         assertTrue("var splashAppOpenAd by remoteAdUnit(\"a\")" in updated, "kept as it was")
         assertEquals(1, Regex("var splashAppOpenAd ").findAll(updated).count())
         for ((key, _) in ADS_KEYS) assertTrue(Regex("var $key by remote").containsMatchIn(updated), key)
-        assertTrue(updated.trimEnd().endsWith("}") && "ADDED BY make:ads" in updated)
+        assertTrue(updated.trimEnd().endsWith("}") && "// region ➕ Added by make:ads" in updated && "    // endregion\n}" in updated.replace("\r\n", "\n"))
         assertNull(addAdsKeys(updated), "nothing missing the second time")
     }
 

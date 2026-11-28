@@ -256,7 +256,8 @@ new version goes next to it as `.new`.
     the [Event Box](https://github.com/JpOriginDev/event-box) library.
   - **Helpers:** `firebaseEvent()`, `Crash`, `RemoteConfig`, `Messaging`, `logDebug()` / `logError()` / `logging()` /
     `logFlow()`, with a settings-only `DebugConfig` and a `README.md`.
-  - **One switch:** `DebugConfig.QA_BUILD` (event box and test ads) or the Play Store release (live ads and app id).
+  - **Two switches:** `DebugConfig.ENABLE_EVENT_BOX` and `ENABLE_LIVE_AD`: a QA build (event box, test ads) or the
+    Play Store release (live ads and app id). Every file opens with a box and is split into `// region` blocks.
     `LOGGING_VOLUME` sets how much logcat gets. R8 strips the log calls in release, and Crashlytics gets breadcrumbs.
   - **Release guards:** a release build warns when DebugConfig isn't ready, and fails on `android.util.Log`,
     `printStackTrace()` or `println()` in app code.

@@ -2,16 +2,15 @@ package {{PACKAGE}}.log
 
 import timber.log.Timber
 
-/**
- * Timber, through this module. Same calls as Timber, so other modules never depend on Timber themselves:
- *
- *   AppLog.d("loaded %d items", count)
- *   AppLog.tag("HomeScreen").e(e, "load failed")
- *   AppLog.e(e)
- *
- * Analytics.init plants the debug tree in debug builds only; release builds print nothing (and R8 strips the
- * calls, see consumer-rules.pro). Untagged calls are tagged with the calling class, as Timber's DebugTree does.
- */
+// ╔══════════════════════════════════════════════════════════════╗
+// ║ 🌲 APP LOG · Timber, through this module                     ║
+// ║ 🎯 AppLog.d("loaded %d items", count) · AppLog.e(e)          ║
+// ║ 🏷️ AppLog.tag("HomeScreen").e(e, "load failed")              ║
+// ║ 📦 Other modules never depend on Timber themselves           ║
+// ╟──────────────────────────────────────────────────────────────╢
+// ║ 🐞 Debug builds only · R8 strips the calls in release        ║
+// ║ 🏷️ No tag → the calling class (like Timber's DebugTree)      ║
+// ╚══════════════════════════════════════════════════════════════╝
 object AppLog {
 
     /** A tagged logger. Unlike Timber.tag(), the tag stays for every call on it, so it can be kept in a val. */

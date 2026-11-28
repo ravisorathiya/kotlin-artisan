@@ -1,4 +1,4 @@
-# make:notify — `[ ]` 0.24.0
+# make:notify — `[ ]` 0.25.0
 
 `artisan make:notify [--channel id] [--name text]`: push notifications in `:core:firebase`'s `messaging/`, built
 like PDFReader's `FirebaseMSGService`, plus a simple `Notifier` for local notifications. Asked 2026-11-06.
@@ -33,7 +33,7 @@ like PDFReader's `FirebaseMSGService`, plus a simple `Notifier` for local notifi
    PushService example). `purge` already removes the module.
 7. To-do at the end: `artisan make:permission <Screen> noti`, a test message from the Firebase console.
 8. `MakeNotifyTest`: the files created, manifest edits run twice change nothing, an existing service isn't doubled.
-9. Docs + CHANGELOG `## 0.24.0: ...`.
+9. Docs + CHANGELOG `## 0.25.0: ...`.
 
 ## Done
 

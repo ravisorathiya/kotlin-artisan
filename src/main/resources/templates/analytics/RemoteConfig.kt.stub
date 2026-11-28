@@ -19,18 +19,25 @@ import {{PACKAGE}}.DebugConfig
 import {{PACKAGE}}.events.firebaseEvent
 import {{PACKAGE}}.log.logging
 
-/**
- * Firebase Remote Config, driven by the `by remote...` properties of AdsConstant (and any holder object passed to
- * Analytics.init). Started by Analytics.init: fetch, apply every registered property, then live updates.
- *
- *     lifecycleScope.launch { RemoteConfig.awaitFetch(); showSplashAd() }    // splash: wait at most the timeout
- *     RemoteConfig.onApplied { applyNewLayout() }                            // after each fetch / live update
- *     RemoteConfig.string("welcome_text", "Hi")                              // an ad-hoc key, no property
- *
- * Events: remote_cfg_load_start / _load_success / _load_failed / _timeout / _live_applied / _live_failed.
- * Debug builds log an audit of every key (logcat RemoteConfigAudit). See README.md in this module.
- */
+// ╔════════════════════════════════════════════════════════════════════════════════════════╗
+// ║ 🌐 REMOTE CONFIG · fetch, apply, live updates                                          ║
+// ║ 🔑 Keys = the `by remote...` properties of AdsConstant                                 ║
+// ║ 🚀 Started by Analytics.init · more holders → Analytics.init(this, AdsConstant, Flags) ║
+// ║ ⏳ Splash → lifecycleScope.launch { RemoteConfig.awaitFetch(); showSplashAd() }        ║
+// ║ 🔁 RemoteConfig.onApplied { ... } → after each fetch / live update                     ║
+// ║ 🧰 RemoteConfig.string("welcome_text", "Hi") → an ad-hoc key                           ║
+// ╟────────────────────────────────────────────────────────────────────────────────────────╢
+// ║ 📊 Events → remote_cfg_load_start · _load_success · _load_failed · _timeout            ║
+// ║ 📊 Live → remote_cfg_live_applied · remote_cfg_live_failed                             ║
+// ║ 🔍 Audit → logcat tag RemoteConfigAudit (debug)                                        ║
+// ║ 📚 More → README.md in this module                                                     ║
+// ╚════════════════════════════════════════════════════════════════════════════════════════╝
 object RemoteConfig {
+
+    // region 🧠 State
+    // ┌────────────────────────────┐
+    // │ 🧠 State                   │
+    // └────────────────────────────┘
     private const val TAG = "RemoteConfigAudit"
 
     private val config: FirebaseRemoteConfig? get() = try {
@@ -44,7 +51,13 @@ object RemoteConfig {
     private val firstFetch = CompletableDeferred<Boolean>()
     private var live: ConfigUpdateListenerRegistration? = null
     private val listeners = mutableListOf<() -> Unit>()
+    // endregion
 
+    // region 🚀 Start & fetch
+    // ┌────────────────────────────┐
+    // │ 🚀 Start & fetch           │
+    // └────────────────────────────┘
+    // ⏳ awaitFetch() waits DebugConfig.REMOTE_CONFIG_TIMEOUT_MILLIS at most
     /** True once the first fetch has finished (successfully or not). */
     val isFetched: Boolean get() = firstFetch.isCompleted
 
@@ -112,6 +125,13 @@ object RemoteConfig {
         live = null
     }
 
+    // endregion
+
+    // region 🧰 Ad-hoc keys
+    // ┌────────────────────────────┐
+    // │ 🧰 Ad-hoc keys             │
+    // └────────────────────────────┘
+    // 🔑 a key without a property: the Firebase value, else the default
     /** Ad-hoc keys without a property: the Firebase value, else [default]. */
     fun string(key: String, default: String = ""): String = config?.getString(key)?.trim()?.takeIf { it.isNotEmpty() } ?: default
 
@@ -125,8 +145,13 @@ object RemoteConfig {
 
     fun double(key: String, default: Double = 0.0): Double = string(key).toDoubleOrNull() ?: default
 
-    // ---------- internals ----------
+    // endregion
 
+    // region 🔧 Internals
+    // ┌────────────────────────────┐
+    // │ 🔧 Internals               │
+    // └────────────────────────────┘
+    // 📡 live updates · 🔍 the audit table
     private fun startLiveUpdates(c: FirebaseRemoteConfig) {
         live = c.addOnConfigUpdateListener(object : ConfigUpdateListener {
             override fun onUpdate(configUpdate: ConfigUpdate) {
@@ -206,4 +231,5 @@ object RemoteConfig {
     private class Row(val rank: Int, val status: String, val key: String, val local: String, val firebase: String, val applied: String)
 
     private fun String.quoted() = "\"" + replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r") + "\""
+    // endregion
 }

@@ -63,13 +63,13 @@ It doesn't just say that a line ran: write "loaded 12 contacts from cache", not 
 | `logging("x ${e.stackTraceToString()}")` | `logging("x", e)` | Crashlytics groups by the throwable |
 | Phone numbers, emails, names, tokens, passwords, exact location in a log | ids, counts, `maskNumber(n)` | logs end up in Crashlytics and bug reports |
 | Logging inside tight loops (every frame, every list item bind) | once before and after, with a count | floods logcat; use `logVerbose` if you really need it |
-| Changing `DebugConfig` values to make your own testing easier and leaving them | ask, or change them back | `DebugConfig` belongs to the person: `QA_BUILD`, `ENABLE_LIVE_AD` and the ad ids decide what ships |
+| Changing `DebugConfig` values to make your own testing easier and leaving them | ask, or change them back | `DebugConfig` belongs to the person: `ENABLE_EVENT_BOX`, `ENABLE_LIVE_AD` and the ad ids decide what ships |
 
 ## The switches (DebugConfig.kt, read them, change them only when asked)
 
 | Switch | What it does |
 |---|---|
-| `QA_BUILD` | true = QA build (event box, test ads); false = Play Store release. The others follow it. |
+| `ENABLE_EVENT_BOX`, `ENABLE_LIVE_AD` | QA: `true`, `false` (event box, test ads). Play Store: `false`, `true`. Values marked `🔗 auto` follow them. |
 | `LOGGING_VOLUME` | `FULL` everything; `MEDIUM` info and up, no lifecycle events; `LOW` full until `LOW_FULL_UNTIL_SCREEN` opens, then warnings and errors; `NONE`. |
 | `ENABLE_TIMBER` | false = a quiet debug build. |
 | `LOG_CALLER_LOCATION` | the `· method(File.kt:line)` part. |

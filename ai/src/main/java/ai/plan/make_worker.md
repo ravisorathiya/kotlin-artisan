@@ -1,4 +1,4 @@
-# make:worker — `[ ]` 0.25.0
+# make:worker — `[ ]` 0.26.0
 
 `artisan make:worker [Name] [--periodic 15m|1h|1d] [--network] [--module :x]`: a WorkManager worker and the code
 that schedules it. Asked 2026-11-06.
@@ -13,7 +13,7 @@ that schedules it. Asked 2026-11-06.
 3. `androidx.work:work-runtime-ktx`, latest from Google Maven, catalog or not, added once.
 4. The end says where to call `<Name>Worker.schedule(this)` (Application.onCreate).
 5. `MakeWorkerTest`: the interval parse, the code per option, the dependency added once.
-6. Docs + CHANGELOG `## 0.25.0: ...`.
+6. Docs + CHANGELOG `## 0.26.0: ...`.
 
 ## Done
 

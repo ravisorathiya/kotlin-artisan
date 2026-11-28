@@ -9,17 +9,21 @@ import {{PACKAGE}}.crash.Crash
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
-/*
- * logging: debug logs that are not analytics events (use firebaseEvent for those). Goes through Timber, which
- * Analytics.init plants for debug builds only, so release builds print nothing to logcat.
- *
- *   logging("Splash_AdShown")              a line; in release also a Crashlytics breadcrumb
- *   logging("Splash_AdLoad_Error", e)      a caught error; in release also a Crashlytics non-fatal
- *
- * Never build the stack trace yourself (e.stackTraceToString()): pass the throwable.
- * More: logDebug / logError (AppLogger.kt), AppLog (Timber calls), logFlow (LogFlow.kt). See README.md in this module.
- */
+// ╔══════════════════════════════════════════════════════════════════╗
+// ║ 🐞 LOGGING · debug lines that are not analytics events           ║
+// ║ 📝 logging("Splash_AdShown") → a line · release: a breadcrumb    ║
+// ║ 🧯 logging("Splash_AdLoad_Error", e) → release: a non-fatal      ║
+// ║ ⛔ Never e.stackTraceToString(): pass the throwable              ║
+// ╟──────────────────────────────────────────────────────────────────╢
+// ║ 🐞 Logcat tag → DebugConfig.TAG_DEBUG (debug builds only)        ║
+// ║ 🔉 How much → DebugConfig.LOGGING_VOLUME                         ║
+// ║ 📚 More → logDebug (AppLogger.kt) · AppLog · logFlow · README.md ║
+// ╚══════════════════════════════════════════════════════════════════╝
 
+// region 🔉 Volume
+// ┌────────────────────────────┐
+// │ 🔉 Volume                  │
+// └────────────────────────────┘
 /** LOW only: true once DebugConfig.LOW_FULL_UNTIL_SCREEN has opened (set by Analytics). */
 @Volatile
 internal var pastOnboarding = false
@@ -36,6 +40,12 @@ internal fun isLoggable(priority: Int): Boolean = when (DebugConfig.LOGGING_VOLU
 internal val breadcrumbsOn: Boolean
     get() = DebugConfig.CRASHLYTICS_BREADCRUMBS && !Analytics.debuggable
 
+// endregion
+
+// region 📝 logging
+// ┌────────────────────────────┐
+// │ 📝 logging                 │
+// └────────────────────────────┘
 /** A debug log line (logcat tag DebugConfig.TAG_DEBUG). In release builds a Crashlytics breadcrumb. */
 fun logging(message: String) {
     if (isLoggable(Log.DEBUG)) Timber.tag(DebugConfig.TAG_DEBUG).d(message)
@@ -61,3 +71,4 @@ fun logging(tag: String, throwable: Throwable) {
     LogFlow.activeSummary()?.let { Crash.log("active flows: $it") }
     Crash.record(throwable, tag)
 }
+// endregion

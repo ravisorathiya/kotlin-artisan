@@ -4,24 +4,24 @@ import {{PACKAGE}}.DebugConfig
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
-/*
- * Remote Config values as properties. In any object (AdsConstant, or one of your own passed to Analytics.init):
- *
- *     var homeNativeAd by remoteAdUnit("ca-app-pub-xxx/yyy")   // Firebase key = the property name: "homeNativeAd"
- *     var showHomeNativeAd by remoteString("yes")
- *     var interGapSeconds by remoteInt(30, invalidFallback = 30)
- *
- * The default is used until Remote Config answers. After each fetch (and each live update) every registered property
- * takes the Firebase value; the debug audit lists them all. Properties stay writable for tests and local overrides.
- *
- * Live or test (DebugConfig.ENABLE_LIVE_AD):
- *
- *     var homeNativeAd by remoteAdUnit(test = "ca-app-pub-3940256099942544/2247696110", live = "ca-app-pub-123/456")
- *
- * Test mode uses the test id and ignores Firebase, so a QA build never shows a live ad. Live mode uses the live id and
- * lets Firebase change it; an empty live id falls back to the test one (the debug log lists those keys).
- */
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║ 🔑 REMOTE VALUE · Remote Config keys as properties                       ║
+// ║ 🏷️ Property name = Firebase key · value = default until the fetch        ║
+// ║ 💰 var homeNativeAd by remoteAdUnit(test = "...", live = "...")          ║
+// ║ 🔘 var showHomeNativeAd by remoteString("yes")                           ║
+// ║ 🔢 var interGapSeconds by remoteInt(30, invalidFallback = 30)            ║
+// ║ ✍️ Properties stay writable (tests, local overrides)                     ║
+// ╟──────────────────────────────────────────────────────────────────────────╢
+// ║ 🧪 ENABLE_LIVE_AD = false → test id, Firebase ignored (no live ad in QA) ║
+// ║ 🚀 ENABLE_LIVE_AD = true → live id, Firebase may change it               ║
+// ║ ⚠️ Empty live id → the test id (listed in the debug log)                 ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
 
+// region 🧱 Registry
+// ┌────────────────────────────┐
+// │ 🧱 Registry                │
+// └────────────────────────────┘
+// 📌 how a property becomes a key · you rarely need these
 /** One Remote Config value: its local default, the current value, and how a Firebase string turns into it. */
 class RemoteValue<T>(
     val localValue: T,
@@ -80,6 +80,13 @@ class RemoteDelegate<T>(private val remote: RemoteValue<T>, private val emptyLiv
     }
 }
 
+// endregion
+
+// region 🧰 Builders
+// ┌────────────────────────────┐
+// │ 🧰 Builders                │
+// └────────────────────────────┘
+// 🎯 what AdsConstant uses: remoteAdUnit · remoteString · remoteInt · remoteLong · remoteBoolean
 /** Any type: [resolve] turns the Firebase string (empty when there is none) and the current value into the new one. */
 fun <T> remote(defaultValue: T, legacyKeys: List<String> = emptyList(), resolve: (raw: String, current: T) -> T) =
     RemoteDelegate(RemoteValue(defaultValue, legacyKeys, resolve))
@@ -123,3 +130,4 @@ fun remoteBoolean(defaultValue: Boolean) = RemoteDelegate(RemoteValue(defaultVal
         else -> current
     }
 })
+// endregion

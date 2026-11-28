@@ -14,7 +14,7 @@ skill that apply.
 ```text
 core/firebase/src/main/java/<app>/firebase/
 ├── Analytics.kt          Analytics[.setIcon/.setBubble.../.setDeltaTime/.setStartState/.setRemoteHolders].init(app[, holders]): Firebase, Timber, Crashlytics, event box, Remote Config
-├── DebugConfig.kt        settings only: QA_BUILD (the one switch), live/test ads and the AdMob app id, logging volume, Crashlytics, Remote Config, bypass rules
+├── DebugConfig.kt        settings only: ENABLE_EVENT_BOX + ENABLE_LIVE_AD (the release switches), the AdMob app id, logging volume, Crashlytics, Remote Config, bypass rules
 ├── events/FirebaseEvents.kt   firebaseEvent(name, bundle)
 ├── remote/AdsConstant.kt      ad units and remote switches, one line per key
 ├── remote/RemoteValue.kt      remoteString / remoteAdUnit / remoteInt / remoteLong / remoteDouble / remoteBoolean
@@ -36,10 +36,10 @@ core/firebase/debug_config.gradle  applied by the app: ${admobAppId} from DebugC
 |---|---|---|
 | New event | the screen's code: `firebaseEvent("<screen>_<thing>_<action>")` + `artisan make:event` | log events with `FirebaseAnalytics` directly |
 | New ad unit / ad switch / remote value | `remote/AdsConstant.kt` (one line) | read `FirebaseRemoteConfig` directly in a screen |
-| What the event box shows | the Bypass section of `DebugConfig.kt` | edit `isBypassed()` |
+| What the event box shows | the `📦 Event box` region of `DebugConfig.kt` | edit `isBypassed()` |
 | A log line | `logDebug("...")` / `logWarn` / `logError` ([logging.md](logging.md)) | `android.util.Log`, `println` (the release build fails) |
 | A caught error | `logging("Class.method", e)` (Timber + Crashlytics non-fatal in release) | `e.printStackTrace()`, `Log.e` |
-| Test or live ads, the AdMob app id | `DebugConfig.QA_BUILD` / `ENABLE_LIVE_AD`, `ADMOB_APP_ID_LIVE` | hard-code an app id in the manifest (it reads `${admobAppId}`) |
+| Test or live ads, the AdMob app id | `DebugConfig.ENABLE_LIVE_AD`, `ADMOB_APP_ID_LIVE` | hard-code an app id in the manifest (it reads `${admobAppId}`) |
 | A new Firebase product | `core/firebase` build file + its own folder | add Firebase dependencies to the app or a feature module |
 
 Imports from any module: `import <app>.firebase.events.firebaseEvent`, `<app>.firebase.remote.AdsConstant`,
@@ -61,7 +61,7 @@ existed then; a module added later needs this line).
    `RemoteConfig.onApplied { ... }`.
 3. Tell the developer the key to add in the Firebase console (same name, same type), and its default. Don't invent
    production ad unit ids: put Google's test id in `test =`, leave `live = ""` and say `ASK DEV` for the real one.
-   Test mode (`ENABLE_LIVE_AD = false`, i.e. `QA_BUILD = true`) always uses `test` and ignores the console; an empty
+   Test mode (`ENABLE_LIVE_AD = false`) always uses `test` and ignores the console; an empty
    `live` falls back to `test` and start-up logs it (`RemoteConfigAudit`).
 4. Run the app (debug) and check the audit table: `artisan app:logcat RemoteConfigAudit`.
 
@@ -121,7 +121,7 @@ Report LOCAL MISSING and unexpected OVERRIDE rows in the task notes.
 1. The change sits in the right file (table in section 1); no Firebase calls outside the module's API.
 2. New events are in event.md (`artisan check:events` agrees); new keys are in `AdsConstant` with a switch, and the
    developer has the list of console keys to add.
-3. `DebugConfig` is as the developer left it: `QA_BUILD`, `ENABLE_LIVE_AD` and the ids are theirs (note it in the task
+3. `DebugConfig` is as the developer left it: `ENABLE_EVENT_BOX`, `ENABLE_LIVE_AD` and the ids are theirs (note it in the task
    if you changed one to test). A release build prints `Release guard:` with what isn't ready.
 4. Build: `gradlew :core:firebase:compileDebugKotlin`, then the app.
 5. VERIFY ON DEVICE: the audit table (`RemoteConfigAudit`), the events (`artisan app:logcat GlobalFirebaseEventNameTag`

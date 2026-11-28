@@ -285,7 +285,7 @@ internal fun eventDoc(p: Project, events: Map<String, List<String>>): String {
         |  bubble that lists events as they fire (with their parameters, and a warning when one breaks a Firebase limit), on every
         |  screen. For testing, set `ENABLE_EVENT_BOX = true` in `DebugConfig.kt`; `Analytics.init(this)` in
         |  `Application.onCreate()` sets it up. **Set it back to `false` before a release.**
-        |- **Bypass** (the Bypass section of `DebugConfig`) controls what the box shows. Hidden events still go to Firebase and
+        |- **Bypass** (the `📦 Event box` region of `DebugConfig`) controls what the box shows. Hidden events still go to Firebase and
         |  logcat. `EVENT_BOX_BYPASS = false` shows everything. Otherwise `BYPASS_SUFFIXES` (lifecycle by default:
         |  `_on_create`, `_on_resume`, ...), `BYPASS_PREFIXES` and `BYPASS_NAMES` hide events, and `ALWAYS_SHOW` wins over them.
         |  The rules are snake_case like the names. The module's README.md has the rest (Crashlytics, Remote Config, Messaging).

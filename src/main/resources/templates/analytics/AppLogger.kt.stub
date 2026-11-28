@@ -7,23 +7,22 @@ import android.util.Log
 import timber.log.Timber
 import {{PACKAGE}}.DebugConfig
 
-/*
- * App logging. Just pass the message; the caller's context is added for you:
- *
- *   logDebug("banner loaded")
- *   logError("load failed", e)
- *
- * Logcat:  D/GlobTag MainActivity: banner loaded  ·  onAdLoaded(MainActivity.kt:104)
- *
- * The tag is the calling class, "(File.kt:line)" is clickable in Android Studio (DebugConfig.LOG_CALLER_LOCATION),
- * and the thread is shown when it is not the main thread. For Timber-style calls with your own tag, use
- * AppLog.tag(TAG).e(...).
- *
- * Everything goes through Timber, which Analytics.init plants for debug builds only. Release builds print nothing,
- * and R8 strips these calls there too (consumer-rules.pro). Caught errors that should also reach Crashlytics in
- * release go through logging(tag, throwable) in Logging.kt.
- */
+// ╔════════════════════════════════════════════════════════════════════════╗
+// ║ 📝 APP LOGGER · just the message, the caller is added for you          ║
+// ║ 🎯 logDebug("banner loaded") · logError("load failed", e)              ║
+// ║ 📍 D/MainActivity: banner loaded · onAdLoaded(MainActivity.kt:104)     ║
+// ║ 🏷️ Tag = the calling class · file:line clickable (LOG_CALLER_LOCATION) ║
+// ║ 🧵 The thread is shown when it isn't main                              ║
+// ╟────────────────────────────────────────────────────────────────────────╢
+// ║ 🐞 Debug builds only · R8 strips them in release (consumer-rules.pro)  ║
+// ║ 🧯 To Crashlytics too → logging(tag, throwable) in Logging.kt          ║
+// ║ 🏷️ Your own tag → AppLog.tag(TAG).e(...)                               ║
+// ╚════════════════════════════════════════════════════════════════════════╝
 
+// region 📝 Log calls
+// ┌────────────────────────────┐
+// │ 📝 Log calls               │
+// └────────────────────────────┘
 fun logVerbose(message: String?) = write(Log.VERBOSE, message, null)
 fun logVerbose(message: String?, throwable: Throwable?) = write(Log.VERBOSE, message, throwable)
 
@@ -42,6 +41,12 @@ fun logError(message: String?, throwable: Throwable?) = write(Log.ERROR, message
 fun logWtf(message: String?) = write(Log.ASSERT, message, null)
 fun logWtf(message: String?, throwable: Throwable?) = write(Log.ASSERT, message, throwable)
 
+// endregion
+
+// region 🔧 Internals
+// ┌────────────────────────────┐
+// │ 🔧 Internals               │
+// └────────────────────────────┘
 /** This file's JVM class: frames from it are skipped to find the real caller. */
 private const val SELF = "{{PACKAGE}}.log.AppLogger"
 
@@ -71,3 +76,4 @@ internal fun withContext(message: String, caller: StackTraceElement?): String = 
     }
     if (Looper.myLooper() != Looper.getMainLooper()) append(" [").append(Thread.currentThread().name).append(']')
 }
+// endregion

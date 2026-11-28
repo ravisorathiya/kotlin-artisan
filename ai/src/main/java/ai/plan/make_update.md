@@ -1,4 +1,4 @@
-# make:update — `[ ]` 0.21.0
+# make:update — `[ ]` 0.22.0
 
 In-app update + review, a feature folder `update/` in `:core:firebase`.
 

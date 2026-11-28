@@ -7,22 +7,22 @@ import timber.log.Timber
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
 
-/*
- * Flow tracing: follow one multi-step flow (a checkout, splash -> ad -> main) end to end.
- *
- *   val flow = logFlow("Checkout")
- *   flow.step("cart loaded")
- *   flow.fail("payment", e)        // also logging("Checkout.payment", e)
- *   flow.end("paid")
- *
- * Logcat (debug):  D/Flow: Checkout#a3f2 +120ms (2) cart loaded  ·  pay(CheckoutActivity.kt:88)
- *                  filter "tag:Flow" for every flow, or "Checkout#a3f2" for one.
- * Release:         each line is a Crashlytics breadcrumb, the last step is the key "flow_Checkout", and every
- *                  logging(tag, e) non-fatal lists the flows that were active when it happened.
- *
- * Never put phone numbers, emails or names in a step: use maskNumber().
- */
+// ╔═══════════════════════════════════════════════════════════════════════════════╗
+// ║ 🧭 LOG FLOW · one multi-step flow, end to end (splash → ad → main)            ║
+// ║ 🎯 val flow = logFlow("Checkout")                                             ║
+// ║ ➡️ flow.step("cart loaded") · flow.fail("payment", e) · flow.end("paid")      ║
+// ║ 📍 D/Flow: Checkout#a3f2 +120ms (2) cart loaded · pay(CheckoutActivity.kt:88) ║
+// ║ 🔍 Logcat → filter tag:Flow, or Checkout#a3f2 for one flow                    ║
+// ╟───────────────────────────────────────────────────────────────────────────────╢
+// ║ 🍞 Release → each line is a Crashlytics breadcrumb                            ║
+// ║ 🔑 Last step → key flow_Checkout · non-fatals list the active flows           ║
+// ║ ⛔ No phone numbers, emails or names in a step → maskNumber()                 ║
+// ╚═══════════════════════════════════════════════════════════════════════════════╝
 
+// region 🎯 Start a flow
+// ┌────────────────────────────┐
+// │ 🎯 Start a flow            │
+// └────────────────────────────┘
 /** Starts a flow named [name] (PascalCase, no spaces). Each call is a new flow with its own id. */
 fun logFlow(name: String, firstStep: String = "start"): LogFlow = LogFlow(name).also {
     LogFlow.register(it)
@@ -35,6 +35,12 @@ fun maskNumber(number: String?): String {
     return if (digits.length <= 3) "•••" else "•".repeat(digits.length - 3) + digits.takeLast(3)
 }
 
+// endregion
+
+// region 🧭 The flow
+// ┌────────────────────────────┐
+// │ 🧭 The flow                │
+// └────────────────────────────┘
 class LogFlow internal constructor(val name: String) {
 
     /** "Checkout#a3f2": the same id on every line of this flow. */
@@ -111,3 +117,4 @@ class LogFlow internal constructor(val name: String) {
         }
     }
 }
+// endregion

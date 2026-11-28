@@ -297,8 +297,8 @@ internal fun addAdsKeys(adsConstant: String): String? {
     val close = adsConstant.trimEnd().lastIndexOf('}')
     if (close < 0) return null
     val nl = if ("\r\n" in adsConstant) "\r\n" else "\n"
-    val block = "$nl    /*============================================================*/$nl    // ADDED BY make:ads: keys the ads module reads$nl" +
-        missing.joinToString("") { "    ${it.second}$nl" }
+    val block = nl + regionHeader("➕ Added by make:ads", 5, "💰 keys the ads module reads · defaults, change them freely", nl) +
+        missing.joinToString("") { "    ${it.second}$nl" } + "    // endregion$nl"
     return adsConstant.substring(0, close).trimEnd() + nl + block + "}" + adsConstant.substring(close + 1)
 }
 

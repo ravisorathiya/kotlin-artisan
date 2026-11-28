@@ -3,7 +3,13 @@ package {{PACKAGE}}.crash
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import timber.log.Timber
 
-/** Crashlytics in one place. Every call is safe: it never throws into the app. See README.md in this module. */
+// ╔══════════════════════════════════════════════════════════════╗
+// ║ 💥 CRASH · Crashlytics in one place                          ║
+// ║ 🛡️ Every call is safe: it never throws into the app          ║
+// ║ 🧯 Caught errors → logging(tag, e) in Logging.kt uses this   ║
+// ║ 🔀 Switches → DebugConfig (Crashlytics region)               ║
+// ║ 📚 More → README.md in this module                           ║
+// ╚══════════════════════════════════════════════════════════════╝
 object Crash {
 
     /** A breadcrumb shown with the next crash report, e.g. "opened settings". */

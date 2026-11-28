@@ -1,16 +1,18 @@
-// DebugConfig for the build (artisan make:firebase). The app's build file applies it, as its last line:
-//   apply(from = "<this module>/debug_config.gradle")
-//
-//   1. The AdMob app id: manifestPlaceholders.admobAppId, from DebugConfig.kt (ENABLE_LIVE_AD, ADMOB_APP_ID_TEST,
-//      ADMOB_APP_ID_LIVE). The app manifest uses it:
-//      <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="${admobAppId}" />
-//   2. checkReleaseSwitches: before every release build, a warning when DebugConfig isn't ready for the Play Store.
-//      It never fails the build.
-//   3. checkLogging: app code that logs around {{MODULE}} (android.util.Log, printStackTrace(), println(),
-//      stackTraceToString() in a log call). Release builds fail (DebugConfig.FAIL_RELEASE_ON_RAW_LOGS = false: warn
-//      only), debug builds warn. Run it any time: ./gradlew checkLogging
-//
-// The settings are in DebugConfig.kt. make:firebase keeps this file current. See README.md in this module.
+// ╔════════════════════════════════════════════════════════════════════════════════════╗
+// ║ 🛠️ DEBUG CONFIG IN THE BUILD (artisan make:firebase)                               ║
+// ║ 📌 The app's build file applies it, as its last line:                              ║
+// ║    apply(from = "<this module>/debug_config.gradle")                               ║
+// ║ 🔀 The settings → DebugConfig.kt · make:firebase keeps this file current           ║
+// ╟────────────────────────────────────────────────────────────────────────────────────╢
+// ║ 🆔 AdMob app id → manifestPlaceholders.admobAppId (ENABLE_LIVE_AD, ADMOB_APP_ID_*) ║
+// ║    manifest: android:value="${admobAppId}"                                         ║
+// ║ 🛡️ checkReleaseSwitches → warns before a release build, never fails                ║
+// ║ ⛔ checkLogging → android.util.Log / printStackTrace / println around {{MODULE}}   ║
+// ║    release builds fail (FAIL_RELEASE_ON_RAW_LOGS = false: warn) · debug warns      ║
+// ║ ▶️ Any time → ./gradlew checkLogging                                                ║
+// ╟────────────────────────────────────────────────────────────────────────────────────╢
+// ║ 📚 More → README.md in this module                                                 ║
+// ╚════════════════════════════════════════════════════════════════════════════════════╝
 
 def artisanModule = rootProject.findProject("{{MODULE}}")
 def artisanModuleDir = artisanModule != null ? artisanModule.projectDir : rootProject.file("{{MODULE}}".substring(1).replace(':', '/'))
@@ -55,7 +57,7 @@ tasks.configureEach { t ->
     else if (t.name == "check") t.dependsOn(artisanLogging)
 }
 
-/** Reads DebugConfig.kt as text: each one-line `const val NAME = value`, with `QA_BUILD` / `!QA_BUILD` resolved. */
+/** Reads DebugConfig.kt as text: each one-line `const val NAME = value`, with other names and `!NAME` resolved. */
 class ArtisanDebugConfig {
     static final String TEST_APP_ID = "ca-app-pub-3940256099942544~3347511713"
 
@@ -99,7 +101,6 @@ class ArtisanReleaseSwitches extends DefaultTask {
             return
         }
         def wrong = []
-        if (c["QA_BUILD"] == "true") wrong << "QA_BUILD = true: this is a QA build, not the Play Store release"
         if (c["ENABLE_EVENT_BOX"] == "true") wrong << "ENABLE_EVENT_BOX = true: testers' event box on every screen"
         if (c["ENABLE_LIVE_AD"] != "true") wrong << "ENABLE_LIVE_AD = false: Google's TEST ads and app id"
         else if (!c["ADMOB_APP_ID_LIVE"]) wrong << "ADMOB_APP_ID_LIVE is empty: the test app id is used"

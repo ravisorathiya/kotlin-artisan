@@ -12,7 +12,7 @@ Create it with `artisan make:firebase` (a walkthrough: [Add Firebase to an app](
 ```text
 com.example.app.firebase
 ├── Analytics.kt          Analytics.init(app), setIcon, setRemoteHolders, setUserId, setUserProperty
-├── DebugConfig.kt        settings only: QA_BUILD, live/test ads and app id, logging volume, Crashlytics, Remote Config, bypass
+├── DebugConfig.kt        settings only: ENABLE_EVENT_BOX + ENABLE_LIVE_AD, the app id, logging volume, Crashlytics, Remote Config, bypass
 ├── events/
 │   └── FirebaseEvents.kt firebaseEvent(name, bundle)
 ├── remote/
@@ -118,12 +118,12 @@ firebaseEvent("home_contact_click", bundleOf("source" to "list"))
   - the event sheet is generated from event.md.
 - It works from any thread. The event box part runs on the main thread by itself, through a coroutine.
 - To watch events:
-  - the event box: on while `DebugConfig.QA_BUILD = true` (the default), off when it is `false` for the release;
+  - the event box: on while `DebugConfig.ENABLE_EVENT_BOX = true` (the default), off when it is `false` for the release;
   - or logcat: `artisan app:logcat GlobalFirebaseEventNameTag`.
 
 ### What the event box shows (bypass)
 
-Edit the **Bypass** section of `DebugConfig`. Left-out events still go to Firebase and logcat.
+Edit the **`📦 Event box`** region of `DebugConfig`. Left-out events still go to Firebase and logcat.
 
 | Setting | Default | Effect |
 |---|---|---|
@@ -297,35 +297,40 @@ Not for analytics: use `firebaseEvent` for events.
 
 ## Debug config and release
 
-`DebugConfig.kt` holds every switch. **`QA_BUILD` is the one to flip:**
+`DebugConfig.kt` holds every switch. **Two are flipped for a release**, in its `🚦 Main` region:
 
-| | `QA_BUILD = true` (QA) | `QA_BUILD = false` (Play Store) |
+| | QA (the default) | Play Store |
 |---|---|---|
-| Event box | on | off |
-| Ads (`ENABLE_LIVE_AD`) | Google's test units and app id; the console can't change them | the `live =` units and `ADMOB_APP_ID_LIVE`; the console can |
+| `ENABLE_EVENT_BOX` | `true`: the event box on every screen | `false` |
+| `ENABLE_LIVE_AD` | `false`: Google's test units and app id; the console can't change them | `true`: the `live =` units and `ADMOB_APP_ID_LIVE`; the console can |
 
-Each switch set to `QA_BUILD` / `!QA_BUILD` follows it; give one its own value to break away. At start-up a debug
-build logs its mode in one line (`PRINT_CONFIG_ON_START`), e.g. `QA build · ads TEST · logging FULL · event box ON`.
+Values marked `🔗 auto` follow those two (`ENABLE_TIMBER`, `LOGGING_VOLUME`, `ADMOB_APP_ID`): give one its own value to
+break away. At start-up a debug build logs its mode in one line (`PRINT_CONFIG_ON_START`), e.g.
+`QA build · ads TEST · logging FULL · event box ON`.
+
+Every file of this module opens with a box saying what it is, how to use it and where to look in logcat, and is
+split into `// region` blocks (Android Studio folds them: Ctrl+Shift+- / Ctrl+Shift++). In `DebugConfig` and
+`AdsConstant` add a key in the region it belongs to.
 
 `debug_config.gradle` (in this folder) is applied by the app's build file. It reads `DebugConfig.kt` as text, so keep
 each switch a one-line `const val`:
 
 - **The AdMob app id:** the manifest's `com.google.android.gms.ads.APPLICATION_ID` reads `${admobAppId}`, which
   is the test or live id from DebugConfig. Don't put a literal id back in the manifest.
-- **`checkReleaseSwitches`** runs before every release build and warns when DebugConfig isn't ready: QA build, event
+- **`checkReleaseSwitches`** runs before every release build and warns when DebugConfig isn't ready: the event
   box on, test ads, an empty `ADMOB_APP_ID_LIVE`, or the audit on in release. It never fails the build.
 - **`checkLogging`** finds app code that logs around this module: `android.util.Log`, `printStackTrace()`,
   `println()`, or `stackTraceToString()` in a log call. Release builds fail on it, debug builds warn.
   `DebugConfig.FAIL_RELEASE_ON_RAW_LOGS = false` makes it a warning everywhere. Run it any time: `./gradlew checkLogging`.
 
 Before a release: your ids in `ADMOB_APP_ID_LIVE` and each `live = ""` in `AdsConstant` (or the console), then
-`QA_BUILD = false`, then build. The `Release guard:` line says when it's ready.
+`ENABLE_EVENT_BOX = false` and `ENABLE_LIVE_AD = true`, then build. The `Release guard:` line says when it's ready.
 
 ## Rules
 
 - Keep app logic out of this module: it's Firebase and logging only.
 - Only one place calls `Analytics.init`: `Application.onCreate()`.
-- `DebugConfig.QA_BUILD = false` (event box off, live ads) in every Play Store build.
+- `DebugConfig.ENABLE_EVENT_BOX = false` and `ENABLE_LIVE_AD = true` in every Play Store build.
 - App code logs through this module only (`checkLogging`).
 
 ## Remove it
